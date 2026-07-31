@@ -1,4 +1,4 @@
-# etium
+# Etium
 
 **The outer loop for coding agents.**
 
