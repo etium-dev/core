@@ -6,7 +6,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { resolve as resolveAdapter } from "./adapters.ts";
+import { getAdapter, resolve as resolveAdapter } from "./adapters.ts";
 import type { RunStepArgs, RunStepOutcome } from "./engine.ts";
 import { parseDuration, type Usage } from "./types.ts";
 
@@ -23,9 +23,13 @@ export interface EnvResolution {
 const AGENT_ALLOWLIST = ["PATH", "HOME", "USER", "LOGNAME", "SHELL", "TMPDIR", "TERM", "LANG", "LC_ALL", "TZ"];
 const SECRET_NAME = /(TOKEN|SECRET|KEY|PASSWORD|PASSWD|CREDENTIAL)/i;
 
-/** §9: least environment per step. `agent` is the credential-free default;
- * `host` inherits everything but redacts secret-looking values from raw. */
-export function resolveEnv(spec?: { profile?: "agent" | "host"; add?: Record<string, string> }): EnvResolution {
+/** §9: least environment per step. `agent` allowlists basics plus the adapter's
+ * declared model-credential vars (ADR-007) — publication credentials never;
+ * `host` inherits everything and redacts secret-looking values from raw. */
+export function resolveEnv(
+  spec?: { profile?: "agent" | "host"; add?: Record<string, string> },
+  declaredEnv?: string[],
+): EnvResolution {
   const profile = spec?.profile ?? "agent";
   let env: Record<string, string>;
   const secrets: string[] = [];
@@ -36,12 +40,42 @@ export function resolveEnv(spec?: { profile?: "agent" | "host"; add?: Record<str
   } else {
     env = {};
     for (const k of AGENT_ALLOWLIST) if (process.env[k]) env[k] = process.env[k]!;
+    for (const k of declaredEnv ?? []) if (process.env[k]) env[k] = process.env[k]!;
+  }
+  // Declared values are secrets by declaration, not by the name heuristic (§9).
+  for (const k of declaredEnv ?? []) {
+    const v = process.env[k];
+    if (v && v.length >= 6) secrets.push(v);
   }
   for (const [k, v] of Object.entries(spec?.add ?? {})) {
     env[k] = v;
     if (SECRET_NAME.test(k) && v.length >= 6) secrets.push(v);
   }
   return { env, secrets };
+}
+
+export type StepAuthResult = { ok: true; authEnv: string[] } | { ok: false; detail: string };
+
+/** Pre-spawn auth gate (§6.3, ADR-007). Uncached — the supervisor caches per
+ * attach. Definitive failures (non-zero exit, missing binary) block; an
+ * indeterminate check (timeout) proceeds with a warning so unattended resumes
+ * never hang on a flaky check. */
+export function checkHarnessAuth(harness: string, timeoutMs = 10_000): StepAuthResult {
+  const adapter = getAdapter(harness);
+  const authEnv = (adapter.auth?.env ?? []).filter((k) => process.env[k] !== undefined);
+  const check = adapter.auth?.check;
+  if (!check) return { ok: true, authEnv };
+  const remedy = adapter.auth?.remedy ? ` — run: ${adapter.auth.remedy}` : "";
+  const r = spawnSync(check.cmd, check.args, { stdio: "ignore", timeout: timeoutMs });
+  const errCode = (r.error as NodeJS.ErrnoException | undefined)?.code;
+  if (errCode === "ETIMEDOUT" || r.signal) {
+    process.stderr.write(`etium: auth check for ${harness} did not complete; proceeding\n`);
+    return { ok: true, authEnv };
+  }
+  if (r.error)
+    return { ok: false, detail: `harness ${harness} not runnable (${check.cmd}: ${errCode ?? r.error.message})${remedy}` };
+  if (r.status !== 0) return { ok: false, detail: `harness ${harness} not authenticated${remedy}` };
+  return { ok: true, authEnv };
 }
 
 function redact(line: string, secrets: string[]): string {
@@ -121,7 +155,7 @@ export async function runStep(a: RunStepArgs): Promise<RunStepOutcome> {
     fixture: a.opts.fixture,
     inner: a.opts.inner,
   });
-  const { env, secrets } = resolveEnv(a.opts.env);
+  const { env, secrets } = resolveEnv(a.opts.env, adapter.auth?.env);
   Object.assign(env, built.env ?? {});
 
   const rawPath = path.join(a.stepDir, "raw.jsonl");
@@ -239,7 +273,8 @@ export async function runStep(a: RunStepArgs): Promise<RunStepOutcome> {
     passed = g.status === 0;
     const gradePath = path.join(a.stepDir, "artifacts", "grade.txt");
     fs.mkdirSync(path.dirname(gradePath), { recursive: true });
-    fs.writeFileSync(gradePath, (g.stdout ?? "") + (g.stderr ?? ""));
+    // The grader inherits the step env; its output is redacted like raw (§9).
+    fs.writeFileSync(gradePath, redact((g.stdout ?? "") + (g.stderr ?? ""), secrets));
     artifacts.push(path.relative(a.runDir, gradePath));
   } else if (a.opts.harness === "exec") {
     passed = status === "ok";

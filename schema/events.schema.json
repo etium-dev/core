@@ -90,6 +90,7 @@
         "model": { "type": "string" },
         "promptSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
         "envProfile": { "type": "string" },
+        "authEnv": { "type": "array", "items": { "type": "string" }, "description": "names of adapter-declared env vars passed through; never values" },
         "budget": { "$ref": "#/$defs/budgetSpec" },
         "digest": { "type": "string", "description": "config digest for divergence detection" },
         "unmetered": { "type": "boolean" },

@@ -23,7 +23,7 @@ These are the behavioral contract. Changes to core must preserve them or amend t
 5. **Every step runs under an explicit budget** and can be killed without corrupting the run.
 6. **Steps are fresh-context by default and at-least-once.** Completed steps are exactly-once via replay memoization. Continuity lives in files, not conversations.
 7. **Gates fail closed.** Decisions are explicit, attributed, and consumed once.
-8. **Least environment per step.** Publication credentials never enter agent-controlled processes.
+8. **Least environment per step.** Publication credentials never enter agent-controlled processes. Model credentials enter agent steps only by adapter declaration, and every passed-through value is redacted from raw (`MODEL_AUTH.md`, ADR-007).
 9. **Crash-only.** Any etium process may die at any instant; `etium tick` restores correctness without human intervention.
 10. **Anything not covered above is an adapter or a loop, not core.**
 
@@ -72,7 +72,7 @@ Well-known paths are the most language-neutral API there is. Everything below is
     <run-id>/               # git worktree per run (M1)
 ```
 
-Retention: ledgers are kept forever. `etium gc` prunes `raw.jsonl.zst` and worktrees by age/count policy. Deleting raw later is easy; recovering unrecorded raw is impossible, so we record first and prune second.
+Retention: ledgers are kept forever. `etium gc` prunes `raw.jsonl.zst`, `stderr.log`, and worktrees by age/count policy. Deleting raw later is easy; recovering unrecorded raw is impossible, so we record first and prune second.
 
 ---
 
@@ -107,7 +107,7 @@ Newline-delimited JSON (JSONL), append-only, single writer. Crash recovery rule:
 |---|---|---|
 | `run.created` | CLI | task hash, loop ref, params, etium version |
 | `supervisor.started` | supervisor | pid, host — emitted on every attach (start and resume) |
-| `step.started` | supervisor | name, occ, harness, model?, prompt sha256, env profile, budget, config digest |
+| `step.started` | supervisor | name, occ, harness, model?, prompt sha256, env profile, auth env names?, budget, config digest |
 | `step.activity` | supervisor | step ref, kind: `message` \| `tool` \| `usage`, summary (short string), usage delta?, raw: RawRef |
 | `step.completed` | supervisor | step ref, status: `ok` \| `error` \| `killed` \| `budget`, exit code?, usage totals, raw file + sha256, artifacts[], passed? |
 | `gate.opened` | supervisor | name, occ, show: artifact refs |
@@ -152,6 +152,8 @@ Determinism rules for loop authors (enforced by review and by divergence detecti
 ### 6.3 Steps
 
 A step is at-least-once. If a supervisor dies mid-step, resume re-executes that step from scratch with fresh context; the previous attempt's partial `raw.jsonl` is preserved automatically: each attempt appends its own `step.started` and therefore gets its own `steps/<seq>-<name>.<occ>/` directory, so re-execution never overwrites an earlier attempt's raw. Consequences, documented as loop-authoring guidance: steps should leave the workspace in a state they can re-enter (from M1, with worktrees, the reference loops have each step commit its work to the run's branch, so an interrupted step's partial work is visible as an uncommitted diff and recoverable or resettable).
+
+Auth preflight at the step boundary: on a memo miss, before `step.started` is appended, the supervisor runs the adapter's declared auth check (§10.1) — non-interactive, short timeout, cached per harness for the life of the attach. A definitive failure (non-zero exit, missing binary) errors the run with the adapter's remedy verbatim in `run.completed.summary` — e.g. ``harness codex not authenticated — run: codex login``. Because nothing was appended for the step's key, no occurrence is consumed and nothing is memoized: after the operator authenticates, `etium resume` replays to the identical point and the step executes for the first time — a run completed `error` stays resumable by explicit attach, while `tick` skips all completed runs, so errors are never retried unattended. An indeterminate check (timeout) proceeds with a stderr warning — unattended resumes must never block on a flaky check; if auth is truly broken the step itself fails legibly. This is the authoritative auth gate; the `etium run` preflight (§9) is a best-effort fast path in front of it.
 
 Step outcome: `run.step()` returns `{ status, exit, passed, artifact(name), usage }`. It does not throw on step failure — `status: error | killed | budget` is a value the loop branches on. It throws only on etium-internal errors (divergence, ledger corruption).
 
@@ -239,8 +241,9 @@ Gate notes: when a decision carries `--note`, the note is recorded in `gate.deci
 
 ## 9. Security model
 
-- **Env profiles**: every step names its profile; default is `agent`. M0 ships two built-ins: `agent` (fixed allowlist — PATH, HOME, locale, and similar; credential-free) and `host` (full inherited environment, for publication steps), plus per-step `env.add` for explicit additions. Named custom profiles defined in config (e.g. a `publish` profile holding exactly `GH_TOKEN`) arrive with config-as-code (§14, open item 1). Publication (push, PR creation) happens in `exec` steps under `host`/`publish`, never `agent`. This is Invariant 8 made concrete; it preserves the predecessor system's hard-won boundary.
-- **Redaction**: the step runner scans raw and stderr lines for exact secret values and writes `[redacted]` before anything touches disk. M0 baseline: secrets are the values of inherited variables whose names match a credential pattern (TOKEN, SECRET, KEY, PASSWORD, …) plus any secret-named `env.add` values; config-marked secrets refine this with config-as-code. Documented limitation: encoded or split secrets are not caught; raw contains repository content by nature.
+- **Env profiles**: every step names its profile; default is `agent`. M0 ships two built-ins: `agent` (fixed allowlist — PATH, HOME, locale, and similar; publication-credential-free) and `host` (full inherited environment, for publication steps), plus per-step `env.add` for explicit additions. Named custom profiles defined in config (e.g. a `publish` profile holding exactly `GH_TOKEN`) arrive with config-as-code (§14, open item 1). Publication (push, PR creation) happens in `exec` steps under `host`/`publish`, never `agent`. This is Invariant 8 made concrete; it preserves the predecessor system's hard-won boundary.
+- **Model auth — declared passthrough** (`MODEL_AUTH.md`, ADR-007): model auth is harness-owned; etium never stores, prompts for, or refreshes a credential. An adapter may declare `auth.env` — the env var names its harness consumes for model credentials. Under the `agent` profile the runner copies each declared name present in the host environment into the step env, inherited at spawn time and stored nowhere; `HOME` stays on the allowlist so store/keychain-based harness auth keeps working. Every passed-through value joins the redaction secret list unconditionally — by declaration, not by the name heuristic. `step.started` records the *names* actually passed through (`authEnv`), never values; the field is informational and excluded from the config digest — host-env presence is runtime input, like operator notes (ADR-002), and must never cause DIVERGENCE. Precedence: explicit `env.add` beats declared passthrough beats profile allowlist. Preflight is two-tier: `etium run` checks the harnesses it can resolve from `--harness`/params *before* `run.created` — on definitive failure it creates nothing, exits non-zero, and prints the adapter's remedy verbatim; the authoritative check runs supervisor-side before each step's first spawn (§6.3), because harness choice can be runtime data. `etium doctor` renders the same per-adapter checks read-only (binary present? authenticated? remedy), exits 0 — informational; the preflights are the gates.
+- **Redaction**: the step runner scans raw and stderr lines for exact secret values and writes `[redacted]` before anything touches disk. M0 baseline: secrets are the values of inherited variables whose names match a credential pattern (TOKEN, SECRET, KEY, PASSWORD, …), all adapter-declared passthrough values, and any secret-named `env.add` values; config-marked secrets refine this with config-as-code. Grader output is redacted with the same secret list before `grade.txt` is written — the grader inherits the step env and must not become a plaintext path into the run directory. Documented limitations: encoded or split secrets are not caught; raw and artifacts contain repository content by nature, and a credentialed step can echo secrets into workspace files that `artifacts:` globs then copy verbatim; `prompt.md` is written pre-redaction, so secrets must not be smuggled through params or gate notes.
 - **Isolation is delegated**: etium sets cwd and env and can invoke a harness through a user-supplied wrapper command (docker, container-use). Sandbox policy is the user's, per the non-goals.
 
 ---
@@ -249,11 +252,16 @@ Gate notes: when a decision carries `--note`, the note is recorded in `gate.deci
 
 ### 10.1 Harness adapter interface
 
-Core owns spawning, raw capture, redaction, budgets, and kill. An adapter is two pure functions — a command builder and a line parser — which is what keeps each one under ~300 LOC:
+Core owns spawning, raw capture, redaction, budgets, kill, and auth preflight. An adapter is two pure functions — a command builder and a line parser — plus an inert auth declaration, which is what keeps each one under ~300 LOC:
 
 ```ts
 interface HarnessAdapter {
   id: string;
+  auth?: {                        // model auth is harness-owned (MODEL_AUTH.md); this is inert data core acts on
+    env?: string[];               // var names passed through into `agent` steps when present in the host env
+    check?: { cmd: string; args: string[] }; // cheap, non-interactive, no browser; exit 0 = authenticated
+    remedy?: string;              // the harness's own fix, printed verbatim — e.g. "codex login"
+  };
   build(req: StepRequest): {
     cmd: string; args: string[];
     stdin?: string;               // prompt via stdin, arg, or file — adapter's choice
@@ -276,8 +284,23 @@ The runner tees raw bytes to `raw.jsonl`, feeds lines to `parse`, attaches `RawR
 - **`exec`**: any command as a black-box step. No `parse`; stdout/stderr are the raw stream; only lifecycle events; unmetered. This is the interface floor and the publication-step vehicle.
 - **`replay`**: plays a recorded raw stream through a named adapter's parser, with optional timing. Deterministic, token-free end-to-end runs; what the test suite and demos run on.
 - **`codex`** (M0): built on Codex's headless JSON event stream (`codex exec --json` as the baseline; exact flags pinned during fixture capture).
-- **`pi`**, **`claude`** (M1): Pi's JSON/RPC mode; Claude Code's stream-json. Raw fixtures from both are captured during M0 to validate the normalized schema against three formats before it hardens.
-- **`openhands`** (M2): drives the OpenHands agent server/CLI as a subprocess.
+- **`pi`** (pulled forward from M1 for the quick start): `pi -p --mode json` (session stream v3). Parser fully validated against captured fixtures (`fixtures/pi/`) — message, usage, error, lifecycle, and tool shapes, the last captured by an etium-supervised run itself. Pi exits 0 even on a failed turn — the parser surfaces the in-stream `errorMessage` as a message event so failures are visible in `etium tail`.
+- **`claude`** (M1): Claude Code's stream-json. Raw fixtures from pi and claude are captured during M0 to validate the normalized schema against three formats before it hardens.
+- **`openhands`** (M2): drives the OpenHands CLI's headless mode as a subprocess — never the agent-server, whose contract expects LLM credentials in-band, which is exactly the brokering `MODEL_AUTH.md` rules out.
+
+Auth declarations per adapter (ADR-007). Status commands and exit-code
+semantics are pinned at fixture-capture time, like parser shapes (ADR-005);
+entries marked *provisional* await that capture. A missing `check` simply
+means creation-time preflight can only verify the binary exists — the step
+still fails legibly at spawn if auth is absent.
+
+| adapter | `auth.env` | `auth.check` | `auth.remedy` |
+|---|---|---|---|
+| `exec`, `replay` | — (none; the test substrate stays credential-free) | — | — |
+| `codex` | `OPENAI_API_KEY` | `codex login status` (*provisional*: exit semantics unpinned) | `codex login` |
+| `claude` | `ANTHROPIC_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN` | `claude auth status` (verified: non-interactive JSON, exit 0 when logged in; *provisional*: logged-out exit code unpinned) | `claude auth login` (or `claude setup-token` for a long-lived token) |
+| `pi` | the providers pi documents: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, … (full list pinned with the adapter) | — (pi ships no status subcommand; OAuth store is `~/.pi/agent/auth.json`) | `pi` then `/login` (interactive) |
+| `openhands` | `LLM_API_KEY` only — declared values are redacted, so non-secret config (`LLM_MODEL`, `LLM_BASE_URL`) does not belong in `auth.env`; the adapter's build() maps model/base-url from step options and adds `--override-with-envs` | — (*provisional*: no known status command; settings live in `~/.openhands/agent_settings.json`) | `openhands` then `/settings` (interactive) |
 
 ### 10.3 Surface adapter interface (M2, design-level)
 
@@ -300,7 +323,7 @@ The GitHub surface maps: issues → tasks; command labels → gate decisions (co
 
 ## 11. Non-goals
 
-Core will never contain: model API clients or context management; an MCP router (etium's boundary is subprocess + JSONL; an `etium-mcp` extension exposing status/approve/dispatch as tools is welcome later); a workflow DSL; a server, web UI, or authoritative database (a derived SQLite index for cross-run `status` at scale is acceptable later — a projection, never a source of truth); sandboxing; an eval framework (stable traces + exporter scripts instead); a scheduler daemon (cron + `tick`); a memory system (files in the workspace); fleet orchestration; GitHub coupling; credential brokering beyond env profiles and redaction.
+Core will never contain: model API clients or context management; an MCP router (etium's boundary is subprocess + JSONL; an `etium-mcp` extension exposing status/approve/dispatch as tools is welcome later); a workflow DSL; a server, web UI, or authoritative database (a derived SQLite index for cross-run `status` at scale is acceptable later — a projection, never a source of truth); sandboxing; an eval framework (stable traces + exporter scripts instead); a scheduler daemon (cron + `tick`); a memory system (files in the workspace); fleet orchestration; GitHub coupling; credential storage or brokering — no credential store, no `etium login`, no OAuth or token refresh, no secret-valued config field; adapter-declared passthrough and redaction (§9, `MODEL_AUTH.md`) are the entire model-auth surface.
 
 ---
 
@@ -323,9 +346,9 @@ are unchanged, enforced per-area by `scripts/loc-budget.mjs`.
 
 LOC budgets are enforced in CI and published in the README — both a feature and a constraint; the credibility test is "read core in an afternoon."
 
-Testing: adapter parser tests against golden fixtures; property tests on the fold (random valid event interleavings preserve invariants); end-to-end on the `replay` harness; crash-injection (SIGKILL a real detached supervisor mid-step; assert `tick` recovers, completed steps never re-execute, interrupted steps re-execute at most from scratch); torn-last-line recovery tests.
+Testing: adapter parser tests against golden fixtures; property tests on the fold (random valid event interleavings preserve invariants); end-to-end on the `replay` harness; crash-injection (SIGKILL a real detached supervisor mid-step; assert `tick` recovers, completed steps never re-execute, interrupted steps re-execute at most from scratch); torn-last-line recovery tests. Model auth (ADR-007): `resolveEnv` passes declared-and-present vars through under `agent`, omits absent ones, leaves `host` and `env.add` precedence unchanged, and registers every passed-through value as a redaction secret unconditionally; passthrough values are redacted in raw, stderr, and `grade.txt`; a failing pre-spawn check appends no `step.started`, ends the run `error` with the remedy in the summary, and a subsequent resume executes the step under the same occurrence; changing host-env credential presence between attaches never diverges; `doctor` against a fake adapter; `exec`/`replay` declare nothing, keeping the test substrate credential-free.
 
-CLI (M0 set): `run`, `status`, `tail`, `gates`, `approve`, `reject`, `resume`, `abandon`, `tick`, `fold`. M1 adds: `redo`, `gc`, `watch`.
+CLI (M0 set): `run`, `status`, `tail`, `gates`, `approve`, `reject`, `resume`, `abandon`, `tick`, `fold`. M1 adds: `redo`, `gc`, `watch`, `doctor`.
 
 ---
 
@@ -333,7 +356,7 @@ CLI (M0 set): `run`, `status`, `tail`, `gates`, `approve`, `reject`, `resume`, `
 
 **M0 — kernel.** Ledger + fold + engine (replay memoization, divergence, parking), runner (raw capture, redaction, wall/stall budgets, kill), lockfile + mailbox + `tick`, adapters `exec` + `replay` + `codex`, the `ralph` loop, the M0 CLI set, plain-directory workspaces. Fixture capture from Claude Code and Pi to validate schema neutrality. Exit criteria: etium is being developed by a Codex ralph loop running under etium, and `kill -9` at any point is recovered by `tick`.
 
-**M1 — daily driver.** Git worktrees per run; usage/cost normalization and token/cost budgets; `pi` and `claude` adapters; the `plan-implement` loop with predecessor defaults; `redo`, `gc`, `watch`.
+**M1 — daily driver.** Git worktrees per run; usage/cost normalization and token/cost budgets; the `claude` adapter (`pi` was pulled forward, provisional, with the quick start; the model-auth pre-spawn gate also landed early — see ADR-007); creation-time preflight and `doctor`; the `plan-implement` loop with predecessor defaults; `redo`, `gc`, `watch`.
 
 **M2 — team surface.** Surface adapter interface + GitHub surface (issues→tasks, labels→decisions, status-comment projection); hardened env profiles and publication steps; `openhands` adapter; predecessor-system migration guide.
 

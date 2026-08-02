@@ -9,7 +9,7 @@ import { pathToFileURL } from "node:url";
 import { executeLoop, type EngineOutcome } from "./engine.ts";
 import { LedgerWriter, loadState, writeStateCache, sha256 } from "./ledger.ts";
 import { acquireLock, isLockLive, lockPath, readLock, releaseLock } from "./lock.ts";
-import { activeChildren, runStep } from "./runner.ts";
+import { activeChildren, checkHarnessAuth, runStep, type StepAuthResult } from "./runner.ts";
 import type { LoopFn } from "./types.ts";
 
 export interface LoopConfig {
@@ -30,7 +30,10 @@ export async function supervise(runDir: string): Promise<SuperviseOutcome> {
   runDir = path.resolve(runDir);
   const runId = path.basename(runDir);
   let state = loadState(runDir);
-  if (state.completed) {
+  // A run completed `error` stays resumable by explicit attach (`etium resume`)
+  // — retry-after-fix, e.g. after authenticating a harness (§6.3). `tick` skips
+  // all completed runs on its own, so errors are never retried unattended.
+  if (state.completed && state.completed.status !== "error") {
     writeStateCache(runDir, state);
     return "already-completed";
   }
@@ -84,6 +87,7 @@ export async function supervise(runDir: string): Promise<SuperviseOutcome> {
     if (typeof mod.default !== "function")
       throw new Error(`loop module has no default export function: ${cfg.loop}`);
 
+    const authCache = new Map<string, StepAuthResult>(); // per attach (§6.3)
     const outcome = await executeLoop({
       runDir,
       runId,
@@ -95,6 +99,14 @@ export async function supervise(runDir: string): Promise<SuperviseOutcome> {
       workspace: cfg.workspace,
       preapprovals: cfg.preapprove ?? [],
       runStepImpl: runStep,
+      stepAuth: (h) => {
+        let r = authCache.get(h);
+        if (r === undefined) {
+          r = checkHarnessAuth(h);
+          authCache.set(h, r);
+        }
+        return r;
+      },
       maxSteps: cfg.maxSteps,
     });
     return outcome;

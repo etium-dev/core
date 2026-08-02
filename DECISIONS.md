@@ -139,3 +139,89 @@ claim. A workspace split today would add packaging surface with zero users on
 the other side of it. This supersedes the literal directory tree in DESIGN §12
 (amended there); the budgets — the part of §12 that is contract — are
 unchanged and enforced.
+
+---
+
+## ADR-007 — Model auth: harness-owned, adapter-declared passthrough, two-tier preflight
+
+**Decision.** Model auth is delegated to harnesses entirely — etium never
+stores, prompts for, refreshes, or brokers a model credential (the position
+and its evidence are in `MODEL_AUTH.md`; this ADR records the mechanism).
+Four pieces:
+
+1. **Declaration.** `HarnessAdapter` gains an optional, inert `auth` field:
+   `env` (var names the harness consumes for model credentials), `check`
+   (a cheap, non-interactive command; exit 0 = authenticated), `remedy`
+   (the harness's own fix, printed verbatim). Adapters stay two pure
+   functions plus data; core acts on the declaration, adapters never read
+   the environment themselves. `exec` and `replay` declare nothing, which
+   keeps the deterministic test substrate credential-free.
+2. **Passthrough.** Under the `agent` profile, `resolveEnv` copies each
+   declared name present in the host env into the step env — inherited at
+   spawn time, stored nowhere. Precedence: explicit `env.add` > declared
+   passthrough > profile allowlist. Every passed-through value joins the
+   redaction secret list *unconditionally* (by declaration, not the
+   name-pattern heuristic). `HOME` stays on the allowlist so store- and
+   keychain-based harness auth keeps working. Grader output is redacted with
+   the same secret list before `grade.txt` is written — the grader inherits
+   the step env, and `env` piped to a grader must not become a plaintext
+   secret in an `rsync`-able run directory.
+3. **Ledger.** `step.started` gains an additive, informational
+   `authEnv?: string[]` — the names actually passed through, never values.
+   It is excluded from the config digest: host-env presence is runtime
+   input, exactly like operator notes (ADR-002), so an attach on a
+   differently-populated environment (another machine, an unset var) must
+   never throw DIVERGENCE. Additive within schema v1 — consumers ignore
+   unknown fields; `schema/events.schema.json` and golden fixtures update
+   in the same change as `types.ts`.
+4. **Preflight, two-tier.** Creation-time: `etium run` checks the harnesses
+   it can resolve (from `--harness`/params) *before* appending `run.created`;
+   on definitive failure it creates nothing, exits non-zero, and prints the
+   remedy. Authoritative: the supervisor runs the declared check on each
+   step's memo miss, *before* `step.started` is appended, cached per harness
+   per attach. Definitive failure (non-zero exit, missing binary) ends the
+   run `error` with the remedy in the summary; because nothing was appended
+   for the step's key, no occurrence is consumed and nothing is memoized —
+   after the operator authenticates, resume replays to the identical point
+   and the step runs for the first time. Indeterminate results (timeout)
+   proceed with a stderr warning: unattended `tick` resumes must never block
+   on a flaky check, and a truly broken credential fails legibly one step
+   later. To make retry-after-fix real, `supervise` re-attaches runs that
+   completed `error` (only `done`/`abandoned`/`superseded` are terminal to
+   it) — the explicit-human path via `etium resume` — while `tick` keeps
+   skipping all completed runs, so errors are never retried unattended.
+   `etium doctor` (M1) renders the same checks read-only and exits 0 —
+   informational; the preflights are the gates.
+
+**Why.** The full argument is `MODEL_AUTH.md`; the load-bearing points: the
+auth-baggage floor (storage, refresh, precedence) is irreducible only for
+things that call models, and etium uniquely doesn't; subscription OAuth —
+the auth mode users actually run — is legally and technically tied to each
+harness and cannot be brokered; and the OpenHands reference implementation
+shows what brokering grows into (plaintext stores, echo-prevention, rotation
+footguns, unresolved credential-scoping issues). Delegation's one real
+weakness is *illegible failure*, so the mechanism spends its entire budget
+on legibility: declared (not accidental) passthrough, names in the ledger,
+remedies printed verbatim, and a check that runs before anything is
+recorded. Creation-time preflight alone was rejected as authoritative
+because harness choice is runtime data (`run.params.harness ?? "codex"` in
+ralph) — statically undecidable, so the pre-spawn check carries the
+guarantee. Failing *before* `step.started` was chosen over a
+`status: "auth"` step outcome because a recorded failure burns the
+`(kind, name, occ)` memo key and hands the loop a failure value it may
+branch on forever; an un-recorded failure makes "fix auth, resume" the
+normal crash-only path.
+
+**Rejected.** An etium credential store / `etium login` / secret-valued
+config (banned in `MODEL_AUTH.md`; imports the brokering baggage without its
+justification). Recording preflight failure as a ledger event (a run that
+never started has nothing to record; the error summary on `run.completed`
+suffices when the supervisor was already attached). Including `authEnv` in
+the config digest (spurious DIVERGENCE on env changes between attaches).
+Gating passthrough-value redaction on the `SECRET_NAME` heuristic (a var is
+a credential *by declaration*; the heuristic exists for undeclared `host`
+vars). A loop-level harness-declaration surface for creation-time preflight
+(new API surface to make a best-effort check slightly less partial — the
+pre-spawn check already carries the guarantee). Driving the OpenHands
+agent-server (expects LLM credentials in-band — the rejected brokering;
+the adapter drives the headless CLI, which reads its own settings store).

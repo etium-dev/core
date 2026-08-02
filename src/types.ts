@@ -52,8 +52,9 @@ export interface StepStartedData extends StepRef {
   model?: string;
   promptSha256: string;
   envProfile: string;
+  authEnv?: string[]; // names of adapter-declared vars passed through — never values (§9, ADR-007)
   budget: BudgetSpec;
-  digest: string; // config digest for divergence detection (§6.2)
+  digest: string; // config digest for divergence detection (§6.2); authEnv is runtime input, excluded
   unmetered?: boolean;
   notes?: number; // count of operator notes injected into the prompt
 }
@@ -210,6 +211,12 @@ export type HarnessEvent =
 
 export interface HarnessAdapter {
   id: string;
+  auth?: {
+    // Model auth is harness-owned (MODEL_AUTH.md, ADR-007); this is inert data core acts on.
+    env?: string[]; // credential var names passed through into `agent` steps; values always redacted
+    check?: { cmd: string; args: string[] }; // cheap, non-interactive; exit 0 = authenticated
+    remedy?: string; // the harness's own fix, printed verbatim — e.g. "codex login"
+  };
   build(req: AdapterBuildRequest): BuildResult;
   parse?(line: string): HarnessEvent[] | null; // null/undefined = raw-only line
 }

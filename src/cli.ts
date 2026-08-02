@@ -382,7 +382,8 @@ async function cmdAbandon(argv: string[]): Promise<number> {
     }
   }
   const st = loadState(runDir);
-  if (st.completed) {
+  // Errored runs stay resumable (§6.3) and therefore also abandonable.
+  if (st.completed && st.completed.status !== "error") {
     process.stdout.write(`run already completed (${st.completed.status})\n`);
     return 0;
   }
@@ -499,6 +500,11 @@ const invoked = process.argv[1]
     })()
   : "";
 if (invoked === entry) {
+  // `etium status | head` must not crash: a closed pipe ends output, not the run.
+  process.stdout.on("error", (e: NodeJS.ErrnoException) => {
+    if (e.code === "EPIPE") process.exit(0);
+    throw e;
+  });
   main(process.argv.slice(2)).then((code) => {
     process.exitCode = code;
   });

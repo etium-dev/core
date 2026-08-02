@@ -60,6 +60,12 @@ export interface RunStepOutcome {
 }
 export type RunStepImpl = (args: RunStepArgs) => Promise<RunStepOutcome>;
 
+/** Pre-spawn auth gate (§6.3): consulted on memo miss before `step.started` is
+ * appended. Structurally matches runner.checkHarnessAuth. */
+export type StepAuthFn = (
+  harness: string,
+) => { ok: true; authEnv: string[] } | { ok: false; detail: string };
+
 export interface EngineCtx {
   runDir: string;
   runId: string;
@@ -71,6 +77,7 @@ export interface EngineCtx {
   workspace: string;
   preapprovals: string[];
   runStepImpl: RunStepImpl;
+  stepAuth?: StepAuthFn;
   maxSteps?: number; // per-run guard; default 100
   pollMs?: number; // test hook
 }
@@ -256,6 +263,16 @@ export async function executeLoop(ctx: EngineCtx): Promise<EngineOutcome> {
       if (stepCount >= maxSteps)
         throw new EtiumError(`per-run step guard exceeded (${maxSteps}); raise maxSteps deliberately`);
 
+      // Auth gate before anything is recorded for this key (§6.3): a failure
+      // consumes no occurrence, so a fixed credential resumes into a clean
+      // first execution instead of replaying a memoized failure.
+      let authEnv: string[] | undefined;
+      if (ctx.stepAuth) {
+        const auth = ctx.stepAuth(opts.harness);
+        if (!auth.ok) throw new EtiumError(auth.detail);
+        authEnv = auth.authEnv.length > 0 ? auth.authEnv : undefined;
+      }
+
       active++;
       try {
         const { text: prompt, injected } = resolvePrompt(opts.prompt);
@@ -266,6 +283,7 @@ export async function executeLoop(ctx: EngineCtx): Promise<EngineOutcome> {
           model: opts.model,
           promptSha256: sha256(prompt),
           envProfile: opts.env?.profile ?? "agent",
+          authEnv,
           budget: opts.budget ?? {},
           digest,
           unmetered: opts.harness === "exec" || undefined,
