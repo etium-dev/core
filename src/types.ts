@@ -38,7 +38,9 @@ export type RunEndStatus = "done" | "abandoned" | "superseded" | "error";
  * is the degenerate case, not the definition (ADR-008). */
 export type Decision = string;
 export const DEFAULT_GATE_OPTIONS = ["approve", "reject"];
-export type DecisionVia = "cli" | "preapproval" | "github" | "mcp";
+/** How a decision arrived: "cli", "preapproval", "mcp", or a surface id
+ * (e.g. "github"). Open-ended because surfaces are user-supplied (§10.3). */
+export type DecisionVia = string;
 
 export interface RunCreatedData {
   taskSha256: string;
@@ -279,6 +281,63 @@ export interface Run {
 }
 
 export type LoopFn = (run: Run) => Promise<void>;
+
+// ---------------------------------------------------------------------------
+// Surfaces (§10.3): pull-based adapters driven by `etium tick`. A surface
+// turns an external system's event stream into tasks and gate decisions, and
+// projects run state back out (idempotently — projections are never read
+// back). Loaded from user-supplied modules via `etium tick --surface <path>`.
+// ---------------------------------------------------------------------------
+
+export interface SurfaceTask {
+  /** Idempotency key, stable across redelivery — use the id of the external
+   * event that triggered the task (a new attempt needs a new key). At most one
+   * run is ever created per (surface id, key). */
+  key: string;
+  task: string; // task.md content
+  loop: string; // loop path or builtin name
+  params?: Record<string, string>;
+  workspace?: string;
+  preapprove?: string[];
+  maxSteps?: number;
+}
+
+export interface SurfaceDecision {
+  run: string; // exact run id
+  gate: string;
+  decision: string; // must be in the gate's declared options; validated fail-closed
+  note?: string;
+  by: string; // platform identity; surfaces enforce their own authorization (§8)
+}
+
+/** Derived, read-only view of one run, built from the fold. Surfaces needing
+ * more read the run directory itself — files are the API (§4). */
+export interface RunView {
+  id: string;
+  dir: string;
+  status: RunStatus;
+  params: Record<string, string>;
+  workspace: string;
+  openGates: GateOpenedData[];
+  usage: Required<Usage>;
+  seq: number;
+  lastEventTs?: string;
+  completed?: RunCompletedData;
+}
+
+export interface SurfacePollResult {
+  tasks: SurfaceTask[];
+  decisions: SurfaceDecision[];
+  /** Opaque to core; persisted and handed back on the next poll. Encode
+   * whatever the surface needs (timeline cursor, per-run projected seq, …). */
+  cursor: string | null;
+}
+
+export interface Surface {
+  id: string; // becomes `via` on decisions and namespaces the cursor
+  poll(ctx: { cursor: string | null; runs: RunView[] }): SurfacePollResult | Promise<SurfacePollResult>;
+  project?(run: RunView): void | Promise<void>;
+}
 
 // ---------------------------------------------------------------------------
 // Helpers shared across core

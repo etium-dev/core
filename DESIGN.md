@@ -133,7 +133,7 @@ There is no daemon. Three process roles, all short-lived or step-lived:
 
 - **CLI** (`etium ...`): creates runs, reads projections, drops decisions, spawns supervisors detached.
 - **Supervisor** (one per active run): holds the lock, executes the loop function under replay, spawns step subprocesses, enforces budgets, appends events. Exits when the run completes, errors, or parks.
-- **`etium tick`**: idempotent janitor. For each run: skip live supervisors and completed runs; if the run is resumable (interrupted; running with a dead or stale lock; created but never supervised; or parked with a pending decision in the mailbox) → spawn a detached supervisor. The attaching supervisor — never tick — clears the stale lock and appends `run.interrupted` (with the dead holder's pid/host/lock age, or `no-lock` if a prior supervisor died between releasing the lock and recording an outcome), preserving Invariant 4: only the lock holder writes. Guarded by a global tick lock so overlapping cron invocations no-op. In M2, `tick` also drives pull-based surface adapters (§10.3).
+- **`etium tick`**: idempotent janitor. For each run: skip live supervisors and completed runs; if the run is resumable (interrupted; running with a dead or stale lock; created but never supervised; or parked with a pending decision in the mailbox) → spawn a detached supervisor. The attaching supervisor — never tick — clears the stale lock and appends `run.interrupted` (with the dead holder's pid/host/lock age, or `no-lock` if a prior supervisor died between releasing the lock and recording an outcome), preserving Invariant 4: only the lock holder writes. Guarded by a global tick lock so overlapping cron invocations no-op. `tick` also drives pull-based surface adapters (§10.3) when invoked with `--surface <path>`: surfaces are polled first (so a decision polled this tick resumes its run this tick), runs are reconciled second, projections run last.
 
 `etium watch` is sugar: `loop { tick; sleep 30 }`. It holds no state and gets no socket. Cron calling `tick` is the supported "automation" mechanism; scheduling semantics belong to cron.
 
@@ -304,18 +304,52 @@ still fails legibly at spawn if auth is absent.
 | `pi` | the providers pi documents: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, … (full list pinned with the adapter) | — (pi ships no status subcommand; OAuth store is `~/.pi/agent/auth.json`) | `pi` then `/login` (interactive) |
 | `openhands` | `LLM_API_KEY` only — declared values are redacted, so non-secret config (`LLM_MODEL`, `LLM_BASE_URL`) does not belong in `auth.env`; the adapter's build() maps model/base-url from step options and adds `--override-with-envs` | — (*provisional*: no known status command; settings live in `~/.openhands/agent_settings.json`) | `openhands` then `/settings` (interactive) |
 
-### 10.3 Surface adapter interface (M2, design-level)
+### 10.3 Surface adapter interface
 
-Pull-based, driven by `tick`; projections are idempotent:
+Pull-based, driven by `etium tick --surface <path>` (repeatable); a surface is
+a user-supplied module, loaded like a loop (ADR-009):
 
 ```ts
 interface Surface {
-  poll(cursor: string | null): { tasks: NewTask[]; decisions: ExternalDecision[]; cursor: string };
-  project(run: RunView): Promise<void>;  // e.g., upsert one status comment from the ledger
+  id: string;                       // becomes `via` on decisions; namespaces the cursor
+  poll(ctx: { cursor: string | null; runs: RunView[] }):
+    { tasks: SurfaceTask[]; decisions: SurfaceDecision[]; cursor: string | null };
+  project?(run: RunView): void | Promise<void>;  // e.g. upsert one status comment
 }
 ```
 
-The GitHub surface maps: issues → tasks; command labels → gate decisions (consumed on acceptance, exactly-one-command, unauthorized actors refused); one bot-owned status comment → a projection of the ledger, rewritten idempotently, never read back as state.
+Semantics, all fail-closed and at-least-once:
+
+- **Tasks** carry a required idempotency `key` — the id of the external event
+  that triggered them (a new attempt is a new event, hence a new key). Core
+  creates at most one run per `(surface id, key)`, recorded as the reserved
+  run param `surface.task` (`surface` is also reserved); redelivery skips.
+- **Decisions** name an exact run id and gate; core validates the gate is
+  open and the decision is in the declared option set (§8) before writing the
+  mailbox file with `via: <surface id>` — invalid ones are dropped and
+  reported, never guessed. Surfaces should pre-validate against
+  `runs[].openGates[].options` to give their own users a good error reply;
+  core's check is the defensive layer.
+- **The cursor is opaque to core** — persisted under `.etium/surfaces/` and
+  handed back on the next poll. Encode whatever the surface needs (timeline
+  position, per-run projected seq). It advances only after the poll's actions
+  land; a crash replays, and the key check plus fail-closed decisions absorb
+  the redelivery.
+- **Projections are idempotent and never read back** (Invariant 2). `project`
+  runs for every run each tick, after reconciliation; a throwing surface is
+  reported and skipped — it must never block reconciliation. `RunView` is the
+  fold, read-only: id, dir, status, params, workspace, open gates (with
+  options), usage, seq, completion. Anything more, the surface reads from the
+  run directory — files are the API.
+
+The GitHub surface (M2, shipped as a package outside core) maps: issue
+assignment → a task; **command comments** (`/et plan`, `/et approve — note`)
+→ gate decisions, validated against the gate's declared options, consumed by
+cursor advance — never labels, which are a mutable bitfield with no payload,
+no atomic consume, and no attribution; one bot-owned status comment → the
+projection, listing the currently-valid commands; a tiny write-only label set
+(`et:working` / `et:waiting` / `et:blocked`) → filter decoration only.
+Unauthorized authors are refused surface-side (§8 attribution).
 
 ### 10.4 Grader hook
 
@@ -360,7 +394,7 @@ CLI (M0 set): `run`, `status`, `tail`, `gates`, `approve`, `reject`, `decide`, `
 
 **M1 — daily driver.** Git worktrees per run; usage/cost normalization and token/cost budgets; the `claude` adapter (`pi` was pulled forward with the quick start and is fixture-validated; the model-auth pre-spawn gate also landed early — see ADR-007); creation-time preflight and `doctor`; a tick admission cap (resume at most K live supervisors per tick, oldest first; the rest stay parked until a later tick — a budget, not a scheduler); the `plan-implement` loop with predecessor defaults; `redo`, `gc`, `watch`.
 
-**M2 — team surface.** Surface adapter interface + GitHub surface (issues→tasks, labels→decisions, status-comment projection); hardened env profiles and publication steps; `openhands` adapter; predecessor-system migration guide.
+**M2 — team surface.** GitHub surface as a package (assignment→tasks, `/et` command comments→decisions, status-comment projection — the surface adapter interface itself landed early, §10.3/ADR-009); hardened env profiles and publication steps; `openhands` adapter; predecessor-system migration guide.
 
 **M3 — ecosystem.** Trace exporters (OTel / Braintrust / LangSmith / Laminar scripts); static HTML trace viewer generated from ledger + raw; loop-authoring guide; `etium-mcp` extension.
 

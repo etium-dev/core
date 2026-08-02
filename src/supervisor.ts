@@ -6,11 +6,12 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
+import { bundledLoopsDir } from "./adapters.ts";
 import { executeLoop, type EngineOutcome } from "./engine.ts";
 import { LedgerWriter, loadState, writeStateCache, sha256 } from "./ledger.ts";
 import { acquireLock, isLockLive, lockPath, readLock, releaseLock } from "./lock.ts";
 import { activeChildren, checkHarnessAuth, runStep, type StepAuthResult } from "./runner.ts";
-import type { LoopFn } from "./types.ts";
+import { ETIUM_VERSION, type LoopFn } from "./types.ts";
 
 export interface LoopConfig {
   loop: string; // absolute module path (or builtin already resolved to one)
@@ -22,6 +23,83 @@ export interface LoopConfig {
 
 export function loopConfigPath(runDir: string): string {
   return path.join(runDir, "loop.json");
+}
+
+// ---------------------------------------------------------------------------
+// Run creation (§6.1) — shared by `etium run` and surface-delivered tasks.
+// ---------------------------------------------------------------------------
+
+export interface CreateRunSpec {
+  task: string; // task.md content
+  loop: string; // builtin name or path to a loop module
+  params?: Record<string, string>;
+  workspace?: string; // default: <runDir>/ws
+  preapprove?: string[];
+  maxSteps?: number;
+  idSeed?: string; // slug source for the run id; default: the task text
+}
+
+function slug(s: string): string {
+  return (
+    s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 24) || "run"
+  );
+}
+
+/** Resolve a builtin loop name or user path to an absolute module path. */
+export function resolveLoop(ref: string): string {
+  if (!ref.includes("/") && !ref.includes(".")) {
+    const cands = [path.join(bundledLoopsDir(), `${ref}.js`), path.join(bundledLoopsDir(), `${ref}.ts`)];
+    const hit = cands.find((p) => fs.existsSync(p));
+    if (!hit) throw new Error(`unknown builtin loop "${ref}"`);
+    return hit;
+  }
+  const p = path.resolve(ref);
+  if (!fs.existsSync(p)) throw new Error(`loop not found: ${p}`);
+  return p;
+}
+
+export function createRun(base: string, spec: CreateRunSpec): { runId: string; runDir: string } {
+  if (!spec.task) throw new Error("run creation needs task text");
+  const loopPath = resolveLoop(spec.loop);
+  const date = new Date().toISOString().slice(0, 10);
+  const rand = Math.random().toString(36).slice(2, 6);
+  const runId = `${date}-${slug(spec.idSeed ?? spec.task)}-${rand}`;
+  const runDir = path.join(base, "runs", runId);
+  fs.mkdirSync(runDir, { recursive: true });
+  fs.writeFileSync(path.join(runDir, "task.md"), spec.task);
+
+  const workspace = spec.workspace ? path.resolve(spec.workspace) : path.join(runDir, "ws");
+  fs.mkdirSync(workspace, { recursive: true });
+  const wsLink = path.join(runDir, "workspace");
+  if (!fs.existsSync(wsLink)) {
+    try {
+      fs.symlinkSync(workspace, wsLink);
+    } catch {
+      /* e.g. FS without symlinks; the path is in loop.json regardless */
+    }
+  }
+
+  const params = spec.params ?? {};
+  const cfg: LoopConfig = {
+    loop: loopPath,
+    params,
+    workspace,
+    preapprove: spec.preapprove ?? [],
+    maxSteps: spec.maxSteps,
+  };
+  fs.writeFileSync(loopConfigPath(runDir), JSON.stringify(cfg, null, 2));
+
+  const w = new LedgerWriter(runDir, runId, 0);
+  w.append("run.created", {
+    taskSha256: sha256(spec.task),
+    loop: loopPath,
+    params,
+    workspace,
+    etiumVersion: ETIUM_VERSION,
+  });
+  w.close();
+  writeStateCache(runDir, loadState(runDir));
+  return { runId, runDir };
 }
 
 export type SuperviseOutcome = EngineOutcome | "already-running" | "already-completed";

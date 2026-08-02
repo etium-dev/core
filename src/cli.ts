@@ -7,11 +7,10 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { bundledLoopsDir } from "./adapters.ts";
-import { LedgerWriter, loadState, openGates, readLedger, sha256, writeStateCache } from "./ledger.ts";
+import { LedgerWriter, loadState, openGates, readLedger, writeStateCache } from "./ledger.ts";
 import { isLockLive, readLock, writeDecision } from "./lock.ts";
-import { loopConfigPath, supervise, superviseDetached, type LoopConfig } from "./supervisor.ts";
-import { tickOnce } from "./tick.ts";
+import { createRun, supervise, superviseDetached } from "./supervisor.ts";
+import { loadSurfaces, tickOnce } from "./tick.ts";
 import { DEFAULT_GATE_OPTIONS, ETIUM_VERSION, type AnyEnvelope } from "./types.ts";
 
 const HELP = `etium — the outer loop for coding agents
@@ -27,7 +26,7 @@ usage:
   etium resume  <run>        attach a supervisor
   etium abandon <run> [--reason text]
   etium tail    <run> [--once]
-  etium tick                 reconcile all runs (cron-safe, idempotent)
+  etium tick [--surface path]…   reconcile all runs; poll/project surfaces (cron-safe, idempotent)
   etium fold    <run>        rebuild state.json from the ledger
   etium --version
 
@@ -58,16 +57,6 @@ function resolveRunDir(b: string, idOrPrefix: string): string {
   );
 }
 
-function slug(s: string): string {
-  return (
-    s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 24) || "run"
-  );
-}
-function newRunId(seed: string): string {
-  const d = new Date().toISOString().slice(0, 10);
-  const rand = Math.random().toString(36).slice(2, 6);
-  return `${d}-${slug(seed)}-${rand}`;
-}
 function age(ts?: string): string {
   if (!ts) return "-";
   const s = Math.max(0, Math.round((Date.now() - Date.parse(ts)) / 1000));
@@ -145,39 +134,6 @@ async function cmdRun(argv: string[]): Promise<number> {
     process.stderr.write("etium run: provide a goal or --task file\n");
     return 2;
   }
-  const runId = newRunId(v.task ? path.basename(v.task, path.extname(v.task)) : goal);
-  const runDir = path.join(runsDir(b), runId);
-  fs.mkdirSync(runDir, { recursive: true });
-  fs.writeFileSync(path.join(runDir, "task.md"), taskText);
-
-  const workspace = v.workspace ? path.resolve(v.workspace) : path.join(runDir, "ws");
-  fs.mkdirSync(workspace, { recursive: true });
-  const wsLink = path.join(runDir, "workspace");
-  if (!fs.existsSync(wsLink)) {
-    try {
-      fs.symlinkSync(workspace, wsLink);
-    } catch {
-      /* e.g. FS without symlinks; the path is in loop.json regardless */
-    }
-  }
-
-  let loopPath: string;
-  if (!v.loop!.includes("/") && !v.loop!.includes(".")) {
-    const cands = [path.join(bundledLoopsDir(), `${v.loop}.js`), path.join(bundledLoopsDir(), `${v.loop}.ts`)];
-    const hit = cands.find((p) => fs.existsSync(p));
-    if (!hit) {
-      process.stderr.write(`etium run: unknown builtin loop "${v.loop}"\n`);
-      return 2;
-    }
-    loopPath = hit;
-  } else {
-    loopPath = path.resolve(v.loop!);
-    if (!fs.existsSync(loopPath)) {
-      process.stderr.write(`etium run: loop not found: ${loopPath}\n`);
-      return 2;
-    }
-  }
-
   const params: Record<string, string> = {};
   for (const p of v.param ?? []) {
     const i = p.indexOf("=");
@@ -189,34 +145,30 @@ async function cmdRun(argv: string[]): Promise<number> {
   }
   if (v.harness) params.harness = v.harness;
 
-  const cfg: LoopConfig = {
-    loop: loopPath,
-    params,
-    workspace,
-    preapprove: v.approve ?? [],
-    maxSteps: v["max-steps"] ? Number(v["max-steps"]) : undefined,
-  };
-  fs.writeFileSync(loopConfigPath(runDir), JSON.stringify(cfg, null, 2));
+  let created: { runId: string; runDir: string };
+  try {
+    created = createRun(b, {
+      task: taskText,
+      loop: v.loop!,
+      params,
+      workspace: v.workspace,
+      preapprove: v.approve ?? [],
+      maxSteps: v["max-steps"] ? Number(v["max-steps"]) : undefined,
+      idSeed: v.task ? path.basename(v.task, path.extname(v.task)) : goal,
+    });
+  } catch (e) {
+    process.stderr.write(`etium run: ${e instanceof Error ? e.message : String(e)}\n`);
+    return 2;
+  }
 
-  const w = new LedgerWriter(runDir, runId, 0);
-  w.append("run.created", {
-    taskSha256: sha256(taskText),
-    loop: loopPath,
-    params,
-    workspace,
-    etiumVersion: ETIUM_VERSION,
-  });
-  w.close();
-  writeStateCache(runDir, loadState(runDir));
-
-  process.stdout.write(`${runId}\n`);
+  process.stdout.write(`${created.runId}\n`);
   if (wantSync(v.sync)) {
-    const outcome = await supervise(runDir);
+    const outcome = await supervise(created.runDir);
     process.stdout.write(`outcome: ${outcome}\n`);
     return outcome === "error" ? 1 : 0;
   }
-  superviseDetached(runDir, entry);
-  process.stdout.write(`supervisor detached; \`etium status ${runId}\` to watch\n`);
+  superviseDetached(created.runDir, entry);
+  process.stdout.write(`supervisor detached; \`etium status ${created.runId}\` to watch\n`);
   return 0;
 }
 
@@ -447,9 +399,14 @@ async function cmdTail(argv: string[]): Promise<number> {
 async function cmdTick(argv: string[]): Promise<number> {
   const { values: v } = parseArgs({
     args: argv,
-    options: { dir: { type: "string" }, sync: { type: "boolean" } },
+    options: {
+      dir: { type: "string" },
+      sync: { type: "boolean" },
+      surface: { type: "string", multiple: true },
+    },
   });
-  const actions = await tickOnce(base(v.dir), entry, wantSync(v.sync));
+  const surfaces = await loadSurfaces(v.surface ?? []);
+  const actions = await tickOnce(base(v.dir), entry, wantSync(v.sync), surfaces);
   for (const a of actions)
     process.stdout.write(`${a.run.padEnd(36)} ${a.action}${a.detail ? `  (${a.detail})` : ""}\n`);
   if (!actions.length) process.stdout.write("no runs\n");

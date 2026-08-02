@@ -266,3 +266,56 @@ to blobs; no workflow in scope needs it). Multi-select (its consumer is
 always the model, so the note covers it; the predecessor treats multiple
 simultaneous commands as an error — hard-won evidence that single-choice is
 the right human contract).
+
+---
+
+## ADR-009 — Surfaces: pull-based poll/project modules driven by tick; commands are comments, not labels
+
+**Decision.** A surface is a user-supplied module (`etium tick --surface
+<path>`, loaded like a loop) implementing `{ id, poll(ctx), project?(run) }`.
+`poll` receives an opaque persisted cursor plus read-only `RunView`s and
+returns new tasks and gate decisions; `project` idempotently pushes run state
+out and is never read back. Core creates at most one run per task
+idempotency `key` (recorded as reserved param `surface.task`), validates
+decisions fail-closed against the gate's ledger-declared options before
+writing the mailbox with `via: <surface id>`, and orders each tick
+poll → reconcile → project so a decision polled this tick resumes its run
+this tick. A broken surface is reported and skipped; reconciliation never
+waits on one.
+
+**Why pull + cursor + keys.** Push (webhooks, servers) needs something
+resident — the non-goal. Pull from cron-driven tick matches ADR-003's
+liveness story and makes offline honest: nothing updates, nothing lies, the
+next tick catches up. At-least-once with an opaque cursor is the simplest
+correct contract: the cursor advances after actions land, and redelivery is
+absorbed by the task-key check and by decisions failing closed on
+already-decided gates — idempotency in the actions, not in delivery
+plumbing. Task keys are the triggering external event's id, so "new attempt"
+is naturally "new event, new key" with no attempt-counter machinery.
+
+**Why commands are comments, not labels (the predecessor's core flaw).**
+Labels did three jobs — command channel, status display, state storage — on
+GitHub's one mutable-state primitive: a shared, unversioned bitfield with
+last-writer-wins, no compare-and-swap ("consume the label" is a
+read-then-write race), no payload (forcing the comment-before-label ordering
+trap), and no attribution without a second read path (the timeline). Status
+labels as mutable flags are why the watchdog apparatus existed. GitHub's
+event primitive is the comment: append-only, attributed, ordered, carries
+option + note in one atomic unit, consumed by cursor advance with no
+mutation. So: `/et <option> [note]` comments in (slash form, not @-mention —
+short handles like @et belong to real users who would be pinged), one
+idempotently-rewritten status comment out (listing the currently-valid
+commands), labels reduced to a write-only filter-decoration set
+(`et:working`/`et:waiting`/`et:blocked`) that nothing ever reads back, and
+assignment/merge/close consumed as timeline events under the same cursor.
+Option strings must read as imperatives addressed to the agent (triage,
+debug, design, plan, implement; approve/reject/stop) — "does `/et <option>`
+parse as an order" is the naming test.
+
+**Rejected.** Config-as-code for surface registration (the cron line naming
+`--surface` paths IS the registration; no new config machinery — §14 open
+item 1 stays open on its own merits). Surfaces in core (the GitHub surface
+is policy-heavy and ships as a package; core carries only the interface).
+Push/webhook ingestion in core (a tiny external trigger can always call
+`etium tick`). Labels as commands (above). Per-run cursors managed by core
+(the cursor is opaque precisely so surfaces encode their own).
