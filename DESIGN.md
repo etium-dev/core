@@ -110,8 +110,8 @@ Newline-delimited JSON (JSONL), append-only, single writer. Crash recovery rule:
 | `step.started` | supervisor | name, occ, harness, model?, prompt sha256, env profile, auth env names?, budget, config digest |
 | `step.activity` | supervisor | step ref, kind: `message` \| `tool` \| `usage`, summary (short string), usage delta?, raw: RawRef |
 | `step.completed` | supervisor | step ref, status: `ok` \| `error` \| `killed` \| `budget`, exit code?, usage totals, raw file + sha256, artifacts[], passed? |
-| `gate.opened` | supervisor | name, occ, show: artifact refs |
-| `gate.decided` | lock holder | name, occ, decision: `approve` \| `reject`, note?, by, via: `cli` \| `preapproval` \| `github` \| `mcp` |
+| `gate.opened` | supervisor | name, occ, options (declared answer set; `["approve","reject"]` when undeclared), show: artifact refs |
+| `gate.decided` | lock holder | name, occ, decision: one element of the recorded options, note?, by, via: `cli` \| `preapproval` \| `github` \| `mcp` |
 | `effect.recorded` | supervisor | name, occ, value (small JSON) |
 | `budget.warning` | supervisor | step ref?, kind: `stall` \| `approaching`, detail |
 | `budget.exceeded` | supervisor | step ref, which budget, action: `killed` |
@@ -224,7 +224,9 @@ export default async function ralph(run: Run) {
 }
 ```
 
-API surface (complete): `run.step(name, opts)`, `run.gate(name, opts?)`, `run.effect(name, fn)`, `run.abandon(reason)`, `run.params`, `run.id`, `run.workspace`, and `t(file)` (also available as `run.t(file)`, which is what bundled `.js` loops use to avoid importing the package). That is the whole vocabulary. Reference loops: `ralph` (M0), `plan-implement` (M1, above), `triage` (M2). Everything else is user-authored.
+API surface (complete): `run.step(name, opts)`, `run.gate(name, opts?)`, `run.effect(name, fn)`, `run.abandon(reason)`, `run.params`, `run.id`, `run.workspace`, and `t(file)` (also available as `run.t(file)`, which is what bundled `.js` loops use to avoid importing the package). That is the whole vocabulary.
+
+A gate is a question with a declared, finite answer set (ADR-008): `run.gate(name, { options: ["debug", "architecture", "plan"] })` returns `{ decision, note?, by }` where `decision` is the chosen element — deterministic loop code branches on it with a `switch`. Gates that declare nothing get the default set `["approve", "reject"]`; the binary gate is the degenerate case, not the definition. Free-form human input still travels in the note, whose consumer is the next prompt. Reference loops: `ralph` (M0), `plan-implement` (M1, above), `triage` (M2). Everything else is user-authored.
 
 Gate notes: when a decision carries `--note`, the note is recorded in `gate.decided`, returned from `run.gate()`, and additionally auto-appended to the next step's prompt (visible in that step's `prompt.md`). Feedback is snapshotted at step start; nothing arriving mid-step is injected.
 
@@ -232,9 +234,9 @@ Gate notes: when a decision carries `--note`, the note is recorded in `gate.deci
 
 ## 8. Gates and decisions
 
-- `gate.opened` lists artifact refs to show the human. `etium gates` renders the inbox across all runs.
-- Decisions travel through the **mailbox**: `etium approve <run> <gate> [--note ...]` writes `decisions/<gate>.<occ>.json` `{ decision, note, by, via, ts }`. The lock holder ingests mailbox files, appends `gate.decided`, and deletes the file — consumed once, even with a live supervisor running parallel steps. If no supervisor is alive, `approve` verifies the gate is open, writes the decision file, and spawns a detached supervisor, returning immediately; the supervisor ingests the mailbox at attach (`etium tail` to watch). The CLI never takes the run lock itself.
-- `approve`/`reject` error if the gate is not open — fail closed, no blind pre-approval. The sanctioned pre-approval path is explicit at run creation: `etium run --approve merge-approved ...` records intent; when that gate opens it is immediately decided with `via: "preapproval"`.
+- `gate.opened` records the declared answer set (`options`) and lists artifact refs to show the human. `etium gates` renders the inbox across all runs, including each gate's options.
+- Decisions travel through the **mailbox**: `etium approve <run> <gate> [--note ...]` (sugar for the default binary set) or `etium decide <run> <gate> <option> [--note ...]` writes `decisions/<gate>.<occ>.json` `{ decision, note, by, via, ts }`. The lock holder ingests mailbox files, appends `gate.decided`, and deletes the file — consumed once, even with a live supervisor running parallel steps. If no supervisor is alive, the CLI verifies the gate is open, writes the decision file, and spawns a detached supervisor, returning immediately; the supervisor ingests the mailbox at attach (`etium tail` to watch). The CLI never takes the run lock itself.
+- Decisions fail closed twice over: the gate must be open, and the decision must be an element of the option set **as recorded in `gate.opened`** — the ledger, not current loop code, is the validation authority (if the two drift after a loop edit, the supervisor warns and the ledger governs). Invalid decisions are dropped with a message naming the declared options. The sanctioned pre-approval path is explicit at run creation: `etium run --approve merge-approved ...` records intent; when that gate opens it is immediately decided with `via: "preapproval"` — and errors loudly if the gate's declared options do not include `"approve"`.
 - Attribution: `by` is the OS user for CLI, the platform identity for surfaces (M2). Surfaces must enforce their own authorization (the GitHub surface honors an allowlist equivalent to the predecessor's single trusted user).
 
 ---
@@ -348,7 +350,7 @@ LOC budgets are enforced in CI and published in the README — both a feature an
 
 Testing: adapter parser tests against golden fixtures; property tests on the fold (random valid event interleavings preserve invariants); end-to-end on the `replay` harness; crash-injection (SIGKILL a real detached supervisor mid-step; assert `tick` recovers, completed steps never re-execute, interrupted steps re-execute at most from scratch); torn-last-line recovery tests. Model auth (ADR-007): `resolveEnv` passes declared-and-present vars through under `agent`, omits absent ones, leaves `host` and `env.add` precedence unchanged, and registers every passed-through value as a redaction secret unconditionally; passthrough values are redacted in raw, stderr, and `grade.txt`; a failing pre-spawn check appends no `step.started`, ends the run `error` with the remedy in the summary, and a subsequent resume executes the step under the same occurrence; changing host-env credential presence between attaches never diverges; `doctor` against a fake adapter; `exec`/`replay` declare nothing, keeping the test substrate credential-free.
 
-CLI (M0 set): `run`, `status`, `tail`, `gates`, `approve`, `reject`, `resume`, `abandon`, `tick`, `fold`. M1 adds: `redo`, `gc`, `watch`, `doctor`.
+CLI (M0 set): `run`, `status`, `tail`, `gates`, `approve`, `reject`, `decide`, `resume`, `abandon`, `tick`, `fold`. M1 adds: `redo`, `gc`, `watch`, `doctor`.
 
 ---
 

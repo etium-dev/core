@@ -12,7 +12,7 @@ import { LedgerWriter, loadState, openGates, readLedger, sha256, writeStateCache
 import { isLockLive, readLock, writeDecision } from "./lock.ts";
 import { loopConfigPath, supervise, superviseDetached, type LoopConfig } from "./supervisor.ts";
 import { tickOnce } from "./tick.ts";
-import { ETIUM_VERSION, type AnyEnvelope } from "./types.ts";
+import { DEFAULT_GATE_OPTIONS, ETIUM_VERSION, type AnyEnvelope } from "./types.ts";
 
 const HELP = `etium — the outer loop for coding agents
 
@@ -22,6 +22,7 @@ usage:
   etium status [run]         one line per run, or detail for one
   etium gates                open gates across all runs
   etium approve <run> <gate> [--note text]
+  etium decide  <run> <gate> <option> [--note text]   (gates with declared options)
   etium reject  <run> <gate> [--note text]
   etium resume  <run>        attach a supervisor
   etium abandon <run> [--reason text]
@@ -93,10 +94,15 @@ function fmtEvent(e: AnyEnvelope): string {
       const tok = d.usage ? `  ${(d.usage.tokensIn ?? 0) + (d.usage.tokensOut ?? 0)} tok` : "";
       return `${t}  step ${mark} ${d.step.name}.${d.step.occ}  ${d.status}${d.passed !== undefined ? ` passed=${d.passed}` : ""}${tok}`;
     }
-    case "gate.opened":
-      return `${t}  gate ? ${e.data.name}.${e.data.occ}  awaiting decision${e.data.show.length ? `  show=${e.data.show.join(",")}` : ""}`;
-    case "gate.decided":
-      return `${t}  gate ${e.data.decision === "approve" ? "✓" : "✗"} ${e.data.name}.${e.data.occ}  ${e.data.decision} by ${e.data.by} (${e.data.via})${e.data.note ? ` — ${e.data.note}` : ""}`;
+    case "gate.opened": {
+      const opts = e.data.options ?? DEFAULT_GATE_OPTIONS;
+      const binary = opts.length === 2 && opts.includes("approve") && opts.includes("reject");
+      return `${t}  gate ? ${e.data.name}.${e.data.occ}  awaiting decision${binary ? "" : `  options=${opts.join("|")}`}${e.data.show.length ? `  show=${e.data.show.join(",")}` : ""}`;
+    }
+    case "gate.decided": {
+      const mark = e.data.decision === "approve" ? "✓" : e.data.decision === "reject" ? "✗" : "◆";
+      return `${t}  gate ${mark} ${e.data.name}.${e.data.occ}  ${e.data.decision} by ${e.data.by} (${e.data.via})${e.data.note ? ` — ${e.data.note}` : ""}`;
+    }
     case "effect.recorded":
       return `${t}  effect ${e.data.name}.${e.data.occ}`;
     case "budget.warning":
@@ -267,9 +273,13 @@ function cmdGates(argv: string[]): number {
     const st = loadState(runDir);
     for (const g of openGates(st)) {
       any = true;
+      const declared = g.opened!.options ?? DEFAULT_GATE_OPTIONS;
+      const binary = declared.length === 2 && declared.includes("approve") && declared.includes("reject");
+      const hint = binary
+        ? `  → etium approve ${name} ${g.name}   |   etium reject ${name} ${g.name}\n`
+        : `  → etium decide ${name} ${g.name} <${declared.join("|")}>\n`;
       process.stdout.write(
-        `${name}  ${g.name}.${g.occ}${g.opened!.show.length ? `  show: ${g.opened!.show.join(", ")}` : ""}\n` +
-          `  → etium approve ${name} ${g.name}   |   etium reject ${name} ${g.name}\n`,
+        `${name}  ${g.name}.${g.occ}${g.opened!.show.length ? `  show: ${g.opened!.show.join(", ")}` : ""}\n` + hint,
       );
     }
   }
@@ -277,15 +287,23 @@ function cmdGates(argv: string[]): number {
   return 0;
 }
 
-async function decide(argv: string[], decision: "approve" | "reject"): Promise<number> {
+/** `fixed` is set for the approve/reject sugar verbs; `etium decide` reads the
+ * option from the third positional. */
+async function decide(argv: string[], fixed?: "approve" | "reject"): Promise<number> {
   const { values: v, positionals } = parseArgs({
     args: argv,
     options: { note: { type: "string" }, dir: { type: "string" }, sync: { type: "boolean" } },
     allowPositionals: true,
   });
   const [runRef, gateName] = positionals;
-  if (!runRef || !gateName) {
-    process.stderr.write(`usage: etium ${decision} <run> <gate> [--note text]\n`);
+  const decision = fixed ?? positionals[2];
+  const verb = fixed ?? "decide";
+  if (!runRef || !gateName || !decision) {
+    process.stderr.write(
+      fixed
+        ? `usage: etium ${verb} <run> <gate> [--note text]\n`
+        : `usage: etium decide <run> <gate> <option> [--note text]\n`,
+    );
     return 2;
   }
   const runDir = resolveRunDir(base(v.dir), runRef);
@@ -296,13 +314,21 @@ async function decide(argv: string[], decision: "approve" | "reject"): Promise<n
   if (open.length === 0) {
     // Fail closed (§8): no blind decisions for gates that are not open.
     process.stderr.write(
-      `etium ${decision}: gate "${gateName}" is not open on ${st.run}. Open gates: ${
+      `etium ${verb}: gate "${gateName}" is not open on ${st.run}. Open gates: ${
         openGates(st).map((g) => g.name).join(", ") || "none"
       }\n`,
     );
     return 1;
   }
   const g = open[0]!;
+  // Fail closed (§8): the ledger's declared option set is the authority.
+  const declared = g.opened!.options ?? DEFAULT_GATE_OPTIONS;
+  if (!declared.includes(decision)) {
+    process.stderr.write(
+      `etium ${verb}: "${decision}" is not a declared option for gate "${gateName}" (options: ${declared.join(", ")})\n`,
+    );
+    return 1;
+  }
   writeDecision(runDir, {
     name: g.name,
     occ: g.occ,
@@ -461,6 +487,8 @@ export async function main(argv: string[]): Promise<number> {
         return await decide(rest, "approve");
       case "reject":
         return await decide(rest, "reject");
+      case "decide":
+        return await decide(rest);
       case "resume":
         return await cmdResume(rest);
       case "abandon":

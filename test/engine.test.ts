@@ -185,3 +185,56 @@ test("divergence: editing a template mid-run fails loudly", async () => {
     /^DIVERGENCE/,
   );
 });
+
+test("gate options: declared set recorded, invalid decision dropped, valid one resumes", async () => {
+  const { runDir, workspace } = tmpRun();
+  const routes: string[] = [];
+  const loop: LoopFn = async (run) => {
+    const d = await run.gate("route", { options: ["debug", "architecture", "plan"] });
+    routes.push(d.decision);
+  };
+  assert.equal(await exec(runDir, workspace, loop, fakeStepImpl([])), "parked");
+  const opened = readLedger(runDir).find((e) => e.type === "gate.opened")!;
+  assert.deepEqual((opened.data as { options: string[] }).options, ["debug", "architecture", "plan"]);
+
+  // Not in the declared set: dropped fail-closed, gate stays open, run parks again.
+  writeDecision(runDir, { name: "route", occ: 0, decision: "ship-it", by: "t", via: "cli", ts: new Date().toISOString() });
+  assert.equal(await exec(runDir, workspace, loop, fakeStepImpl([])), "parked");
+  assert.equal(routes.length, 0);
+  assert.equal(readLedger(runDir).filter((e) => e.type === "gate.decided").length, 0);
+  assert.equal(fs.readdirSync(path.join(runDir, "decisions")).length, 0); // consumed (dropped), not left pending
+
+  writeDecision(runDir, { name: "route", occ: 0, decision: "plan", by: "t", via: "cli", ts: new Date().toISOString() });
+  assert.equal(await exec(runDir, workspace, loop, fakeStepImpl([])), "done");
+  assert.deepEqual(routes, ["plan"]);
+});
+
+test("gate options: default binary set is recorded explicitly", async () => {
+  const { runDir, workspace } = tmpRun();
+  const loop: LoopFn = async (run) => {
+    await run.gate("go");
+  };
+  assert.equal(await exec(runDir, workspace, loop, fakeStepImpl([])), "parked");
+  const opened = readLedger(runDir).find((e) => e.type === "gate.opened")!;
+  assert.deepEqual((opened.data as { options: string[] }).options, ["approve", "reject"]);
+});
+
+test("gate options: preapproval of a gate that does not declare approve fails loudly", async () => {
+  const { runDir, workspace } = tmpRun();
+  const loop: LoopFn = async (run) => {
+    await run.gate("route", { options: ["debug", "plan"] });
+  };
+  const state = loadState(runDir);
+  const writer = new LedgerWriter(runDir, "r1", state.seq);
+  try {
+    const outcome = await executeLoop({
+      runDir, runId: "r1", writer, state, loopFn: loop, loopDir: workspace,
+      params: {}, workspace, preapprovals: ["route"], runStepImpl: fakeStepImpl([]), pollMs: 5,
+    });
+    assert.equal(outcome, "error");
+  } finally {
+    writer.close();
+  }
+  const last = readLedger(runDir).at(-1)!;
+  assert.match((last.data as { summary: string }).summary, /preapproval.*do not include "approve"/);
+});

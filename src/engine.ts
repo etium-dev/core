@@ -7,6 +7,7 @@ import { setImmediate as flushTurn } from "node:timers/promises";
 import { sha256, type LedgerWriter } from "./ledger.ts";
 import { listDecisions, removeDecision, type DecisionFile } from "./lock.ts";
 import {
+  DEFAULT_GATE_OPTIONS,
   stepKey,
   type Decision,
   type GateRecord,
@@ -184,7 +185,15 @@ export async function executeLoop(ctx: EngineCtx): Promise<EngineOutcome> {
     for (const d of listDecisions(ctx.runDir)) {
       const rec = gateRec(d.name, d.occ);
       if (rec?.opened && !rec.decided) {
-        decideGate(d.name, d.occ, d);
+        // The ledger's recorded option set is the validation authority (§8).
+        const declared = rec.opened.options ?? DEFAULT_GATE_OPTIONS;
+        if (declared.includes(d.decision)) {
+          decideGate(d.name, d.occ, d);
+        } else {
+          process.stderr.write(
+            `etium: dropping decision "${d.decision}" for ${d.name}.${d.occ} (declared options: ${declared.join(", ")}) — decisions fail closed\n`,
+          );
+        }
       } else {
         process.stderr.write(
           `etium: dropping decision for ${d.name}.${d.occ} (gate not open) — decisions fail closed\n`,
@@ -346,23 +355,37 @@ export async function executeLoop(ctx: EngineCtx): Promise<EngineOutcome> {
       }
     },
 
-    async gate(name: string, opts?: { show?: string[] }): Promise<GateResult> {
+    async gate(name: string, opts?: { show?: string[]; options?: string[] }): Promise<GateResult> {
       const occ = nextOcc("g", name);
       const key = stepKey("g", name, occ);
       visited.add(key);
+      const options = opts?.options ?? DEFAULT_GATE_OPTIONS;
+      if (options.length === 0 || options.some((o) => !o) || new Set(options).size !== options.length)
+        throw new EtiumError(`gate ${name}: options must be distinct non-empty strings`);
       const rec = gateRec(name, occ);
       if (rec?.decided)
         return { decision: rec.decided.decision, note: rec.decided.note, by: rec.decided.by };
       if (!rec?.opened) {
-        writer.append("gate.opened", { name, occ, show: opts?.show ?? [] });
+        writer.append("gate.opened", { name, occ, options, show: opts?.show ?? [] });
         state.gates.set(`${name}.${occ}`, {
           name,
           occ,
-          opened: { name, occ, show: opts?.show ?? [] },
+          opened: { name, occ, options, show: opts?.show ?? [] },
         });
+      } else {
+        const recorded = rec.opened.options ?? DEFAULT_GATE_OPTIONS;
+        if (JSON.stringify(recorded) !== JSON.stringify(options))
+          process.stderr.write(
+            `etium: warning: gate ${name}.${occ} options changed in loop code (ledger: ${recorded.join(", ")}; code: ${options.join(", ")}) — the ledger's set governs decisions\n`,
+          );
       }
+      const declared = gateRec(name, occ)!.opened!.options ?? DEFAULT_GATE_OPTIONS;
       if (ctx.preapprovals.includes(name) && !consumedPreapprovals.has(`${name}.${occ}`)) {
         consumedPreapprovals.add(`${name}.${occ}`);
+        if (!declared.includes("approve"))
+          throw new EtiumError(
+            `preapproval for gate "${name}" is invalid: declared options are [${declared.join(", ")}], which do not include "approve"`,
+          );
         decideGate(name, occ, {
           decision: "approve" as Decision,
           by: "preapproval",

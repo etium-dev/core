@@ -225,3 +225,44 @@ vars). A loop-level harness-declaration surface for creation-time preflight
 pre-spawn check already carries the guarantee). Driving the OpenHands
 agent-server (expects LLM credentials in-band — the rejected brokering;
 the adapter drives the headless CLI, which reads its own settings store).
+
+---
+
+## ADR-008 — Gate answers are declared option sets; binary is the default, not the definition
+
+**Decision.** `run.gate(name, { options?: string[] })` — a gate is a question
+with a declared, finite answer set. `gate.opened` records the set;
+`gate.decided.decision` is the chosen element; gates that declare nothing get
+`["approve", "reject"]`. Decisions are validated fail-closed against the set
+**as recorded in the ledger** (loop code that drifts after opening produces a
+warning; the ledger governs). CLI: `etium decide <run> <gate> <option>`, with
+`approve`/`reject` as sugar for the default set. Pre-approval errors loudly
+if the named gate's options do not include `"approve"`. Single-choice only;
+the note remains the free-text channel alongside any decision.
+
+**Why.** Two structural facts fix the answer-space a gate can offer. Loop
+code is deterministic TypeScript: it can only branch on values from a closed
+set. And every loop has an LLM downstream: free-form human input needs no
+structure because its consumer is the next prompt — that is what the note
+already is. So the consumable answer types are exactly {element of a declared
+enum} ∪ {free text}, and the old binary gate was the hardcoded special case
+of the former. The delivery media agree: CLI verbs, GitHub labels, Slack
+buttons, MCP tool enums — every cheap human-decision channel is enum+text
+shaped. The need is general, not routing-specific: the predecessor system's
+escalation contract required listing "available choices and the exact label
+needed to continue," and ralph's iteration guard, needs-human gates,
+judge-panel picks, and budget-breach recovery all want declared choices.
+Recording the set in `gate.opened` makes the question auditable, gives
+surfaces a closed set to render, and makes validation authority unambiguous
+after loop edits.
+
+**Rejected.** N binary gates raced (unchosen gates dangle open — inbox
+pollution, broken consumed-once semantics; fixing that needs a stranger
+withdraw-gate primitive). A separate `run.choice()` primitive (identical
+semantics, twice the surface: two pause primitives, two event types, a split
+inbox). Arbitrary JSON payloads with per-gate schemas (loops can't safely
+consume arbitrary shapes; labels can't render forms; ledger legibility drops
+to blobs; no workflow in scope needs it). Multi-select (its consumer is
+always the model, so the note covers it; the predecessor treats multiple
+simultaneous commands as an error — hard-won evidence that single-choice is
+the right human contract).

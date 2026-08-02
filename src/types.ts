@@ -33,7 +33,11 @@ export interface BudgetSpec {
 
 export type StepStatus = "ok" | "error" | "killed" | "budget";
 export type RunEndStatus = "done" | "abandoned" | "superseded" | "error";
-export type Decision = "approve" | "reject";
+/** A gate decision is one element of the gate's declared option set (§8).
+ * Gates without declared options use DEFAULT_GATE_OPTIONS — the binary gate
+ * is the degenerate case, not the definition (ADR-008). */
+export type Decision = string;
+export const DEFAULT_GATE_OPTIONS = ["approve", "reject"];
 export type DecisionVia = "cli" | "preapproval" | "github" | "mcp";
 
 export interface RunCreatedData {
@@ -79,6 +83,7 @@ export interface StepCompletedData {
 export interface GateOpenedData {
   name: string;
   occ: number;
+  options: string[]; // the declared answer set; decisions validate against THIS (ledger authority)
   show: string[]; // run-dir-relative artifact paths (or workspace-relative)
 }
 export interface GateDecidedData {
@@ -267,7 +272,7 @@ export interface Run {
   readonly params: Record<string, string>;
   readonly workspace: string;
   step(name: string, opts: StepOptions): Promise<StepResult>;
-  gate(name: string, opts?: { show?: string[] }): Promise<GateResult>;
+  gate(name: string, opts?: { show?: string[]; options?: string[] }): Promise<GateResult>;
   effect<T>(name: string, fn: () => T | Promise<T>): Promise<T>;
   abandon(reason?: string): Promise<never>;
   t(file: string): PromptSpec; // template relative to the loop file, then workspace

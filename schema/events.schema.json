@@ -125,10 +125,16 @@
     },
     "gateOpened": {
       "type": "object",
-      "required": ["name", "occ", "show"],
+      "required": ["name", "occ", "options", "show"],
       "properties": {
         "name": { "type": "string" },
         "occ": { "type": "integer", "minimum": 0 },
+        "options": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1,
+          "description": "The declared answer set. Decisions validate against this recorded set — the ledger is the authority. [\"approve\", \"reject\"] is the default for gates that declare nothing."
+        },
         "show": { "type": "array", "items": { "type": "string" } }
       }
     },
@@ -138,7 +144,11 @@
       "properties": {
         "name": { "type": "string" },
         "occ": { "type": "integer", "minimum": 0 },
-        "decision": { "enum": ["approve", "reject"] },
+        "decision": {
+          "type": "string",
+          "minLength": 1,
+          "description": "One element of the gate's declared options (gateOpened.options)."
+        },
         "note": { "type": "string" },
         "by": { "type": "string" },
         "via": { "enum": ["cli", "preapproval", "github", "mcp"] }
