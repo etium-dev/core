@@ -7,9 +7,9 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { LedgerWriter, loadState, openGates, readLedger, writeStateCache } from "./ledger.ts";
+import { loadState, openGates, readLedger, writeStateCache } from "./ledger.ts";
 import { isLockLive, readLock, writeDecision } from "./lock.ts";
-import { createRun, supervise, superviseDetached } from "./supervisor.ts";
+import { abandonRun, createRun, supervise, superviseDetached } from "./supervisor.ts";
 import { loadSurfaces, tickOnce } from "./tick.ts";
 import { DEFAULT_GATE_OPTIONS, ETIUM_VERSION, type AnyEnvelope } from "./types.ts";
 
@@ -340,40 +340,12 @@ async function cmdAbandon(argv: string[]): Promise<number> {
     return 2;
   }
   const runDir = resolveRunDir(base(v.dir), positionals[0]);
-  const lock = readLock(runDir);
-  if (isLockLive(runDir, lock)) {
-    try {
-      process.kill(lock!.pid, "SIGTERM");
-    } catch {
-      /* raced */
-    }
-    const deadline = Date.now() + 5000;
-    while (Date.now() < deadline && isLockLive(runDir, readLock(runDir)))
-      await new Promise((r) => setTimeout(r, 100));
-    if (isLockLive(runDir, readLock(runDir))) {
-      try {
-        process.kill(lock!.pid, "SIGKILL");
-      } catch {
-        /* gone */
-      }
-      try {
-        fs.unlinkSync(path.join(runDir, "lock"));
-      } catch {
-        /* gone */
-      }
-    }
-  }
-  const st = loadState(runDir);
-  // Errored runs stay resumable (§6.3) and therefore also abandonable.
-  if (st.completed && st.completed.status !== "error") {
-    process.stdout.write(`run already completed (${st.completed.status})\n`);
-    return 0;
-  }
-  const w = new LedgerWriter(runDir, st.run, st.seq);
-  w.append("run.completed", { status: "abandoned", summary: v.reason });
-  w.close();
-  writeStateCache(runDir, loadState(runDir));
-  process.stdout.write(`abandoned ${st.run}\n`);
+  const result = await abandonRun(runDir, v.reason);
+  process.stdout.write(
+    result === "already-completed"
+      ? `run already completed\n`
+      : `abandoned ${path.basename(runDir)}\n`,
+  );
   return 0;
 }
 

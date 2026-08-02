@@ -332,6 +332,11 @@ Semantics, all fail-closed and at-least-once:
   reported, never guessed. Surfaces should pre-validate against
   `runs[].openGates[].options` to give their own users a good error reply;
   core's check is the defensive layer.
+- **Abandons** carry observed lifecycle facts that terminate runs — issue
+  closed, PR closed unmerged, a superseding command. Core kills any live
+  supervisor and marks the run `abandoned` (or `superseded`); completed runs
+  are skipped. This is the one write channel besides decisions: facts end
+  runs, decisions answer gates, nothing else crosses the boundary.
 - **The cursor is opaque to core** — persisted under `.etium/surfaces/` and
   handed back on the next poll. Encode whatever the surface needs (timeline
   position, per-run projected seq). It advances only after the poll's actions

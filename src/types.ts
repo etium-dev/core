@@ -331,6 +331,10 @@ export interface RunView {
 export interface SurfacePollResult {
   tasks: SurfaceTask[];
   decisions: SurfaceDecision[];
+  /** Observed lifecycle facts that terminate runs (issue closed, PR closed
+   * unmerged, a superseding command): kill any live supervisor and mark the
+   * run abandoned/superseded. Already-completed runs are skipped. */
+  abandons?: { run: string; reason?: string; superseded?: boolean }[];
   /** Opaque to core; persisted and handed back on the next poll. Encode
    * whatever the surface needs (timeline cursor, per-run projected seq, …). */
   cursor: string | null;

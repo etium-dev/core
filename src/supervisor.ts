@@ -229,6 +229,47 @@ export async function supervise(runDir: string): Promise<SuperviseOutcome> {
   }
 }
 
+/** Kill any live supervisor and mark the run abandoned (or superseded).
+ * Shared by `etium abandon` and surface-observed lifecycle facts (§10.3).
+ * Errored runs stay abandonable (§6.3); other completed runs are left alone. */
+export async function abandonRun(
+  runDir: string,
+  reason?: string,
+  status: "abandoned" | "superseded" = "abandoned",
+): Promise<"abandoned" | "already-completed"> {
+  runDir = path.resolve(runDir);
+  const lock = readLock(runDir);
+  if (isLockLive(runDir, lock)) {
+    try {
+      process.kill(lock!.pid, "SIGTERM");
+    } catch {
+      /* raced */
+    }
+    const deadline = Date.now() + 5000;
+    while (Date.now() < deadline && isLockLive(runDir, readLock(runDir)))
+      await new Promise((r) => setTimeout(r, 100));
+    if (isLockLive(runDir, readLock(runDir))) {
+      try {
+        process.kill(lock!.pid, "SIGKILL");
+      } catch {
+        /* gone */
+      }
+      try {
+        fs.unlinkSync(lockPath(runDir));
+      } catch {
+        /* gone */
+      }
+    }
+  }
+  const state = loadState(runDir);
+  if (state.completed && state.completed.status !== "error") return "already-completed";
+  const w = new LedgerWriter(runDir, state.run, state.seq);
+  w.append("run.completed", { status, summary: reason });
+  w.close();
+  writeStateCache(runDir, loadState(runDir));
+  return "abandoned";
+}
+
 /** Spawn a detached supervisor and return immediately (§6.1). `entry` is the
  * CLI module path; stdout/stderr go to <run>/supervisor.log. */
 export function superviseDetached(runDir: string, entry: string): void {

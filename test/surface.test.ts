@@ -151,3 +151,25 @@ test("a throwing surface reports an error and does not block reconciliation", as
   assert.ok(actions.some((a) => a.action === "surface-task"));
   assert.equal(fs.readdirSync(path.join(base, "runs")).length, 1);
 });
+
+test("surface abandons: lifecycle facts terminate runs; completed runs are skipped", async () => {
+  const { base, loopPath } = tmpBase();
+  const f = fakeSurface("gh");
+  f.tasks = [{ key: "evt-1", task: "route me", loop: loopPath }];
+  await tickOnce(base, "unused-entry", true, [f.surface]);
+  const runId = fs.readdirSync(path.join(base, "runs"))[0]!;
+
+  (f.surface.poll as unknown) = () => ({
+    tasks: [],
+    decisions: [],
+    abandons: [{ run: runId, reason: "issue closed" }],
+    cursor: null,
+  });
+  const a = await tickOnce(base, "unused-entry", true, [f.surface]);
+  assert.ok(a.some((x) => x.action === "surface-abandon"));
+  const last = readLedger(path.join(base, "runs", runId)).at(-1)!;
+  assert.deepEqual(last.data, { status: "abandoned", summary: "issue closed" });
+
+  const again = await tickOnce(base, "unused-entry", true, [f.surface]);
+  assert.ok(again.some((x) => x.action === "surface-skip" && /already completed/.test(x.detail ?? "")));
+});

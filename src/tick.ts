@@ -9,7 +9,7 @@ import { pathToFileURL } from "node:url";
 import { loadState, writeStateCache } from "./ledger.ts";
 import { isLockLive, readLock, writeDecision } from "./lock.ts";
 import { decisionsDir } from "./lock.ts";
-import { createRun, supervise, superviseDetached } from "./supervisor.ts";
+import { abandonRun, createRun, supervise, superviseDetached } from "./supervisor.ts";
 import type { RunView, Surface, SurfacePollResult } from "./types.ts";
 
 const TICK_LOCK_STALE_MS = 5 * 60_000;
@@ -23,6 +23,7 @@ export interface TickAction {
     | "resume"
     | "surface-task"
     | "surface-decision"
+    | "surface-abandon"
     | "surface-drop"
     | "surface-skip"
     | "surface-error";
@@ -174,6 +175,20 @@ async function driveSurface(base: string, runsDir: string, s: Surface, actions: 
     } catch {
       actions.push({ run: d.run, action: "surface-skip", detail: `${gate.name}.${gate.occ} decision already pending` });
     }
+  }
+
+  for (const a of res.abandons ?? []) {
+    const view = views.find((v) => v.id === a.run);
+    if (!view || view.completed) {
+      actions.push({ run: a.run, action: "surface-skip", detail: `abandon: ${!view ? "unknown run" : "already completed"}` });
+      continue;
+    }
+    const result = await abandonRun(view.dir, a.reason, a.superseded ? "superseded" : "abandoned");
+    actions.push({
+      run: a.run,
+      action: result === "abandoned" ? "surface-abandon" : "surface-skip",
+      detail: a.reason,
+    });
   }
 
   if (res.cursor != null) writeCursor(base, s.id, res.cursor);
