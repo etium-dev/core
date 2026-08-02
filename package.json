@@ -1,0 +1,50 @@
+{
+  "name": "etium",
+  "version": "0.1.0",
+  "description": "The outer loop for coding agents. Etium supervises headless harnesses: tasks, runs, budgets, gates, and an append-only event ledger.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "etium": "dist/cli.js"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "loops",
+    "schema",
+    "README.md",
+    "DESIGN.md",
+    "DECISIONS.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/etium-dev/etium.git"
+  },
+  "homepage": "https://github.com/etium-dev/etium#readme",
+  "keywords": [
+    "agents",
+    "loop-engineering",
+    "coding-agents",
+    "orchestration",
+    "supervisor",
+    "codex",
+    "claude-code",
+    "pi",
+    "openhands"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/postbuild.mjs",
+    "test": "node --test",
+    "budget": "node scripts/loc-budget.mjs",
+    "prepublishOnly": "npm run build && npm test && npm run budget"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "typescript": "^5.7.2"
+  }
+}

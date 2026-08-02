@@ -1,0 +1,110 @@
+# Etium
+
+**The outer loop for coding agents.**
+
+Etium is a supervisor for headless coding agents. It owns the outer loop —
+tasks, runs, budgets, gates, and the event ledger — and delegates the entire
+inner loop (context, tools, model calls) to existing harnesses via thin
+adapters. Pi's equation is *agent = model + minimal harness*; etium's is
+*team = harnesses + minimal loop*. Etium is the loop.
+
+Status: **pre-release (M0)**. The kernel works — see the test suite for what
+that claim means: replay-memoized loops, parking gates, crash-only recovery
+under `SIGKILL`, budget enforcement, redaction. Interfaces may still move
+until 0.2. The `codex` adapter's parser is provisional pending captured
+fixtures (see below).
+
+## Install
+
+```sh
+npm install -g etium     # Node ≥ 22.18
+```
+
+## Sixty seconds
+
+A loop is a plain TypeScript file. No build step, no DSL:
+
+```ts
+// review.ts — plan, wait for a human, implement
+export default async function (run) {
+  await run.step("plan", {
+    harness: "codex",
+    prompt: run.t("PLAN_PROMPT.md"),
+    artifacts: ["PLAN.md"],
+  });
+  const d = await run.gate("plan-approved", { show: ["PLAN.md"] });
+  await run.step("implement", {
+    harness: "codex",
+    prompt: run.t("IMPLEMENT_PROMPT.md"), // gate notes are injected here
+    grade: "npm test",
+    budget: { wall: "2h", tokens: 400_000 },
+  });
+}
+```
+
+```sh
+etium run "add retry to fetchUser" --loop review.ts
+etium status            # one line per run
+etium gates             # what's waiting on you, across all runs
+etium approve <run> plan-approved --note "good plan; keep the timeout at 5s"
+etium tail <run>        # human-readable event stream
+```
+
+The run parks at the gate — no process stays resident. `approve` writes a
+decision file and attaches a fresh supervisor; the loop replays from its
+ledger, skips completed work, and continues with your note injected into the
+next prompt. `kill -9` anything at any time; `etium tick` (cron-safe,
+idempotent) reconciles every run back to where it should be. That is the whole
+liveness story.
+
+The bundled reference loop is `ralph` (iterate until a check passes):
+
+```sh
+etium run "make the tests pass" --loop ralph \
+  --param check="npm test" --param iterations=20
+```
+
+## What a run is
+
+A directory. `task.md` (intent), `events.jsonl` (append-only ledger — the
+authority for control flow), `steps/NNN-name.occ/` (prompt, raw harness
+stream, artifacts), `decisions/` (gate mailbox), `state.json` (derived cache;
+rebuild anytime with `etium fold`). Grep it, `jq` it, archive it, replay it.
+The ledger schema is versioned JSON with a published JSON Schema and golden
+fixtures in [`schema/`](schema/) — that, the on-disk layout, and files-as-API
+are the stable surfaces; everything else is implementation.
+
+## Principles
+
+The core never calls a model. One writer per ledger. Gates fail closed and
+decisions are consumed exactly once. Budgets kill; stalls only warn. Steps are
+at-least-once; completed steps are exactly-once. Least environment per step —
+agent steps never see publication credentials. Crash-only: there is no clean
+shutdown to get wrong. See [DESIGN.md](DESIGN.md) for the contract and
+[DECISIONS.md](DECISIONS.md) for the reasoning.
+
+## Size is a feature
+
+Budgets are enforced in CI (`npm run budget`):
+
+| area | budget (LOC) |
+|---|---|
+| core (ledger, engine, runner, supervisor, tick) | 3,000 |
+| each adapter | 300 |
+| each bundled loop | 150 |
+
+Current core: ~1,600. If etium needs more than this, it is becoming the thing
+it exists to avoid.
+
+## Adapters
+
+`exec` (any command as a step; also the publication vehicle), `replay`
+(recorded streams; the test substrate), `codex` (`codex exec --json`,
+**provisional**). To harden the codex parser and pressure-test schema
+neutrality, run [`scripts/capture-fixtures.sh`](scripts/capture-fixtures.sh)
+on a machine with the harnesses installed and commit the captures under
+`fixtures/`. Pi and Claude Code adapters are next (M1), OpenHands after (M2).
+
+## License
+
+MIT.

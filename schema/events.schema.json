@@ -1,0 +1,198 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/etium-dev/etium/schema/events.schema.json",
+  "title": "Etium ledger event (envelope v1)",
+  "description": "One line of events.jsonl. Consumers MUST ignore unknown fields and unknown event types. Integers < 2^53; timestamps RFC 3339 UTC; no binary (pointers + sha256 instead).",
+  "type": "object",
+  "required": ["v", "ts", "run", "seq", "type", "data"],
+  "properties": {
+    "v": { "const": 1 },
+    "ts": { "type": "string", "format": "date-time" },
+    "run": { "type": "string" },
+    "seq": { "type": "integer", "minimum": 1 },
+    "type": {
+      "enum": [
+        "run.created", "supervisor.started", "step.started", "step.activity",
+        "step.completed", "gate.opened", "gate.decided", "effect.recorded",
+        "budget.warning", "budget.exceeded", "run.parked", "run.interrupted",
+        "run.completed"
+      ]
+    },
+    "data": { "type": "object" }
+  },
+  "allOf": [
+    { "if": { "properties": { "type": { "const": "run.created" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/runCreated" } } } },
+    { "if": { "properties": { "type": { "const": "supervisor.started" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/supervisorStarted" } } } },
+    { "if": { "properties": { "type": { "const": "step.started" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/stepStarted" } } } },
+    { "if": { "properties": { "type": { "const": "step.activity" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/stepActivity" } } } },
+    { "if": { "properties": { "type": { "const": "step.completed" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/stepCompleted" } } } },
+    { "if": { "properties": { "type": { "const": "gate.opened" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/gateOpened" } } } },
+    { "if": { "properties": { "type": { "const": "gate.decided" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/gateDecided" } } } },
+    { "if": { "properties": { "type": { "const": "effect.recorded" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/effectRecorded" } } } },
+    { "if": { "properties": { "type": { "const": "budget.warning" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/budgetWarning" } } } },
+    { "if": { "properties": { "type": { "const": "budget.exceeded" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/budgetExceeded" } } } },
+    { "if": { "properties": { "type": { "const": "run.parked" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/runParked" } } } },
+    { "if": { "properties": { "type": { "const": "run.interrupted" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/runInterrupted" } } } },
+    { "if": { "properties": { "type": { "const": "run.completed" } } }, "then": { "properties": { "data": { "$ref": "#/$defs/runCompleted" } } } }
+  ],
+  "$defs": {
+    "stepRef": {
+      "type": "object",
+      "required": ["name", "occ"],
+      "properties": { "name": { "type": "string" }, "occ": { "type": "integer", "minimum": 0 } }
+    },
+    "rawRef": {
+      "type": "object",
+      "required": ["file", "line"],
+      "properties": { "file": { "type": "string" }, "line": { "type": "integer", "minimum": 1 } },
+      "description": "Pointer into a step's raw stream: run-dir-relative file, 1-based line in the uncompressed stream."
+    },
+    "usage": {
+      "type": "object",
+      "properties": {
+        "tokensIn": { "type": "integer", "minimum": 0 },
+        "tokensOut": { "type": "integer", "minimum": 0 },
+        "costUsd": { "type": "number", "minimum": 0 }
+      }
+    },
+    "budgetSpec": {
+      "type": "object",
+      "properties": {
+        "wall": { "type": ["string", "integer"] },
+        "stallWarn": { "type": ["string", "integer"] },
+        "tokens": { "type": "integer" },
+        "costUsd": { "type": "number" }
+      }
+    },
+    "runCreated": {
+      "type": "object",
+      "required": ["taskSha256", "loop", "params", "workspace", "etiumVersion"],
+      "properties": {
+        "taskSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "loop": { "type": "string" },
+        "params": { "type": "object", "additionalProperties": { "type": "string" } },
+        "workspace": { "type": "string" },
+        "etiumVersion": { "type": "string" }
+      }
+    },
+    "supervisorStarted": {
+      "type": "object",
+      "required": ["pid", "host"],
+      "properties": { "pid": { "type": "integer" }, "host": { "type": "string" } }
+    },
+    "stepStarted": {
+      "type": "object",
+      "required": ["name", "occ", "harness", "promptSha256", "envProfile", "budget", "digest"],
+      "properties": {
+        "name": { "type": "string" },
+        "occ": { "type": "integer", "minimum": 0 },
+        "harness": { "type": "string" },
+        "model": { "type": "string" },
+        "promptSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "envProfile": { "type": "string" },
+        "budget": { "$ref": "#/$defs/budgetSpec" },
+        "digest": { "type": "string", "description": "config digest for divergence detection" },
+        "unmetered": { "type": "boolean" },
+        "notes": { "type": "integer", "description": "operator notes injected into the prompt" }
+      }
+    },
+    "stepActivity": {
+      "type": "object",
+      "required": ["step", "kind", "summary", "raw"],
+      "properties": {
+        "step": { "$ref": "#/$defs/stepRef" },
+        "kind": { "enum": ["message", "tool", "usage", "lifecycle"] },
+        "summary": { "type": "string" },
+        "usage": { "$ref": "#/$defs/usage" },
+        "raw": { "$ref": "#/$defs/rawRef" }
+      }
+    },
+    "stepCompleted": {
+      "type": "object",
+      "required": ["step", "status", "rawFile", "rawSha256", "artifacts"],
+      "properties": {
+        "step": { "$ref": "#/$defs/stepRef" },
+        "status": { "enum": ["ok", "error", "killed", "budget"] },
+        "exit": { "type": ["integer", "null"] },
+        "signal": { "type": ["string", "null"] },
+        "usage": { "$ref": "#/$defs/usage" },
+        "rawFile": { "type": "string" },
+        "rawSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "sha256 of the uncompressed raw stream" },
+        "artifacts": { "type": "array", "items": { "type": "string" } },
+        "passed": { "type": "boolean" }
+      }
+    },
+    "gateOpened": {
+      "type": "object",
+      "required": ["name", "occ", "show"],
+      "properties": {
+        "name": { "type": "string" },
+        "occ": { "type": "integer", "minimum": 0 },
+        "show": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "gateDecided": {
+      "type": "object",
+      "required": ["name", "occ", "decision", "by", "via"],
+      "properties": {
+        "name": { "type": "string" },
+        "occ": { "type": "integer", "minimum": 0 },
+        "decision": { "enum": ["approve", "reject"] },
+        "note": { "type": "string" },
+        "by": { "type": "string" },
+        "via": { "enum": ["cli", "preapproval", "github", "mcp"] }
+      }
+    },
+    "effectRecorded": {
+      "type": "object",
+      "required": ["name", "occ", "value"],
+      "properties": {
+        "name": { "type": "string" },
+        "occ": { "type": "integer", "minimum": 0 },
+        "value": { "description": "small JSON only" }
+      }
+    },
+    "budgetWarning": {
+      "type": "object",
+      "required": ["kind", "detail"],
+      "properties": {
+        "step": { "$ref": "#/$defs/stepRef" },
+        "kind": { "enum": ["stall", "approaching"] },
+        "detail": { "type": "string" }
+      }
+    },
+    "budgetExceeded": {
+      "type": "object",
+      "required": ["step", "budget", "action"],
+      "properties": {
+        "step": { "$ref": "#/$defs/stepRef" },
+        "budget": { "enum": ["wall", "tokens", "cost", "steps"] },
+        "action": { "const": "killed" }
+      }
+    },
+    "runParked": {
+      "type": "object",
+      "required": ["gates"],
+      "properties": { "gates": { "type": "array", "items": { "$ref": "#/$defs/stepRef" } } }
+    },
+    "runInterrupted": {
+      "type": "object",
+      "required": ["reason"],
+      "properties": {
+        "reason": { "enum": ["stale-lock", "no-lock"] },
+        "pid": { "type": "integer" },
+        "host": { "type": "string" },
+        "lockAgeMs": { "type": "number" }
+      }
+    },
+    "runCompleted": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": { "enum": ["done", "abandoned", "superseded", "error"] },
+        "summary": { "type": "string" },
+        "orphans": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}
