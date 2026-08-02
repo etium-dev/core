@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Etium — the outer loop for coding agents</title>
+<meta name="description" content="Etium is a supervisor for headless coding agents: tasks, runs, budgets, gates, and an append-only event ledger. Harnesses plug in; you own the loop.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>⟳</text></svg>">
+<style>
+  :root {
+    --bg: #faf9f6; --fg: #1a1a1a; --dim: #6b6b6b; --line: #e2e0da;
+    --code-bg: #f1efe9; --accent: #0d5c4d; --accent-dim: #0d5c4d22;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12130f; --fg: #e8e6e1; --dim: #96948d; --line: #2a2b26;
+      --code-bg: #1c1d18; --accent: #6fc7b2; --accent-dim: #6fc7b222;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font: 17px/1.65 ui-serif, Georgia, "Times New Roman", serif;
+    padding: 0 1.25rem;
+  }
+  main { max-width: 44rem; margin: 0 auto; padding: 3.5rem 0 5rem; }
+  code, pre, .mono {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.85em;
+  }
+  code { background: var(--code-bg); padding: 0.1em 0.35em; border-radius: 4px; }
+  pre {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px;
+    padding: 1rem 1.2rem; overflow-x: auto; line-height: 1.55; margin: 1.4rem 0;
+  }
+  pre code { background: none; padding: 0; }
+  h1 { font-size: 2.6rem; line-height: 1.15; font-weight: 600; letter-spacing: -0.01em; }
+  h2 {
+    font-size: 1.05rem; text-transform: uppercase; letter-spacing: 0.12em;
+    color: var(--dim); font-weight: 600; margin: 3.2rem 0 1rem;
+    padding-top: 1.6rem; border-top: 1px solid var(--line);
+  }
+  p { margin: 0.9rem 0; }
+  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  .brand { font-size: 0.95rem; letter-spacing: 0.22em; text-transform: uppercase; color: var(--dim); }
+  .tagline { color: var(--dim); font-size: 1.25rem; margin-top: 0.8rem; font-style: italic; }
+  .install {
+    display: inline-block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 8px; padding: 0.55rem 1rem; margin: 1.4rem 0 0.4rem;
+  }
+  .status { font-size: 0.85rem; color: var(--dim); }
+  .nav { margin-top: 1rem; font-size: 0.95rem; }
+  .nav a { margin-right: 1.4rem; }
+  dl.prims { margin: 1.2rem 0; }
+  dl.prims dt { font-weight: 700; float: left; clear: left; margin-right: 0.6rem; }
+  dl.prims dt::after { content: " —"; font-weight: 400; color: var(--dim); }
+  dl.prims dd { margin: 0 0 0.55rem 0; }
+  ul { padding-left: 1.2rem; }
+  li { margin: 0.45rem 0; }
+  .never li strong { color: var(--fg); }
+  table { border-collapse: collapse; margin: 1.2rem 0; width: 100%; }
+  td, th { border: 1px solid var(--line); padding: 0.45rem 0.8rem; text-align: left; font-size: 0.92em; }
+  th { background: var(--code-bg); font-weight: 600; }
+  .cmt { color: var(--dim); }
+  .kw { color: var(--accent); }
+  footer {
+    border-top: 1px solid var(--line); margin-top: 4rem; padding-top: 1.4rem;
+    color: var(--dim); font-size: 0.9rem;
+  }
+  footer a { margin-right: 1.2rem; }
+</style>
+</head>
+<body>
+<main>
+  <div class="brand">Etium</div>
+  <h1>The outer loop for coding&nbsp;agents.</h1>
+  <p class="tagline">Pi's equation is <em>agent&nbsp;=&nbsp;model&nbsp;+&nbsp;minimal&nbsp;harness</em>.
+  Etium's is <em>team&nbsp;=&nbsp;harnesses&nbsp;+&nbsp;minimal&nbsp;loop</em>. Etium is the loop.</p>
+
+  <div class="install mono">npm install -g etium</div>
+  <div class="status">pre-release (M0) · MIT · Node ≥ 22.18</div>
+  <div class="nav mono">
+    <a href="https://github.com/etium-dev/core">github</a>
+    <a href="https://www.npmjs.com/package/etium">npm</a>
+    <a href="https://github.com/etium-dev/core/blob/main/QUICKSTART.md">quickstart</a>
+    <a href="https://github.com/etium-dev/core/blob/main/DESIGN.md">design</a>
+  </div>
+
+  <h2>What it is</h2>
+  <p>Etium is a supervisor for headless coding agents. It owns the outer loop —
+  tasks, runs, budgets, gates, and the event ledger — and delegates the entire
+  inner loop (context, tools, model calls) to existing harnesses via thin
+  adapters: Codex, Pi, Claude Code, OpenHands, or any command. Vendor loops are
+  excellent but per-vendor, per-session, and opaque. Etium gives you what they
+  can't: harness neutrality per step, multi-day lifecycles with human gates,
+  and a durable, replayable ledger you own as files.</p>
+
+  <h2>Sixty seconds</h2>
+  <p>A loop is a plain TypeScript file. No DSL, no YAML, no build step:</p>
+<pre><code><span class="cmt">// review.ts — plan, wait for a human, implement</span>
+<span class="kw">export default async function</span> (run) {
+  <span class="kw">await</span> run.step(<span>"plan"</span>, {
+    harness: <span>"pi"</span>,
+    prompt: run.t(<span>"PLAN_PROMPT.md"</span>),
+    artifacts: [<span>"PLAN.md"</span>],
+  });
+  <span class="kw">const</span> d = <span class="kw">await</span> run.gate(<span>"plan-approved"</span>, { show: [<span>"PLAN.md"</span>] });
+  <span class="kw">await</span> run.step(<span>"implement"</span>, {
+    harness: <span>"pi"</span>,
+    prompt: run.t(<span>"IMPLEMENT_PROMPT.md"</span>), <span class="cmt">// gate notes injected here</span>
+    grade: <span>"npm test"</span>,
+    budget: { wall: <span>"2h"</span>, tokens: 400_000 },
+  });
+}</code></pre>
+<pre><code>$ etium run "add retry to fetchUser" --loop review.ts
+$ etium gates            <span class="cmt"># what's waiting on you, across all runs</span>
+$ etium approve &lt;run&gt; plan-approved --note "keep the timeout at 5s"
+$ etium tail &lt;run&gt;       <span class="cmt"># human-readable event stream</span></code></pre>
+  <p>The run parks at the gate — no process stays resident. <code>approve</code>
+  writes a decision file; the loop replays from its ledger, skips completed
+  work, and continues with your note injected into the next prompt.
+  <code>kill&nbsp;-9</code> anything at any time; <code>etium tick</code>
+  (cron-safe, idempotent) reconciles every run back to where it should be.
+  That is the whole liveness story.</p>
+
+  <h2>Six primitives</h2>
+  <dl class="prims">
+    <dt>Task</dt><dd>a goal plus acceptance criteria; a markdown file.</dd>
+    <dt>Run</dt><dd>one attempt; a directory you can <code>grep</code>, <code>jq</code>, and <code>rsync</code>.</dd>
+    <dt>Loop</dt><dd>a program of steps and gates; ordinary code.</dd>
+    <dt>Step</dt><dd>one headless harness invocation under a budget, fresh context by default.</dd>
+    <dt>Gate</dt><dd>a named pause requiring a human decision, consumed exactly once.</dd>
+    <dt>Ledger</dt><dd>an append-only <code>events.jsonl</code>; every other view is a projection.</dd>
+  </dl>
+
+  <h2>What etium will never do</h2>
+  <ul class="never">
+    <li><strong>Call a model.</strong> No API keys, no context management. Model auth is harness-owned; all intelligence lives in harness subprocesses.</li>
+    <li><strong>Ship a workflow DSL.</strong> Loops are code. YAML workflow languages are how orchestrators become 100,000-line projects.</li>
+    <li><strong>Run a server, web UI, daemon, or database.</strong> Files and a CLI. Your state is yours.</li>
+    <li><strong>Orchestrate fleets.</strong> One operator, one machine, a handful of concurrent runs. If you outgrow etium, that's success.</li>
+  </ul>
+
+  <h2>Size is a feature</h2>
+  <table>
+    <tr><th>area</th><th>budget (LOC)</th></tr>
+    <tr><td>core — ledger, engine, runner, supervisor, tick</td><td class="mono">3,000</td></tr>
+    <tr><td>each adapter</td><td class="mono">300</td></tr>
+    <tr><td>each bundled loop</td><td class="mono">150</td></tr>
+  </table>
+  <p>Budgets are enforced in CI. Current core: ~1,700 lines — small enough to
+  read in an afternoon, and that is the credibility test.</p>
+
+  <footer>
+    <a href="https://github.com/etium-dev/core">GitHub</a>
+    <a href="https://www.npmjs.com/package/etium">npm</a>
+    <a href="https://github.com/etium-dev/core/blob/main/PRODUCT.md">Why etium exists</a>
+    <span>MIT license</span>
+  </footer>
+</main>
+</body>
+</html>
