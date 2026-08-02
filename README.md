@@ -10,9 +10,11 @@ adapters. Pi's equation is *agent = model + minimal harness*; etium's is
 
 Status: **pre-release (M0)**. The kernel works — see the test suite for what
 that claim means: replay-memoized loops, parking gates, crash-only recovery
-under `SIGKILL`, budget enforcement, redaction. Interfaces may still move
-until 0.2. The `codex` adapter's parser is provisional pending captured
-fixtures (see below).
+under `SIGKILL`, budget enforcement, redaction, harness-owned model auth
+([MODEL_AUTH.md](MODEL_AUTH.md)). The `pi` adapter is fixture-validated and
+has supervised a real run end-to-end; the `codex` parser is provisional
+pending captured fixtures (see below). Interfaces may still move until 0.2.
+New here? **[QUICKSTART.md](QUICKSTART.md)** has a runnable hello world.
 
 ## Install
 
@@ -99,11 +101,13 @@ it exists to avoid.
 ## Adapters
 
 `exec` (any command as a step; also the publication vehicle), `replay`
-(recorded streams; the test substrate), `codex` (`codex exec --json`,
+(recorded streams; the test substrate), `pi` (`pi -p --mode json`,
+fixture-validated — message, usage, error, and tool shapes grounded in real
+captures under [`fixtures/pi/`](fixtures/pi/)), `codex` (`codex exec --json`,
 **provisional**). To harden the codex parser and pressure-test schema
 neutrality, run [`scripts/capture-fixtures.sh`](scripts/capture-fixtures.sh)
 on a machine with the harnesses installed and commit the captures under
-`fixtures/`. Pi and Claude Code adapters are next (M1), OpenHands after (M2).
+`fixtures/`. The Claude Code adapter is next (M1), OpenHands after (M2).
 
 ## License
 

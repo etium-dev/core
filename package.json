@@ -14,8 +14,10 @@
     "loops",
     "schema",
     "README.md",
+    "QUICKSTART.md",
     "DESIGN.md",
     "DECISIONS.md",
+    "MODEL_AUTH.md",
     "LICENSE"
   ],
   "engines": {
@@ -23,9 +25,9 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/etium-dev/etium.git"
+    "url": "git+https://github.com/etium-dev/core.git"
   },
-  "homepage": "https://github.com/etium-dev/etium#readme",
+  "homepage": "https://etium-dev.github.io/core/",
   "keywords": [
     "agents",
     "loop-engineering",

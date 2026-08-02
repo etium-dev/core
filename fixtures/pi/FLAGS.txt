@@ -1,0 +1,15 @@
+pi 0.75.4
+pi -ne -p --mode json <prompt>          # session stream v3
+# -ne on the capture machine only: a local extension there needs an
+# unreachable LAN host; -ne does not change the event stream shape.
+# 20260802T183953Z-error-no-key.jsonl — real capture: expired openai-codex
+#   OAuth with the refresh endpoint unreachable. Note pi EXITS 0; the failure
+#   is only visible as stopReason "error" + errorMessage on the assistant
+#   message. The parser surfaces it as a message event.
+# synthetic.jsonl — hand-built success stream modeled 1:1 on the real shapes
+#   (filled content, nonzero usage); kept for deterministic replay tests.
+# 20260802T185638Z-tool-use.jsonl — real success capture WITH tool use
+#   (write tool), taken from an etium-supervised run's own raw
+#   (run 2026-08-02-pi-says-hello-brj7, openai-codex/gpt-5.5 via ChatGPT
+#   subscription OAuth, 2253 tokens / $0.0122). Parser fully validated —
+#   no PROVISIONAL shapes remain for pi.

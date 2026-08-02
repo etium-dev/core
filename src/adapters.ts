@@ -36,6 +36,11 @@ export const execAdapter: HarnessAdapter = {
 // ---------------------------------------------------------------------------
 export const codexAdapter: HarnessAdapter = {
   id: "codex",
+  auth: {
+    env: ["OPENAI_API_KEY"],
+    check: { cmd: "codex", args: ["login", "status"] }, // exit semantics provisional (§10.2)
+    remedy: "codex login",
+  },
   build(req: AdapterBuildRequest): BuildResult {
     const args = ["exec", "--json"];
     if (req.model) args.push("-m", req.model);
@@ -83,6 +88,85 @@ export const codexAdapter: HarnessAdapter = {
 };
 
 // ---------------------------------------------------------------------------
+// pi — parser validated against captured fixtures (fixtures/pi/, 2026-08-02,
+// session stream v3): message, usage, error, lifecycle, and tool shapes all
+// grounded in real streams (the tool-use capture was made by etium itself).
+// Unknown lines (message_update deltas, turn_*, session) return null and
+// live in raw only. Note: pi exits 0 even when the turn errors — the
+// assistant message carries stopReason "error" + errorMessage, which we
+// surface as a message event so failures are visible in `etium tail`.
+// ---------------------------------------------------------------------------
+export const piAdapter: HarnessAdapter = {
+  id: "pi",
+  auth: {
+    // Credential vars pi documents (§10.2); declared values are always redacted.
+    env: ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "OPENROUTER_API_KEY"],
+    remedy: "pi        # then /login",
+  },
+  build(req: AdapterBuildRequest): BuildResult {
+    const args = ["-p", "--mode", "json"];
+    if (req.model) args.push("--model", req.model); // supports "provider/id" patterns
+    args.push(req.prompt);
+    return { cmd: "pi", args };
+  },
+  parse(line: string): HarnessEvent[] | null {
+    let j: Record<string, unknown>;
+    try {
+      j = JSON.parse(line);
+    } catch {
+      return null;
+    }
+    const t = String(j.type ?? "");
+    if (t === "agent_start") return [{ kind: "lifecycle", state: "started" }];
+    if (t === "agent_end") return [{ kind: "lifecycle", state: "exiting" }];
+
+    // Assistant content and usage both ride on message_end. message_start /
+    // turn_end repeat the same message object; only message_end is counted.
+    if (t === "message_end") {
+      const m = (j.message ?? {}) as Record<string, unknown>;
+      if (m.role !== "assistant") return null;
+      const events: HarnessEvent[] = [];
+      const parts = Array.isArray(m.content) ? (m.content as { type?: string; text?: string }[]) : [];
+      const text = parts
+        .filter((p) => p?.type === "text" && typeof p.text === "string")
+        .map((p) => p.text)
+        .join(" ");
+      const summary =
+        text || (typeof m.errorMessage === "string" ? `error: ${m.errorMessage}` : "");
+      if (summary) events.push({ kind: "message", role: "assistant", summary: clip(summary) });
+      const u = m.usage as Record<string, unknown> | undefined;
+      if (u && (typeof u.input === "number" || typeof u.output === "number")) {
+        const cost = (u.cost as Record<string, unknown> | undefined)?.total;
+        events.push({
+          kind: "usage",
+          usage: {
+            tokensIn: typeof u.input === "number" ? u.input : 0,
+            tokensOut: typeof u.output === "number" ? u.output : 0,
+            costUsd: typeof cost === "number" ? cost : undefined,
+          },
+        });
+      }
+      return events.length ? events : null;
+    }
+
+    if (t === "tool_execution_start") {
+      const name = String(j.toolName ?? "tool");
+      return [{ kind: "tool", name, summary: clip(j.args === undefined ? name : JSON.stringify(j.args)) }];
+    }
+    if (t === "tool_execution_end") {
+      // Success results ride the following toolResult message; surface failures.
+      if (j.isError !== true) return null;
+      const parts = (j.result as { content?: { type?: string; text?: string }[] } | undefined)?.content;
+      const text = Array.isArray(parts)
+        ? parts.filter((p) => p?.type === "text" && typeof p.text === "string").map((p) => p.text).join(" ")
+        : "";
+      return [{ kind: "tool", name: String(j.toolName ?? "tool"), summary: clip(`error: ${text || "tool failed"}`) }];
+    }
+    return null;
+  },
+};
+
+// ---------------------------------------------------------------------------
 // replay — plays a recorded raw stream through another adapter's parser.
 // Deterministic, token-free end-to-end runs; what the test suite runs on.
 // ---------------------------------------------------------------------------
@@ -115,7 +199,7 @@ export const replayAdapter: HarnessAdapter = {
 // Registry
 // ---------------------------------------------------------------------------
 const registry = new Map<string, HarnessAdapter>(
-  [execAdapter, codexAdapter, replayAdapter].map((a) => [a.id, a]),
+  [execAdapter, codexAdapter, piAdapter, replayAdapter].map((a) => [a.id, a]),
 );
 
 export function getAdapter(id: string): HarnessAdapter {
