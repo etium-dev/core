@@ -73,7 +73,7 @@ The non-goals are the product. Core will never:
 - **Sandbox.** Etium sets cwd and env; isolation policy is yours (wrap any harness in docker if you want).
 - **Be an eval platform.** Traces are first-class, schema-versioned, and exportable to your eval stack — not locked into ours, because there isn't one.
 - **Schedule.** Cron exists.
-- **Orchestrate fleets.** One operator, one machine, a handful of concurrent runs. If you outgrow etium, that's success.
+- **Be the fleet coordinator.** No scheduler, queue, or control plane in core — ever. Etium scales by composition: more repos, more machines, each running the same daemonless loop, aggregated through surfaces and derived indexes — projections of the ledger, never a server that owns your state. The one constraint core keeps is precise and deliberate: **one machine per active run** — a run's strict-consistency domain is its single writer under a host-local lock. Across runs and machines there is no coordination to outgrow, because there is no shared mutable state. Anyone can build a fleet view *on* etium; the contract is files.
 
 ---
 

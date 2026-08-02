@@ -138,7 +138,7 @@ $ etium tail &lt;run&gt;       <span class="cmt"># human-readable event stream</
     <li><strong>Call a model.</strong> No API keys, no context management. Model auth is harness-owned; all intelligence lives in harness subprocesses.</li>
     <li><strong>Ship a workflow DSL.</strong> Loops are code. YAML workflow languages are how orchestrators become 100,000-line projects.</li>
     <li><strong>Run a server, web UI, daemon, or database.</strong> Files and a CLI. Your state is yours.</li>
-    <li><strong>Orchestrate fleets.</strong> One operator, one machine, a handful of concurrent runs. If you outgrow etium, that's success.</li>
+    <li><strong>Be the fleet coordinator.</strong> No scheduler, queue, or control plane in core. Etium scales by composition — more repos, more machines, each running the same daemonless loop, aggregated by projections of the ledger. The one constraint core keeps: <em>one machine per active run</em> (a run's single writer). Across machines there is nothing to outgrow, because nothing is shared.</li>
   </ul>
 
   <h2>Size is a feature</h2>
