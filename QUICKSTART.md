@@ -89,6 +89,8 @@ iterates or parks at the guard. Authenticate (`pi` → `/login`) and
 
 ## Where to go next
 
+- **[WRITING_LOOPS.md](WRITING_LOOPS.md)** — the loop-authoring guide, built
+  around a worked plan → approve → implement → escalate example.
 - `loops/ralph.js` is the whole reference loop — ~35 lines. Copy it, edit it;
   loops are just code.
 - `DESIGN.md` for the contract; `PRODUCT.md` for why this exists.

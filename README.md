@@ -14,7 +14,9 @@ under `SIGKILL`, budget enforcement, redaction, harness-owned model auth
 ([MODEL_AUTH.md](MODEL_AUTH.md)). The `pi` adapter is fixture-validated and
 has supervised a real run end-to-end; the `codex` parser is provisional
 pending captured fixtures (see below). Interfaces may still move until 0.2.
-New here? **[QUICKSTART.md](QUICKSTART.md)** has a runnable hello world.
+New here? **[QUICKSTART.md](QUICKSTART.md)** has a runnable hello world, and
+**[WRITING_LOOPS.md](WRITING_LOOPS.md)** teaches the loop API with a worked
+example.
 
 ## Install
 

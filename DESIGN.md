@@ -398,7 +398,7 @@ CLI (M0 set): `run`, `status`, `tail`, `gates`, `approve`, `reject`, `decide`, `
 
 **M2 — team surface.** GitHub surface as a package (assignment→tasks, `/et` command comments→decisions, status-comment projection — the surface adapter interface itself landed early, §10.3/ADR-009); hardened env profiles and publication steps; `openhands` adapter; predecessor-system migration guide.
 
-**M3 — ecosystem.** Trace exporters (OTel / Braintrust / LangSmith / Laminar scripts); static HTML trace viewer generated from ledger + raw; loop-authoring guide; `etium-mcp` extension.
+**M3 — ecosystem.** Trace exporters (OTel / Braintrust / LangSmith / Laminar scripts); static HTML trace viewer generated from ledger + raw; `etium-mcp` extension. (The loop-authoring guide — `WRITING_LOOPS.md` — landed early, ahead of the first loop package.)
 
 ---
 
