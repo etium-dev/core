@@ -67,9 +67,11 @@ Well-known paths are the most language-neutral API there is. Everything below is
           raw.jsonl          # raw harness stream while running
           raw.jsonl.zst      # compressed on completion; sha256 recorded in ledger
           artifacts/         # declared step outputs (§7)
-      workspace -> ../../worktrees/<run-id>    # symlink; M0 may point at a plain dir
+      workspace -> ../../worktrees/<run-id>    # symlink; plain-dir workspaces point elsewhere
   worktrees/
-    <run-id>/               # git worktree per run (M1)
+    <run-id>/               # git worktree per run (opt-in: `--worktree`; branch etium/<run-id>, ADR-010)
+  surfaces/
+    <id>.cursor             # opaque surface cursors (§10.3; internal)
 ```
 
 Retention: ledgers are kept forever. `etium gc` prunes `raw.jsonl.zst`, `stderr.log`, and worktrees by age/count policy. Deleting raw later is easy; recovering unrecorded raw is impossible, so we record first and prune second.
@@ -392,7 +394,7 @@ CLI (M0 set): `run`, `status`, `tail`, `gates`, `approve`, `reject`, `decide`, `
 
 **M0 — kernel.** Ledger + fold + engine (replay memoization, divergence, parking), runner (raw capture, redaction, wall/stall budgets, kill), lockfile + mailbox + `tick`, adapters `exec` + `replay` + `codex`, the `ralph` loop, the M0 CLI set, plain-directory workspaces. Fixture capture from Claude Code and Pi to validate schema neutrality. Exit criteria: etium is being developed by a Codex ralph loop running under etium, and `kill -9` at any point is recovered by `tick`.
 
-**M1 — daily driver.** Git worktrees per run; usage/cost normalization and token/cost budgets; the `claude` adapter (`pi` was pulled forward with the quick start and is fixture-validated; the model-auth pre-spawn gate also landed early — see ADR-007); creation-time preflight and `doctor`; a tick admission cap (resume at most K live supervisors per tick, oldest first; the rest stay parked until a later tick — a budget, not a scheduler); the `plan-implement` loop with predecessor defaults; `redo`, `gc`, `watch`.
+**M1 — daily driver.** Git worktrees per run (landed — ADR-010); usage/cost normalization and token/cost budgets; the `claude` adapter (`pi` was pulled forward with the quick start and is fixture-validated; the model-auth pre-spawn gate also landed early — see ADR-007); creation-time preflight and `doctor`; a tick admission cap (resume at most K live supervisors per tick, oldest first; the rest stay parked until a later tick — a budget, not a scheduler); the `plan-implement` loop with predecessor defaults; `redo`, `gc`, `watch`.
 
 **M2 — team surface.** GitHub surface as a package (assignment→tasks, `/et` command comments→decisions, status-comment projection — the surface adapter interface itself landed early, §10.3/ADR-009); hardened env profiles and publication steps; `openhands` adapter; predecessor-system migration guide.
 

@@ -319,3 +319,36 @@ is policy-heavy and ships as a package; core carries only the interface).
 Push/webhook ingestion in core (a tiny external trigger can always call
 `etium tick`). Labels as commands (above). Per-run cursors managed by core
 (the cursor is opaque precisely so surfaces encode their own).
+
+---
+
+## ADR-010 — Worktree per run: explicit opt-in, one branch per attempt, no auto-cleanup
+
+**Decision.** `etium run --worktree [--base ref]` (and `SurfaceTask.worktree`)
+gives a run its own git worktree at `<base>/worktrees/<run-id>` on a fresh
+branch — default `etium/<run-id>` off `HEAD`, both overridable (surfaces name
+attempt branches like `etium/issue-7-attempt-<n>`). Mutually exclusive with
+`--workspace`. The worktree is created *before* the run directory: it is the
+one step that can fail for external reasons, and an aborted creation must
+leave no half-made run behind. `run.created` records `{ repo, branch, base }`
+so surfaces can open PRs from the branch. Completed and abandoned runs keep
+their worktrees; pruning is `etium gc` policy (M1), not a lifecycle side
+effect.
+
+**Why.** One branch per attempt is the predecessor's hard-won rule —
+abandoned work must never block later attempts — and worktrees make parallel
+runs isolated by construction while sharing one object store (a clone per run
+costs full-repo disk and setup time for nothing). Explicit opt-in rather than
+auto-detection of a git cwd: `--workspace .` (work directly in a checkout,
+QUICKSTART's flow) and worktree-per-run are both legitimate; silently
+switching behavior on repo detection would surprise exactly the first-run
+user. No auto-removal on completion because the human's next act is usually
+to inspect, merge, or salvage the branch — deletion is a retention policy,
+and retention lives in `gc` (§4).
+
+**Rejected.** Auto-worktree when cwd is a git repo (behavioral surprise;
+breaks the plain-workspace flow). Clone per run (disk, time, no isolation
+gain over worktrees). Worktree removal on run completion (destroys the thing
+the human is about to review; gc owns retention). Recording the worktree
+only in loop.json (surfaces read the ledger; run.created is the durable,
+greppable record).

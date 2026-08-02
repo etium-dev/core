@@ -1,7 +1,7 @@
 // The supervisor: one per active run, exits on park/complete (§6.1). Attach is
 // crash-only — it reconciles whatever the previous process left behind.
 
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -34,6 +34,10 @@ export interface CreateRunSpec {
   loop: string; // builtin name or path to a loop module
   params?: Record<string, string>;
   workspace?: string; // default: <runDir>/ws
+  /** Give the run its own git worktree at <base>/worktrees/<run-id> on a fresh
+   * branch (default `etium/<run-id>` off `base` ?? HEAD) — one branch per
+   * attempt (§4). Mutually exclusive with `workspace`. */
+  worktree?: { repo: string; base?: string; branch?: string };
   preapprove?: string[];
   maxSteps?: number;
   idSeed?: string; // slug source for the run id; default: the task text
@@ -60,15 +64,37 @@ export function resolveLoop(ref: string): string {
 
 export function createRun(base: string, spec: CreateRunSpec): { runId: string; runDir: string } {
   if (!spec.task) throw new Error("run creation needs task text");
+  if (spec.worktree && spec.workspace)
+    throw new Error("worktree and workspace are mutually exclusive");
+  base = path.resolve(base);
   const loopPath = resolveLoop(spec.loop);
   const date = new Date().toISOString().slice(0, 10);
   const rand = Math.random().toString(36).slice(2, 6);
   const runId = `${date}-${slug(spec.idSeed ?? spec.task)}-${rand}`;
   const runDir = path.join(base, "runs", runId);
+
+  // Worktree first: it is the one step that can fail for external reasons, and
+  // an aborted creation must leave no half-made run behind (§6.1 crash-only).
+  let workspace: string;
+  let worktree: { repo: string; branch: string; base: string } | undefined;
+  if (spec.worktree) {
+    const repo = path.resolve(spec.worktree.repo);
+    const branch = spec.worktree.branch ?? `etium/${runId}`;
+    const baseRef = spec.worktree.base ?? "HEAD";
+    workspace = path.join(base, "worktrees", runId);
+    fs.mkdirSync(path.dirname(workspace), { recursive: true });
+    const r = spawnSync("git", ["-C", repo, "worktree", "add", "-b", branch, workspace, baseRef], {
+      encoding: "utf8",
+    });
+    if (r.status !== 0)
+      throw new Error(`git worktree add failed: ${(r.stderr || r.stdout || "").trim() || `exit ${r.status}`}`);
+    worktree = { repo, branch, base: baseRef };
+  } else {
+    workspace = spec.workspace ? path.resolve(spec.workspace) : path.join(runDir, "ws");
+  }
+
   fs.mkdirSync(runDir, { recursive: true });
   fs.writeFileSync(path.join(runDir, "task.md"), spec.task);
-
-  const workspace = spec.workspace ? path.resolve(spec.workspace) : path.join(runDir, "ws");
   fs.mkdirSync(workspace, { recursive: true });
   const wsLink = path.join(runDir, "workspace");
   if (!fs.existsSync(wsLink)) {
@@ -95,6 +121,7 @@ export function createRun(base: string, spec: CreateRunSpec): { runId: string; r
     loop: loopPath,
     params,
     workspace,
+    worktree,
     etiumVersion: ETIUM_VERSION,
   });
   w.close();

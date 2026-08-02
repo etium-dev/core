@@ -72,6 +72,16 @@
         "loop": { "type": "string" },
         "params": { "type": "object", "additionalProperties": { "type": "string" } },
         "workspace": { "type": "string" },
+        "worktree": {
+          "type": "object",
+          "required": ["repo", "branch", "base"],
+          "properties": {
+            "repo": { "type": "string" },
+            "branch": { "type": "string" },
+            "base": { "type": "string" }
+          },
+          "description": "Present when the workspace is a git worktree created for this run (one branch per attempt)."
+        },
         "etiumVersion": { "type": "string" }
       }
     },

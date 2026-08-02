@@ -47,6 +47,7 @@ export interface RunCreatedData {
   loop: string; // resolved loop module path or builtin name
   params: Record<string, string>;
   workspace: string;
+  worktree?: { repo: string; branch: string; base: string }; // set when the workspace is a git worktree (§4)
   etiumVersion: string;
 }
 export interface SupervisorStartedData {
@@ -298,6 +299,8 @@ export interface SurfaceTask {
   loop: string; // loop path or builtin name
   params?: Record<string, string>;
   workspace?: string;
+  /** Give the run its own git worktree + branch instead of a plain workspace. */
+  worktree?: { repo: string; base?: string; branch?: string };
   preapprove?: string[];
   maxSteps?: number;
 }

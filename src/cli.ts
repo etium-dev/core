@@ -17,7 +17,8 @@ const HELP = `etium — the outer loop for coding agents
 
 usage:
   etium run [goal…] [--task file] [--loop name|path] [--harness h]
-            [--param k=v]… [--approve gate]… [--workspace dir] [--sync]
+            [--param k=v]… [--approve gate]… [--sync]
+            [--workspace dir | --worktree [--base ref]]   (--worktree: own branch etium/<run-id> off ref|HEAD of the repo at cwd)
   etium status [run]         one line per run, or detail for one
   etium gates                open gates across all runs
   etium approve <run> <gate> [--note text]
@@ -121,6 +122,8 @@ async function cmdRun(argv: string[]): Promise<number> {
       param: { type: "string", multiple: true },
       approve: { type: "string", multiple: true },
       workspace: { type: "string" },
+      worktree: { type: "boolean" },
+      base: { type: "string" },
       dir: { type: "string" },
       sync: { type: "boolean" },
       "max-steps": { type: "string" },
@@ -152,6 +155,7 @@ async function cmdRun(argv: string[]): Promise<number> {
       loop: v.loop!,
       params,
       workspace: v.workspace,
+      worktree: v.worktree ? { repo: process.cwd(), base: v.base } : undefined,
       preapprove: v.approve ?? [],
       maxSteps: v["max-steps"] ? Number(v["max-steps"]) : undefined,
       idSeed: v.task ? path.basename(v.task, path.extname(v.task)) : goal,
