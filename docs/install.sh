@@ -1173,11 +1173,7 @@ draw_ring_frame() {
           fi
         fi
       elif [ "$y" -eq 2 ] && [ "$x" -eq 1 ]; then
-        if [ "$settled" = 1 ]; then
-          frame="${frame}${reset}${ETIUM_ESC}[1m     E T I U M    ${reset}"
-        else
-          frame="${frame}${reset}${ETIUM_ESC}[90m     E T I U M    ${reset}"
-        fi
+        frame="${frame}${reset}${ETIUM_ESC}[1m     E T I U M    ${reset}"
         x=9
       else
         frame="${frame}${reset}  "
