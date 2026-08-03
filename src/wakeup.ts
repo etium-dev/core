@@ -84,6 +84,31 @@ export function installWakeup(repoDir: string, env: string): string[] {
     : ["Could not edit crontab — install this line yourself:", "", `  ${line}`];
 }
 
+export function wakeupInstalled(repoDir: string): boolean {
+  if (process.platform === "darwin")
+    return fs.existsSync(path.join(os.homedir(), "Library", "LaunchAgents", `${agentLabel(repoDir)}.plist`));
+  const cur = spawnSync("crontab", ["-l"], { encoding: "utf8" });
+  return cur.status === 0 && cur.stdout.split("\n").some((l) => l.includes("etium tick --surface github") && l.includes(repoDir));
+}
+
+/** Remove this repository's always-on wake-up (agent or cron line). */
+export function removeWakeup(repoDir: string): string[] {
+  if (process.platform === "darwin") {
+    const label = agentLabel(repoDir);
+    const uid = process.getuid?.() ?? 501;
+    spawnSync("launchctl", ["bootout", `gui/${uid}/${label}`], { stdio: "ignore" });
+    try {
+      fs.unlinkSync(path.join(os.homedir(), "Library", "LaunchAgents", `${label}.plist`));
+    } catch {
+      /* already gone */
+    }
+    retireCronLine(repoDir); // belt: a legacy cron line for this repo goes too
+    return [`Removed the launchd agent (${label}).`];
+  }
+  retireCronLine(repoDir);
+  return ["Removed this repository's crontab entry."];
+}
+
 /** `print` mode: show what always-on would do — installing nothing, and on
  * macOS writing nothing (a plist in ~/Library/LaunchAgents would auto-load
  * at next login, which is an install, not a printout). */
@@ -91,7 +116,7 @@ export function printWakeup(repoDir: string, env: string): string[] {
   const cmd = tickCommand(repoDir, env);
   if (process.platform === "darwin")
     return [
-      "When you want always-on, run: etium init --wakeup cron",
+      "When you want always-on, run: etium configure --wakeup cron",
       "It installs a launchd agent (the scheduler that can read gh's keychain",
       "token) running, once a minute:",
       "",

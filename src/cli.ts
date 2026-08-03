@@ -15,7 +15,9 @@ import { loadState, openGates, readLedger, writeStateCache } from "./ledger.ts";
 import { isLockLive, readLock, writeDecision } from "./lock.ts";
 import { abandonRun, createRun, supervise, superviseDetached } from "./supervisor.ts";
 import { loadSurfaces, tickOnce, watchLoop } from "./tick.ts";
-import { installWakeup, printWakeup } from "./wakeup.ts";
+import { etiumsOnPath } from "./checks.ts";
+import { ghEnv, readConfig, statusLines, writeConfig } from "./config.ts";
+import { installWakeup, printWakeup, removeWakeup, wakeupInstalled } from "./wakeup.ts";
 import { DEFAULT_GATE_OPTIONS, ETIUM_VERSION, type AnyEnvelope } from "./types.ts";
 
 const HELP = `etium — the outer loop for coding agents
@@ -36,9 +38,10 @@ usage:
   etium watch [--surface name|path]… [--every seconds]   tick on an interval, foreground (Ctrl-C to stop)
   etium rebuild <run>        rebuild state.json from the ledger
   etium clone-loop [library] [--into dir]   copy a loop library (ralph, ai-engineer) into your repo (no arg: list)
-  etium init [--library ralph|ai-engineer|none] [--github owner/name|off] [--trusted logins]
+  etium configure [--library ralph|ai-engineer|none] [--github owner/name|off] [--trusted logins]
              [--act-as login|me] [--wakeup watch|cron|print] [--git-name n] [--git-email e] [--yes]
-             check dependencies (with fix commands), ask the setup questions, apply
+             check the machine, ask the setup questions, apply — and re-run any
+             time to manage state (wake-up on/off, status)
   etium --version
 
 Base directory: --dir, else $ETIUM_DIR, else ./.etium
@@ -426,10 +429,12 @@ function cmdCloneLoop(argv: string[]): number {
 
 
 // ---------------------------------------------------------------------------
-// etium init (§9, ADR-014): checks → questions → apply, in the installer's
-// look and feel: the ring logo, a sentence of why before every check, and
-// questions as explained numbered menus. Flags answer everything for
-// agents; nothing prompts without a TTY.
+// etium configure (§9, ADR-014, ADR-019): checks → questions → apply, in the
+// installer's look and feel: the ring logo, a sentence of why before every
+// check, and questions as explained numbered menus. Re-run on a configured
+// repository, it opens with a state-aware action menu (re-run setup,
+// wake-up on/off, status) instead of re-interrogating. Flags answer
+// everything for agents; nothing prompts without a TTY.
 // ---------------------------------------------------------------------------
 
 const sh = (cmd: string, args: string[]) =>
@@ -500,12 +505,12 @@ async function initBanner(): Promise<void> {
   const o = (t: string) => process.stdout.write(t + "\n");
   await ringAnimation();
   o("");
-  o(`  ${style("1", "Etium Setup")}`);
+  o(`  ${style("1", "Etium Configure")}`);
   o(`  ${style("2", "The outer loop for coding agents")}`);
   o("");
 }
 
-async function cmdInit(argv: string[]): Promise<number> {
+async function cmdConfigure(argv: string[]): Promise<number> {
   const { values: v } = parseArgs({
     args: argv,
     options: {
@@ -526,8 +531,8 @@ async function cmdInit(argv: string[]): Promise<number> {
   await initBanner();
   out("Etium supervises coding agents working in this repository. Every run");
   out("is recorded as plain files, and each run can work on its own git");
-  out("branch. Setup checks this machine, asks a few questions, and applies");
-  out("your answers — nothing here needs sudo.");
+  out("branch. Configure checks this machine, asks what's needed, and");
+  out("applies your answers — nothing here needs sudo.");
   out();
   out(style("1", "Checking this machine"));
   out();
@@ -542,21 +547,7 @@ async function cmdInit(argv: string[]): Promise<number> {
     hardFail = true;
   }
   out(`  ok     etium ${ETIUM_VERSION}`);
-  const etiums = (() => {
-    const seen = new Map<string, string>(); // realpath -> first PATH entry serving it
-    for (const dir of (process.env.PATH ?? "").split(path.delimiter)) {
-      if (!dir) continue;
-      const p = path.join(dir, "etium");
-      try {
-        fs.accessSync(p, fs.constants.X_OK);
-        const real = fs.realpathSync(p);
-        if (!seen.has(real)) seen.set(real, p);
-      } catch {
-        /* not in this dir */
-      }
-    }
-    return [...seen.values()];
-  })();
+  const etiums = etiumsOnPath();
   if (etiums.length > 1) {
     const [active, ...shadowed] = etiums;
     out(`  needs  one etium install — this machine has ${etiums.length}; PATH serves the first:`);
@@ -581,7 +572,7 @@ async function cmdInit(argv: string[]): Promise<number> {
   if (repoDir) out(`  ok     repository: ${repoDir} — runs are recorded here, under .etium/`);
   else {
     out("  needs  a repository — etium works inside the repository it supervises;");
-    out("         cd into one, then run: etium init");
+    out("         cd into one, then run: etium configure");
     hardFail = true;
   }
   const gitIdentOk = sh("git", ["config", "user.email"]).status === 0;
@@ -589,7 +580,7 @@ async function cmdInit(argv: string[]): Promise<number> {
   else if (interactive || (v["git-name"] && v["git-email"])) out("  note   git identity not set — configured below");
   else {
     out("  needs  a git identity — runs commit their work, and git refuses commits");
-    out("         without an author. Run etium init in a terminal to be prompted,");
+    out("         without an author. Run etium configure in a terminal to be prompted,");
     out(`         or pass: --git-name "Your Name" --git-email you@example.com`);
     hardFail = true;
   }
@@ -616,16 +607,21 @@ async function cmdInit(argv: string[]): Promise<number> {
   }
   if (!anyHarness) {
     out("  needs  a coding-agent harness — harnesses are the agents etium");
-    out("         supervises; install at least one, then run etium init again:");
+    out("         supervises; install at least one, then run etium configure again:");
     out("         pi     https://pi.dev");
     out("         codex  https://github.com/openai/codex");
     hardFail = true;
   }
   out();
   if (hardFail) {
-    out("Fix the `needs` lines above, then run: etium init");
+    out("Fix the `needs` lines above, then run: etium configure");
     return 1;
   }
+
+  const etiumBase = path.join(repoDir!, ".etium");
+  const cfg = readConfig(etiumBase);
+  const wakeOn = wakeupInstalled(repoDir!);
+  const flagsGiven = [v.library, v.github, v.trusted, v["act-as"], v.wakeup].some((x) => x !== undefined);
 
   const rl = interactive ? readline.createInterface({ input: process.stdin, output: process.stdout }) : undefined;
 
@@ -643,7 +639,7 @@ async function cmdInit(argv: string[]): Promise<number> {
     out();
     for (const line of explain) out(`  ${line}`);
     out();
-    options.forEach((o, i) => out(`  ${i + 1}    ${o.label}${i === defIdx ? "  (default)" : ""}`));
+    options.forEach((o, i) => out(`  ${style("36", String(i + 1))}    ${o.label}${i === defIdx ? `  ${style("2", "(default)")}` : ""}`));
     out();
     for (;;) {
       const a = (await rl.question(`Choose [${defIdx + 1}]: `)).trim().toLowerCase();
@@ -668,6 +664,39 @@ async function cmdInit(argv: string[]): Promise<number> {
   };
 
   try {
+    // A configured repository opens with a state-aware action menu (ADR-019)
+    // instead of re-interrogating; flags mean an agent is driving — skip it.
+    if (interactive && !flagsGiven && (cfg !== null || wakeOn)) {
+      out(style("1", "This repository is already configured."));
+      const opts = [{ label: `${style("32", "Re-run setup — walk the questions again")}`, value: "setup" }];
+      if (wakeOn) opts.push({ label: style("31", "Remove the always-on wake-up"), value: "wake-off" });
+      else if (cfg?.github?.loop)
+        opts.push({ label: style("32", "Install the always-on wake-up (ticks once a minute)"), value: "wake-on" });
+      opts.push({ label: "Show status — what's configured here", value: "status" });
+      opts.push({ label: style("2", "Nothing — exit"), value: "exit" });
+      const action = await menu("Choose an action", [], opts, 0);
+      if (action === "exit") {
+        out();
+        out("Chose to do nothing. Exiting.");
+        return 0;
+      }
+      if (action === "wake-on") {
+        out();
+        for (const l of installWakeup(repoDir!, ghEnv(cfg!.github!))) out(l);
+        return 0;
+      }
+      if (action === "wake-off") {
+        out();
+        for (const l of removeWakeup(repoDir!)) out(l);
+        return 0;
+      }
+      if (action === "status") {
+        out();
+        for (const l of statusLines(cfg, wakeOn, etiumBase, process.cwd())) out(l);
+        return 0;
+      }
+      // "setup" falls through into the questions.
+    }
     if (!gitIdentOk) {
       const name = await askText(
         "Name for commits",
@@ -682,7 +711,7 @@ async function cmdInit(argv: string[]): Promise<number> {
         v["git-email"],
       );
       if (!name || !email) {
-        out("Both name and email are needed — run: etium init");
+        out("Both name and email are needed — run: etium configure");
         return 1;
       }
       sh("git", ["config", "--global", "user.name", name]);
@@ -736,7 +765,7 @@ async function cmdInit(argv: string[]): Promise<number> {
         if (!ghInstalled) out("  curl -sS https://webi.sh/gh | sh   (else https://cli.github.com)");
         out("  gh auth login                      (as the bot account, if the engineer acts as one)");
         out();
-        out("Then run: etium init");
+        out("Then run: etium configure");
         return 1;
       }
       if (github === "github")
@@ -793,6 +822,7 @@ async function cmdInit(argv: string[]): Promise<number> {
       }
     }
     if (github === "off") {
+      writeConfig(etiumBase, { v: 1, library, github: null });
       out(style("1", "Done. Next:"));
       out();
       if (library === "ralph") {
@@ -808,6 +838,11 @@ async function cmdInit(argv: string[]): Promise<number> {
       return 0;
     }
     const agentLogin = actAs === "me" ? ghLogin : actAs;
+    writeConfig(etiumBase, {
+      v: 1,
+      library,
+      github: { repo: github, trusted, agent: agentLogin, loop: library === "none" ? "" : `${library}/loop.ts` },
+    });
     const env = `ETIUM_GH_REPO=${github} ETIUM_GH_TRUSTED=${trusted} ETIUM_GH_AGENT=${agentLogin} ETIUM_GH_LOOP=${library === "none" ? "<path-to-your-loop>" : `${library}/loop.ts`}`;
     if (wakeup === "cron") {
       for (const l of installWakeup(repoDir!, env)) out(l);
@@ -916,8 +951,8 @@ export async function main(argv: string[]): Promise<number> {
         return await cmdTick(rest);
       case "watch":
         return await cmdWatch(rest);
-      case "init":
-        return await cmdInit(rest);
+      case "configure":
+        return await cmdConfigure(rest);
       case "rebuild":
         return cmdRebuild(rest);
       case "clone-loop":

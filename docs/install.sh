@@ -98,7 +98,7 @@ etium_installer_main() {
     printf '\nEtium was installed successfully.\n'
   fi
   if installed_etium_is_first_on_path; then
-    printf '\nRun it with: etium\nSet it up in your repository with: etium init\n'
+    printf '\nRun it with: etium\nSet it up in your repository with: etium configure\n'
     print_harness_note
     if [ "${ETIUM_NODE_INSTALLED_STANDALONE:-0}" = 1 ]; then
       printf 'If etium is not found in your shell yet, add this to your shell profile:\n\n'

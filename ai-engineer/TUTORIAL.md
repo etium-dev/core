@@ -22,7 +22,7 @@ cd /path/to/your-repo
 etium clone-loop ai-engineer
 ```
 
-(`etium init` does Part 0's setup and Part 3's wiring questions
+(`etium configure` does Part 0's setup and Part 3's wiring questions
 interactively — checks with fix commands first, then the questions. The
 manual steps below show exactly what it does.)
 

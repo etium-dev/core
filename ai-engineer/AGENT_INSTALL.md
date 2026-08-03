@@ -67,7 +67,7 @@ One conditional item: when the `git config user.email` detection fails,
 add item 5 to round 1 asking what name and email the runs' commits should
 be authored as (default the email to `<gh login>@users.noreply.github.com`
 when a login was detected; the four-item cap yields for this one case).
-Pass the answers to Step 2 as `--git-name`/`--git-email` — `etium init`
+Pass the answers to Step 2 as `--git-name`/`--git-email` — `etium configure`
 applies them itself. After acceptance, restate the configuration in one line — e.g.
 "Configuration: repo /a/b, etium only, no GitHub wiring, scratch in a temp
 dir. Starting." — and proceed.
@@ -88,7 +88,7 @@ The accepted items bind these inputs, referenced by the steps below (round 1: 1�
 
 - Make no changes outside `REPO_DIR` except: the global npm install
   (step 1), throwaway work under `SCRATCH_DIR`, and — only when the
-  wake-up answer is `cron` — one crontab line (installed by `etium init`,
+  wake-up answer is `cron` — one crontab line (installed by `etium configure`,
   not by you).
 - **Never run `sudo`** and never download OS installers. When a step needs
   elevation (system Node, root-owned npm prefix), stop and print the exact
@@ -153,7 +153,7 @@ other:
 
 **Verify**: `etium --version` → prints a version. Otherwise stop and report.
 
-## Step 2 — configure with `etium init`
+## Step 2 — configure with `etium configure`
 
 Translate the accepted interview items into flags and run one command —
 it re-checks the machine (every unmet dependency prints as a `needs` line
@@ -162,7 +162,7 @@ installs or prints the crontab entry per the wake-up answer:
 
 ```sh
 cd "$REPO_DIR"
-etium init --library <ralph|ai-engineer|none> --github <owner/name|off> \
+etium configure --library <ralph|ai-engineer|none> --github <owner/name|off> \
   --trusted <logins> --act-as <me|bot-login> --wakeup <watch|cron|print> \
   --git-name "<name>" --git-email "<email>"
 ```
@@ -263,7 +263,7 @@ to Step 5.
 
 ## Step 4 — GitHub verification (only if wiring was chosen)
 
-`etium init` already gated on `gh` being installed and authenticated.
+`etium configure` already gated on `gh` being installed and authenticated.
 Confirm the account can push, then prove the wiring with one tick:
 
 ```sh

@@ -643,3 +643,40 @@ every existing handoff).
 resume at login. Truly headless fleets pair this with auto-login (the Mac
 CI norm; FileVault requires an unencrypted boot volume for it) — a setup
 choice etium documents but does not make.
+
+---
+
+## ADR-019 — `configure` (né `init`): state-aware, re-runnable, with persisted wiring
+
+**Decision.** The setup verb is `etium configure` — renamed from `init`
+cleanly, no alias (0.10.0; the first exercise of the 0.x versioning
+policy: y bumps only for breaks). It is re-runnable by design: on a
+repository that is already configured, an interactive run opens with a
+state-aware action menu — re-run setup, install or remove the always-on
+wake-up (whichever applies), show status, exit — rendered in the
+installer's exact visual language (cyan keys, green constructive, red
+destructive, dim neutral). Fresh repositories skip the menu and go
+straight into setup; any setup flag means an agent is driving and also
+skips it. To make later invocations possible without re-interrogating,
+setup persists its non-secret answers to `.etium/config.json` (library,
+GitHub repo/trusted/agent/loop). The file is configure's memory, not the
+runtime's input: tick and the github surface still read env vars only —
+config.json reconstructs the commands configure prints and runs, and
+never feeds the runtime behind the operator's back. No secrets ever
+(GitHub auth is gh's, model auth is the harness's).
+
+**Why.** "Init" promised a beginning; the verb is actually how state gets
+managed for the life of the repository — the first field deployment needed
+"add the wake-up later" and "remove the wake-up", and had no way to do
+either short of re-answering everything (the wiring lived only in
+whatever command line it once rode in on — the same observability gap the
+silent-GitHub post-mortem flagged). A menu computed from detected state
+turns those into one keystroke, and the persisted wiring is what makes
+them possible at all.
+
+**Rejected.** Keeping `init` as an alias (two names for one verb; fewer
+ways). Re-asking the GitHub questions inside "install the wake-up"
+(re-interrogation as a substitute for memory). Making config.json a
+runtime input for tick (hidden coupling; env stays the runtime contract,
+12-factor style, and the cron/agent line remains self-contained and
+auditable).

@@ -30,7 +30,7 @@ test("clone-loop: copies the library, ignores .etium/, never overwrites, rejects
   assert.equal(await main(["clone-loop"]), 0); // bare form lists
 });
 
-test("init: sets the git identity itself (from flags when non-interactive; hard-fails without)", () => {
+test("configure: sets the git identity itself (from flags when non-interactive; hard-fails without)", () => {
   const cli = path.resolve("src/cli.ts");
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "etium-ident-"));
   const repo = path.join(root, "repo");
@@ -43,13 +43,13 @@ test("init: sets the git identity itself (from flags when non-interactive; hard-
   const gcfg = path.join(root, "gitconfig"); // isolate from the developer's global config
   const env = { ...process.env, PATH: `${stubBin}:${process.env.PATH}`, GIT_CONFIG_GLOBAL: gcfg };
 
-  const bad = spawnSync(process.execPath, [cli, "init", "--library", "none", "--github", "off"], { cwd: repo, encoding: "utf8", env });
+  const bad = spawnSync(process.execPath, [cli, "configure", "--library", "none", "--github", "off"], { cwd: repo, encoding: "utf8", env });
   assert.equal(bad.status, 1);
   assert.match(bad.stdout, /needs\s+a git identity/);
 
   const ok = spawnSync(
     process.execPath,
-    [cli, "init", "--library", "none", "--github", "off", "--git-name", "Bot Ident", "--git-email", "bot@example.com"],
+    [cli, "configure", "--library", "none", "--github", "off", "--git-name", "Bot Ident", "--git-email", "bot@example.com"],
     { cwd: repo, encoding: "utf8", env },
   );
   assert.equal(ok.status, 0, ok.stdout + ok.stderr);
@@ -57,7 +57,7 @@ test("init: sets the git identity itself (from flags when non-interactive; hard-
   assert.match(fs.readFileSync(gcfg, "utf8"), /bot@example\.com/); // applied, not printed for copy/paste
 });
 
-test("init: two etium installs on PATH is a hard failure naming both", () => {
+test("configure: two etium installs on PATH is a hard failure naming both", () => {
   const cli = path.resolve("src/cli.ts");
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "etium-shadow-"));
   const repo = path.join(root, "repo");
@@ -77,7 +77,7 @@ test("init: two etium installs on PATH is a hard failure naming both", () => {
   fs.mkdirSync(stubBin);
   fs.writeFileSync(path.join(stubBin, "pi"), "#!/bin/sh\necho 0.0.0-stub\n", { mode: 0o755 });
   const env = { ...process.env, PATH: `${binA}:${binB}:${stubBin}:${process.env.PATH}` };
-  const r = spawnSync(process.execPath, [cli, "init", "--library", "none", "--github", "off"], { cwd: repo, encoding: "utf8", env });
+  const r = spawnSync(process.execPath, [cli, "configure", "--library", "none", "--github", "off"], { cwd: repo, encoding: "utf8", env });
   assert.equal(r.status, 1, r.stdout + r.stderr);
   assert.match(r.stdout, /needs\s+one etium install/);
   assert.ok(r.stdout.includes(path.join(binA, "etium")));
@@ -85,7 +85,7 @@ test("init: two etium installs on PATH is a hard failure naming both", () => {
   assert.match(r.stdout, /npm uninstall -g --prefix/);
 });
 
-test("init (flags mode): checks, clones the library, exits 1 outside a repo", () => {
+test("configure (flags mode): checks, clones the library, persists wiring, exits 1 outside a repo", () => {
   const cli = path.resolve("src/cli.ts");
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "etium-init-"));
   const repo = path.join(root, "repo");
@@ -97,16 +97,19 @@ test("init (flags mode): checks, clones the library, exits 1 outside a repo", ()
   fs.mkdirSync(stubBin);
   fs.writeFileSync(path.join(stubBin, "pi"), "#!/bin/sh\necho 0.0.0-stub\n", { mode: 0o755 });
   const env = { ...process.env, PATH: `${stubBin}:${process.env.PATH}` };
-  const ok = spawnSync(process.execPath, [cli, "init", "--library", "ai-engineer", "--github", "off"], { cwd: repo, encoding: "utf8", env });
+  const ok = spawnSync(process.execPath, [cli, "configure", "--library", "ai-engineer", "--github", "off"], { cwd: repo, encoding: "utf8", env });
   assert.equal(ok.status, 0, ok.stderr);
   assert.match(ok.stdout, /ok\s+node/);
   assert.ok(fs.existsSync(path.join(repo, "ai-engineer", "loop.ts")));
-  const ok2 = spawnSync(process.execPath, [cli, "init", "--library", "ralph", "--github", "off"], { cwd: repo, encoding: "utf8", env });
+  const cfg1 = JSON.parse(fs.readFileSync(path.join(repo, ".etium", "config.json"), "utf8"));
+  assert.deepEqual(cfg1, { v: 1, library: "ai-engineer", github: null }); // wiring persisted (ADR-019)
+  const ok2 = spawnSync(process.execPath, [cli, "configure", "--library", "ralph", "--github", "off"], { cwd: repo, encoding: "utf8", env });
   assert.equal(ok2.status, 0, ok2.stderr);
   assert.ok(fs.existsSync(path.join(repo, "ralph", "loop.ts")));
+  assert.equal(JSON.parse(fs.readFileSync(path.join(repo, ".etium", "config.json"), "utf8")).library, "ralph"); // re-run overwrites
   const bare = path.join(root, "empty");
   fs.mkdirSync(bare);
-  const bad = spawnSync(process.execPath, [cli, "init", "--library", "none", "--github", "off"], { cwd: bare, encoding: "utf8", env });
+  const bad = spawnSync(process.execPath, [cli, "configure", "--library", "none", "--github", "off"], { cwd: bare, encoding: "utf8", env });
   assert.equal(bad.status, 1);
   assert.match(bad.stdout, /needs\s+a repository/);
 });

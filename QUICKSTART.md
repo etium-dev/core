@@ -21,7 +21,7 @@ macOS .pkg installer, or a Linux distro package — so its global prefix is
 root-owned. Don't reach for sudo: run the installer above instead; it
 picks a user-writable prefix. A machine should have exactly one etium —
 a second install shadows the first on PATH, and updates silently start
-landing in the copy you aren't running. `etium init` detects this.)
+landing in the copy you aren't running. `etium configure` detects this.)
 
 Etium setup is four questions, the same ones an agent asks on the
 [agent path](https://etium.dev/agent-install.txt): **which repo** (wherever
@@ -31,7 +31,7 @@ the library path), **GitHub wiring or terminal only** (this page is
 terminal only), and **where throwaway work may go** (yours to pick when
 testing).
 
-Prefer being walked through it? `etium init` checks your machine (each
+Prefer being walked through it? `etium configure` checks your machine (each
 missing dependency printed with the command that fixes it), asks the setup
 questions with sensible defaults, and applies your answers.
 

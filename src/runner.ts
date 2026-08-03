@@ -64,7 +64,7 @@ export function checkHarnessAuth(harness: string, timeoutMs = 10_000): StepAuthR
   const adapter = getAdapter(harness);
   const authEnv = (adapter.auth?.env ?? []).filter((k) => process.env[k] !== undefined);
   // Presence before auth: a harness that isn't installed fails here, legibly,
-  // instead of at spawn. Surface-created runs never pass through `etium init`'s
+  // instead of at spawn. Surface-created runs never pass through `etium configure`'s
   // checks, so this gate is where "pi isn't on this machine" must be caught.
   if (adapter.bin) {
     const found = spawnSync("/bin/sh", ["-c", `command -v ${adapter.bin}`], { stdio: "ignore", timeout: timeoutMs });
