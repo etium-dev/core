@@ -567,3 +567,39 @@ and the guided path feels identical). Compiling `ralph.ts` into `dist/` to
 keep a builtin (a build artifact between the user and the ~35 lines they
 are meant to read). A `--loop ralph` name alias over the clone (a second
 resolution mechanism — the thing being deleted).
+
+---
+
+## ADR-017 — commit-ability is core's job; artifact commits are the loop's job
+
+**Decision.** Two guarantees replace one hope. Core: every worktree it
+creates can commit — `createRun` applies the spec's `worktree.identity`
+(surfaces pass the acting account; the github surface authors as
+`<agent>@users.noreply.github.com`) as *worktree-scoped* git config
+(`extensions.worktreeConfig`, never the shared repo config), and when no
+identity is given and the machine resolves none, sets a fallback so
+`git commit` can never die of "tell me who you are". Loops: anything later
+stages or surfaces depend on is committed *by loop code* — the ai-engineer
+loop runs a guarded `exec` commit step after every persona step (no-op when
+clean or outside a git checkout; loud failure otherwise). Around them:
+`etium init` prompts for and applies a missing global identity itself
+(`--git-name`/`--git-email` for agents — never a copy/paste command), and
+the github surface fails poll fast with the remedy when `gh` auth is dead.
+
+**Why.** The first live GitHub run executed a full multi-stage workflow and
+produced zero external evidence: the machine had no git identity, every
+persona commit died silently, branches never left base, so no PR — while
+the dead gh token and a stopped watch muted the rest. Every layer had
+trusted something it must guarantee: core trusted the machine, the loop
+trusted persona compliance with a prompt instruction, the surface trusted
+gh. Prompts are hints; guarantees belong in code. The replay model turns
+the fix into the recovery: existing runs resume, memoized stages skip, the
+new commit steps execute for work already done, and the branches finally
+carry it — no hand-editing of run state.
+
+**Rejected.** Runtime auto-commit after every step in core (can't
+distinguish completed from partial work — the loop knows, core doesn't;
+WRITING_LOOPS keeps "partial work is a diff"). An init-only identity check
+(surface-created runs never pass through init — same lesson as the harness
+presence gate). Hand-repairing the affected runs (masks the defect; replay
+heals them through the fixed loop instead).

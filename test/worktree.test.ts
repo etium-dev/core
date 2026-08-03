@@ -90,6 +90,48 @@ test("a worktree run executes its steps inside the worktree", async () => {
   assert.ok(!fs.existsSync(path.join(repo, "from-run.txt")), "primary checkout untouched");
 });
 
+test("worktree identity: spec identity is worktree-scoped; commits author as it; main checkout untouched", () => {
+  const { root, repo, etiumBase } = tmpRepo();
+  const loop = loopFile(root);
+  const { runId } = createRun(etiumBase, {
+    task: "bot work",
+    loop,
+    worktree: { repo, identity: { name: "botty", email: "botty@noreply.local" } },
+  });
+  const ws = path.join(etiumBase, "worktrees", runId);
+  const cfg = (dir: string, k: string) => (spawnSync("git", ["-C", dir, "config", k], { encoding: "utf8" }).stdout || "").trim();
+  assert.equal(cfg(ws, "user.name"), "botty");
+  assert.equal(cfg(ws, "user.email"), "botty@noreply.local");
+  assert.notEqual(cfg(repo, "user.name"), "botty", "identity must not leak into the shared repo config");
+  // Commits need no -c overrides, and the worktree identity wins over any global.
+  fs.writeFileSync(path.join(ws, "b.txt"), "b\n");
+  assert.equal(spawnSync("git", ["-C", ws, "add", "."]).status, 0);
+  const c = spawnSync("git", ["-C", ws, "commit", "-qm", "bot work"], { encoding: "utf8" });
+  assert.equal(c.status, 0, c.stderr);
+  assert.match(
+    spawnSync("git", ["-C", ws, "log", "-1", "--format=%an <%ae>"], { encoding: "utf8" }).stdout,
+    /botty <botty@noreply\.local>/,
+  );
+});
+
+test("worktree identity: fallback guarantees commit-ability on identity-less machines (ADR-017)", () => {
+  const prev = process.env.GIT_CONFIG_GLOBAL;
+  process.env.GIT_CONFIG_GLOBAL = "/dev/null"; // hide the developer's global config
+  try {
+    const { root, repo, etiumBase } = tmpRepo();
+    const loop = loopFile(root);
+    const { runId } = createRun(etiumBase, { task: "anon", loop, worktree: { repo } });
+    const ws = path.join(etiumBase, "worktrees", runId);
+    fs.writeFileSync(path.join(ws, "c.txt"), "c\n");
+    assert.equal(spawnSync("git", ["-C", ws, "add", "."]).status, 0);
+    const c = spawnSync("git", ["-C", ws, "commit", "-qm", "still works"], { encoding: "utf8" });
+    assert.equal(c.status, 0, c.stderr);
+  } finally {
+    if (prev === undefined) delete process.env.GIT_CONFIG_GLOBAL;
+    else process.env.GIT_CONFIG_GLOBAL = prev;
+  }
+});
+
 test("explicit branch and base are honored (surface-style creation)", () => {
   const { root, repo, etiumBase } = tmpRepo();
   const loop = loopFile(root);

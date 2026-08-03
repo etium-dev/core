@@ -111,9 +111,12 @@ test("assignment → worktree run; projection pushes branch, opens draft PR, ups
   const runsDir = path.join(base, "runs");
   const runId = fs.readdirSync(runsDir)[0]!;
   const created = readLedger(path.join(runsDir, runId)).find((e) => e.type === "run.created")!
-    .data as { params: Record<string, string>; worktree?: { branch: string } };
+    .data as { params: Record<string, string>; workspace: string; worktree?: { branch: string } };
   assert.equal(created.params.issue, "7");
   assert.equal(created.worktree?.branch, "etium/issue-7-attempt-0");
+  // The engineer's commits author as the acting account (ADR-017).
+  const wsIdent = spawnSync("git", ["-C", created.workspace, "config", "user.name"], { encoding: "utf8" });
+  assert.equal((wsIdent.stdout || "").trim(), "agentbot");
   assert.ok(g(bare, "for-each-ref", "--format=%(refname:short)").includes("etium/issue-7-attempt-0"), "branch pushed to origin");
 
   const w = writes();

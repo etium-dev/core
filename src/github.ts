@@ -113,6 +113,14 @@ const surface: Surface = {
   id: "github",
 
   poll({ cursor, runs }): SurfacePollResult {
+    // Fail fast and legibly on broken auth: every call below dies anyway, but
+    // the operator deserves the remedy, not a pile of raw gh stderr.
+    const who = spawnSync(GH(), ["auth", "status"], { encoding: "utf8" });
+    if (who.error) throw new Error("gh CLI not found — install: curl -sS https://webi.sh/gh | sh");
+    if (who.status !== 0)
+      throw new Error(
+        `gh auth is invalid — run: gh auth login${process.env.ETIUM_GH_AGENT ? ` (as ${process.env.ETIUM_GH_AGENT})` : ""}`,
+      );
     const since = cursor ?? new Date(0).toISOString();
     const now = new Date().toISOString();
     const tasks: SurfaceTask[] = [];
@@ -137,6 +145,8 @@ const surface: Surface = {
           worktree: {
             repo: process.env.ETIUM_GH_WORKDIR ?? process.cwd(),
             branch: `etium/issue-${issue.number}-attempt-${attempt}`,
+            // The engineer's commits are authored as the acting account.
+            identity: { name: agent(), email: `${agent()}@users.noreply.github.com` },
           },
         });
         continue;

@@ -1,6 +1,6 @@
 {
   "name": "@etium/core",
-  "version": "0.7.2",
+  "version": "0.8.0",
   "description": "The outer loop for coding agents. Etium supervises headless harnesses: tasks, runs, budgets, gates, and an append-only event ledger.",
   "license": "MIT",
   "type": "module",

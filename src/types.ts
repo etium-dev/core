@@ -2,7 +2,7 @@
 // language-neutral contract. Keep them in sync; the schema wins on conflict.
 
 export const SCHEMA_VERSION = 1;
-export const ETIUM_VERSION = "0.7.2"; // must match package.json (enforced by test)
+export const ETIUM_VERSION = "0.8.0"; // must match package.json (enforced by test)
 
 // ---------------------------------------------------------------------------
 // Ledger envelope and event payloads (§5 of DESIGN.md)
@@ -301,8 +301,9 @@ export interface SurfaceTask {
   loop: string; // loop module path
   params?: Record<string, string>;
   workspace?: string;
-  /** Give the run its own git worktree + branch instead of a plain workspace. */
-  worktree?: { repo: string; base?: string; branch?: string };
+  /** Give the run its own git worktree + branch instead of a plain workspace.
+   * `identity` becomes the worktree's commit author (the acting account). */
+  worktree?: { repo: string; base?: string; branch?: string; identity?: { name: string; email: string } };
   preapprove?: string[];
   maxSteps?: number;
 }

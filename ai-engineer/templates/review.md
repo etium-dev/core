@@ -9,5 +9,13 @@ wrong, unproven, or missing — not to be agreeable. Write `ai/REVIEW.md`:
   the evidence, and what would resolve it. Keep keys identical across rounds
   so unresolved objections are trackable.
 
+Re-review the current `ai/` documents fresh each round. Your previous
+review is history, not input: objections may only target the {{stage}}
+document as it now stands — never the review itself, and never a version
+that no longer exists. Drop any objection the current document resolves.
+When no objection against the current document remains, the verdict is
+`approve` — "all prior objections resolved" IS approval, not a new
+objection.
+
 Approve only when the stage's claims are supported by evidence you checked
 yourself. An unproven claim is an objection, not a footnote.

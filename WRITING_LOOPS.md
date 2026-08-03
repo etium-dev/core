@@ -196,7 +196,10 @@ result instantly; the first unrecorded call executes for real. "Resume" and
    mid-step re-executes that step from scratch with fresh context. Have each
    step leave the workspace in a state it can re-enter — under `--worktree`,
    the convention is: commit completed work; partial work is a diff to keep
-   or reset.
+   or reset. And commit *in loop code* — an `exec` step — anything later
+   stages or surfaces depend on: a prompt telling the agent to commit is a
+   hint, never a guarantee (ADR-017). Core guarantees every worktree can
+   commit: an identity is set at creation when the machine resolves none.
 5. **Branch on values, not exceptions.** `status: error | killed | budget`
    and `passed` are data. The idiomatic response to a bad outcome is a gate.
 6. **Keep loop code to milliseconds of glue.** If something is expensive or

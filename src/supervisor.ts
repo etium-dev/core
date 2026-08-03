@@ -35,8 +35,9 @@ export interface CreateRunSpec {
   workspace?: string; // default: <runDir>/ws
   /** Give the run its own git worktree at <base>/worktrees/<run-id> on a fresh
    * branch (default `etium/<run-id>` off `base` ?? HEAD) — one branch per
-   * attempt (§4). Mutually exclusive with `workspace`. */
-  worktree?: { repo: string; base?: string; branch?: string };
+   * attempt (§4). Mutually exclusive with `workspace`. `identity` sets the
+   * worktree-scoped commit author (surfaces pass the acting account). */
+  worktree?: { repo: string; base?: string; branch?: string; identity?: { name: string; email: string } };
   preapprove?: string[];
   maxSteps?: number;
   idSeed?: string; // slug source for the run id; default: the task text
@@ -86,6 +87,21 @@ export function createRun(base: string, spec: CreateRunSpec): { runId: string; r
     // can tell "has commits to review" without re-resolving a moving ref.
     const sha = spawnSync("git", ["-C", workspace, "rev-parse", "HEAD"], { encoding: "utf8" });
     worktree = { repo, branch, base: baseRef, baseSha: (sha.stdout || "").trim() };
+    // Commit-ability is core's job (ADR-017): a worktree where `git commit`
+    // dies for want of an identity silently swallows agent work. Use the
+    // spec's identity; set a fallback only when the machine resolves none.
+    // Worktree-scoped config — a plain `git config` here would write the
+    // repo's shared config and leak the identity into the main checkout.
+    const ident =
+      spec.worktree.identity ??
+      (spawnSync("git", ["-C", workspace, "config", "user.email"]).status === 0
+        ? undefined
+        : { name: "etium", email: "etium@localhost" });
+    if (ident) {
+      spawnSync("git", ["-C", workspace, "config", "extensions.worktreeConfig", "true"]);
+      spawnSync("git", ["-C", workspace, "config", "--worktree", "user.name", ident.name]);
+      spawnSync("git", ["-C", workspace, "config", "--worktree", "user.email", ident.email]);
+    }
   } else {
     workspace = spec.workspace ? path.resolve(spec.workspace) : path.join(runDir, "ws");
   }

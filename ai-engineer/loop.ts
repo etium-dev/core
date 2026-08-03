@@ -42,12 +42,23 @@ export default async function aiEngineer(run: Run) {
       ...extra,
     });
 
+  // Artifact commits are the loop's job (ADR-017): persona instructions to
+  // commit are hints, never guarantees — the loop lands `ai/` on the branch
+  // itself. Guarded: no-op when clean or outside a git checkout (plain-dir
+  // dry runs); real failures (e.g. a broken repo) fail the step loudly.
+  const commit = (label: string, all = false) =>
+    run.step("commit", {
+      harness: "exec",
+      command: `if git rev-parse --git-dir >/dev/null 2>&1; then git add -A ${all ? "." : "ai"} && { git diff --cached --quiet || git commit -q -m "ai: ${label}"; }; fi`,
+    });
+
   // One stage: builder/reviewer rounds until the reviewer approves (and, for
   // implement, the check passes). The maker never grades its own homework.
   const converge = async (stage: string): Promise<"ready" | "wrapped-up"> => {
     for (;;) {
       for (let r = 0; r < rounds; r++) {
         const built = await step(stage, persona(stage), { artifacts: ["ai/*.md"] });
+        await commit(stage, stage === "implement");
         if (built.status !== "ok") break;
         const check =
           stage === "implement"
@@ -57,6 +68,7 @@ export default async function aiEngineer(run: Run) {
           artifacts: ["ai/REVIEW.md"],
           grade: "grep -qi '^VERDICT: approve' ai/REVIEW.md",
         });
+        await commit(`${stage}-review`);
         show = [ARTIFACT[stage]!, "ai/REVIEW.md"];
         if (review.passed && (check?.passed ?? true)) return "ready";
       }
@@ -72,6 +84,7 @@ export default async function aiEngineer(run: Run) {
 
   // Assignment starts intake only (predecessor invariant 1).
   const intake = await step("triage", persona("triage"), { artifacts: ["ai/INTAKE.md"] });
+  await commit("triage");
   if (intake.status === "ok") show = ["ai/INTAKE.md"];
 
   for (;;) {
@@ -86,6 +99,7 @@ export default async function aiEngineer(run: Run) {
     if (route.decision === "wrap-up") return; // e.g. the PR merged (surface decides this)
     if (route.decision === "triage") {
       const again = await step("triage", persona("triage"), { artifacts: ["ai/INTAKE.md"] });
+      await commit("triage");
       if (again.status === "ok") show = ["ai/INTAKE.md"];
       continue;
     }

@@ -36,7 +36,7 @@ usage:
   etium rebuild <run>        rebuild state.json from the ledger
   etium clone-loop [library] [--into dir]   copy a loop library (ralph, ai-engineer) into your repo (no arg: list)
   etium init [--library ralph|ai-engineer|none] [--github owner/name|off] [--trusted logins]
-             [--act-as login|me] [--wakeup watch|cron|print] [--yes]
+             [--act-as login|me] [--wakeup watch|cron|print] [--git-name n] [--git-email e] [--yes]
              check dependencies (with fix commands), ask the setup questions, apply
   etium --version
 
@@ -513,11 +513,14 @@ async function cmdInit(argv: string[]): Promise<number> {
       trusted: { type: "string" },
       "act-as": { type: "string" },
       wakeup: { type: "string" },
+      "git-name": { type: "string" },
+      "git-email": { type: "string" },
       yes: { type: "boolean" },
       dir: { type: "string" },
     },
   });
   const out = (t = "") => process.stdout.write(t + "\n");
+  const interactive = process.stdin.isTTY && !v.yes;
 
   await initBanner();
   out("Etium supervises coding agents working in this repository. Every run");
@@ -580,6 +583,15 @@ async function cmdInit(argv: string[]): Promise<number> {
     out("         cd into one, then run: etium init");
     hardFail = true;
   }
+  const gitIdentOk = sh("git", ["config", "user.email"]).status === 0;
+  if (gitIdentOk) out("  ok     git identity — run commits have an author");
+  else if (interactive || (v["git-name"] && v["git-email"])) out("  note   git identity not set — configured below");
+  else {
+    out("  needs  a git identity — runs commit their work, and git refuses commits");
+    out("         without an author. Run etium init in a terminal to be prompted,");
+    out(`         or pass: --git-name "Your Name" --git-email you@example.com`);
+    hardFail = true;
+  }
   const ghInstalled = sh("gh", ["--version"]).status === 0;
   const ghAuthed = ghInstalled && sh("gh", ["auth", "status"]).status === 0;
   const ghLogin = ghAuthed ? (sh("gh", ["api", "user", "--jq", ".login"]).stdout || "").trim() : "";
@@ -614,7 +626,6 @@ async function cmdInit(argv: string[]): Promise<number> {
     return 1;
   }
 
-  const interactive = process.stdin.isTTY && !v.yes;
   const rl = interactive ? readline.createInterface({ input: process.stdin, output: process.stdout }) : undefined;
 
   const menu = async (
@@ -656,6 +667,28 @@ async function cmdInit(argv: string[]): Promise<number> {
   };
 
   try {
+    if (!gitIdentOk) {
+      const name = await askText(
+        "Name for commits",
+        ["Runs commit their work into git, and git requires an author.", "Set once for this machine (git config --global)."],
+        process.env.USER ?? "",
+        v["git-name"],
+      );
+      const email = await askText(
+        "Email for commits",
+        [],
+        ghLogin ? `${ghLogin}@users.noreply.github.com` : "",
+        v["git-email"],
+      );
+      if (!name || !email) {
+        out("Both name and email are needed — run: etium init");
+        return 1;
+      }
+      sh("git", ["config", "--global", "user.name", name]);
+      sh("git", ["config", "--global", "user.email", email]);
+      out();
+      out(`  Git identity set: ${name} <${email}>`);
+    }
     const library = await menu(
       "Loops",
       [

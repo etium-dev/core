@@ -21,6 +21,7 @@ proposal instead"):
 git rev-parse --show-toplevel
 git remote get-url origin
 gh api user --jq .login
+git config user.email
 ```
 
 **Round 1 — send exactly this shape:**
@@ -58,7 +59,14 @@ Two hard rules on answers: an item whose detection failed **has no
 default** — "yes" or an omitted number cannot accept it; if a reply leaves
 such an item unanswered, re-ask **just that item** before proceeding, and
 never infer its value from elsewhere. And never surface raw input names (a
-newcomer has no idea what a "trusted login" is). After acceptance, restate the configuration in one line — e.g.
+newcomer has no idea what a "trusted login" is).
+
+One conditional item: when the `git config user.email` detection fails,
+add item 5 to round 1 asking what name and email the runs' commits should
+be authored as (default the email to `<gh login>@users.noreply.github.com`
+when a login was detected; the four-item cap yields for this one case).
+Pass the answers to Step 2 as `--git-name`/`--git-email` — `etium init`
+applies them itself. After acceptance, restate the configuration in one line — e.g.
 "Configuration: repo /a/b, etium only, no GitHub wiring, scratch in a temp
 dir. Starting." — and proceed.
 
@@ -153,10 +161,13 @@ installs or prints the crontab entry per the wake-up answer:
 ```sh
 cd "$REPO_DIR"
 etium init --library <ralph|ai-engineer|none> --github <owner/name|off> \
-  --trusted <logins> --act-as <me|bot-login> --wakeup <watch|cron|print>
+  --trusted <logins> --act-as <me|bot-login> --wakeup <watch|cron|print> \
+  --git-name "<name>" --git-email "<email>"
 ```
 
-(Omit the last three flags when GitHub wiring is off.)
+(Omit `--trusted`/`--act-as`/`--wakeup` when GitHub wiring is off, and the
+git identity flags when the `git config user.email` detection succeeded —
+when it failed they are required, with values from the interview's item 5.)
 
 **PASS**: exit 0. On exit 1: relay every `needs` line to the operator
 **verbatim** — each contains the command that fixes it — list them in the

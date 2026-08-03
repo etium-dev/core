@@ -30,6 +30,33 @@ test("clone-loop: copies the library, ignores .etium/, never overwrites, rejects
   assert.equal(await main(["clone-loop"]), 0); // bare form lists
 });
 
+test("init: sets the git identity itself (from flags when non-interactive; hard-fails without)", () => {
+  const cli = path.resolve("src/cli.ts");
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "etium-ident-"));
+  const repo = path.join(root, "repo");
+  fs.mkdirSync(repo);
+  const g = (...a: string[]) => spawnSync("git", ["-C", repo, "-c", "user.name=t", "-c", "user.email=t@t", ...a]);
+  g("init", "-q"); g("commit", "-qm", "init", "--allow-empty");
+  const stubBin = path.join(root, "stubbin");
+  fs.mkdirSync(stubBin);
+  fs.writeFileSync(path.join(stubBin, "pi"), "#!/bin/sh\necho 0.0.0-stub\n", { mode: 0o755 });
+  const gcfg = path.join(root, "gitconfig"); // isolate from the developer's global config
+  const env = { ...process.env, PATH: `${stubBin}:${process.env.PATH}`, GIT_CONFIG_GLOBAL: gcfg };
+
+  const bad = spawnSync(process.execPath, [cli, "init", "--library", "none", "--github", "off"], { cwd: repo, encoding: "utf8", env });
+  assert.equal(bad.status, 1);
+  assert.match(bad.stdout, /needs\s+a git identity/);
+
+  const ok = spawnSync(
+    process.execPath,
+    [cli, "init", "--library", "none", "--github", "off", "--git-name", "Bot Ident", "--git-email", "bot@example.com"],
+    { cwd: repo, encoding: "utf8", env },
+  );
+  assert.equal(ok.status, 0, ok.stdout + ok.stderr);
+  assert.match(ok.stdout, /Git identity set: Bot Ident <bot@example\.com>/);
+  assert.match(fs.readFileSync(gcfg, "utf8"), /bot@example\.com/); // applied, not printed for copy/paste
+});
+
 test("init: two etium installs on PATH is a hard failure naming both", () => {
   const cli = path.resolve("src/cli.ts");
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "etium-shadow-"));
@@ -37,6 +64,7 @@ test("init: two etium installs on PATH is a hard failure naming both", () => {
   fs.mkdirSync(repo);
   const g = (...a: string[]) => spawnSync("git", ["-C", repo, "-c", "user.name=t", "-c", "user.email=t@t", ...a]);
   g("init", "-q"); g("commit", "-qm", "init", "--allow-empty");
+  g("config", "user.name", "t"); g("config", "user.email", "t@t");
   const mkbin = (name: string) => {
     const d = path.join(root, name);
     fs.mkdirSync(d);
@@ -64,6 +92,7 @@ test("init (flags mode): checks, clones the library, exits 1 outside a repo", ()
   fs.mkdirSync(repo);
   const g = (...a: string[]) => spawnSync("git", ["-C", repo, "-c", "user.name=t", "-c", "user.email=t@t", ...a]);
   g("init", "-q"); g("commit", "-qm", "init", "--allow-empty");
+  g("config", "user.name", "t"); g("config", "user.email", "t@t");
   const stubBin = path.join(root, "stubbin");
   fs.mkdirSync(stubBin);
   fs.writeFileSync(path.join(stubBin, "pi"), "#!/bin/sh\necho 0.0.0-stub\n", { mode: 0o755 });
