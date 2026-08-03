@@ -584,9 +584,7 @@ async function cmdConfigure(argv: string[]): Promise<number> {
   if (gitIdentOk) out("  ok     git identity — run commits have an author");
   else if (interactive || (v["git-name"] && v["git-email"])) out("  note   git identity not set — configured below");
   else {
-    out("  needs  a git identity — runs commit their work, and git refuses commits");
-    out("         without an author. Run etium configure in a terminal to be prompted,");
-    out(`         or pass: --git-name "Your Name" --git-email you@example.com`);
+    out('  needs  a git identity — runs commit their work, and git refuses commits\n         without an author. Run etium configure in a terminal to be prompted,\n         or pass: --git-name "Your Name" --git-email you@example.com');
     hardFail = true;
   }
   const ghInstalled = sh("gh", ["--version"]).status === 0;
@@ -772,7 +770,9 @@ async function cmdConfigure(argv: string[]): Promise<number> {
           originRepo,
         );
       const auth = await ensureGhAuth({ installed: ghInstalled, authed: ghAuthed, unverifiable: ghUnverifiable,
-        interactive: Boolean(interactive), repo: github, out, menu, sh });
+        interactive: Boolean(interactive), repo: github, out, menu, sh,
+        suspendInput: () => { rl?.pause(); process.stdin.setRawMode?.(false); },
+        resumeInput: () => rl?.resume() });
       if (!auth.ok) return 1;
       if (auth.login) ghLogin = auth.login;
       trusted = await askText(

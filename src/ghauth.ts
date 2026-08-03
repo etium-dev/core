@@ -20,6 +20,10 @@ type Sh = (cmd: string, args: string[]) => { status: number | null; stdout: stri
 const TOKEN_CMD = "gh auth login -h github.com --with-token --insecure-storage";
 
 function runGhLogin(withToken: boolean): boolean {
+  // The questionnaire's readline leaves the tty in raw mode, where Ctrl-D
+  // is a byte, not EOF — gh would read stdin forever and Ctrl-C couldn't
+  // interrupt. Hand gh a cooked terminal.
+  if (process.stdin.isTTY) spawnSync("stty", ["sane"], { stdio: ["inherit", "ignore", "ignore"] });
   const args = withToken
     ? ["auth", "login", "-h", "github.com", "--with-token", "--insecure-storage"]
     : ["auth", "login", "-h", "github.com"];
@@ -38,6 +42,8 @@ export async function ensureGhAuth(o: {
   out: (t?: string) => void;
   menu: Menu;
   sh: Sh;
+  suspendInput?: () => void; // release the readline's grip on the tty before gh takes it
+  resumeInput?: () => void;
 }): Promise<{ ok: boolean; login?: string }> {
   const { out } = o;
   if (!o.installed) {
@@ -95,7 +101,10 @@ export async function ensureGhAuth(o: {
     out("straight into gh — etium never sees or stores it.");
     out();
   }
-  if (!runGhLogin(how === "token")) {
+  o.suspendInput?.();
+  const ok = runGhLogin(how === "token");
+  o.resumeInput?.();
+  if (!ok) {
     out();
     out("gh sign-in did not complete — run etium configure again.");
     return { ok: false };
