@@ -102,11 +102,15 @@ test("configure (flags mode): checks, clones the library, persists wiring, exits
   assert.match(ok.stdout, /ok\s+node/);
   assert.ok(fs.existsSync(path.join(repo, "ai-engineer", "loop.ts")));
   const cfg1 = JSON.parse(fs.readFileSync(path.join(repo, ".etium", "config.json"), "utf8"));
-  assert.deepEqual(cfg1, { v: 1, library: "ai-engineer", github: null }); // wiring persisted (ADR-019)
+  assert.equal(cfg1.library, "ai-engineer"); // wiring persisted (ADR-019)
+  assert.equal(cfg1.github, null);
+  assert.match(cfg1.id, /^[0-9a-f]{8}$/); // minted identity (ADR-020)
   const ok2 = spawnSync(process.execPath, [cli, "configure", "--library", "ralph", "--github", "off"], { cwd: repo, encoding: "utf8", env });
   assert.equal(ok2.status, 0, ok2.stderr);
   assert.ok(fs.existsSync(path.join(repo, "ralph", "loop.ts")));
-  assert.equal(JSON.parse(fs.readFileSync(path.join(repo, ".etium", "config.json"), "utf8")).library, "ralph"); // re-run overwrites
+  const cfg2 = JSON.parse(fs.readFileSync(path.join(repo, ".etium", "config.json"), "utf8"));
+  assert.equal(cfg2.library, "ralph"); // re-run overwrites the answers…
+  assert.equal(cfg2.id, cfg1.id); // …but never re-mints identity (ADR-020)
   const bare = path.join(root, "empty");
   fs.mkdirSync(bare);
   const bad = spawnSync(process.execPath, [cli, "configure", "--library", "none", "--github", "off"], { cwd: bare, encoding: "utf8", env });

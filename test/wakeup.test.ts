@@ -1,23 +1,26 @@
-// Wake-up generators (ADR-018). Pure-function tests only: launchctl and
-// crontab are never invoked from the suite — the apply path is field-verified.
+// Wake-up generators (ADR-018, ADR-020). Pure-function tests only: launchctl
+// and crontab are never invoked from the suite — the apply path is
+// field-verified. Identity is minted (config.json), not derived: the label
+// carries the sanitized basename for humans and the id as tie-breaker.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { agentLabel, cronLine, launchAgentPlist, tickCommand } from "../src/wakeup.ts";
 
-test("wakeup generators: per-repo label, escaped plist, once a minute, PATH baked in", () => {
-  const cmd = tickCommand("/tmp/repo", "ETIUM_GH_REPO=a/b ETIUM_GH_LOOP=x/loop.ts");
+test("wakeup generators: identity-named label, marker in command, escaped plist, PATH baked in", () => {
+  const cmd = tickCommand("/tmp/repo", "ETIUM_GH_REPO=a/b ETIUM_GH_LOOP=x/loop.ts", "cafe0123");
   assert.ok(cmd.startsWith("cd /tmp/repo && "));
   assert.ok(cmd.includes('PATH="'), "scheduler environments are bare; PATH must ride along");
   assert.ok(cmd.includes("ETIUM_GH_REPO=a/b"));
-  assert.ok(cmd.endsWith(">> .etium/tick.log 2>&1"));
+  assert.ok(cmd.includes(">> .etium/tick.log 2>&1 #"), "identity marker rides after the redirect");
+  assert.ok(cmd.endsWith(" # etium:repo.cafe0123"), "marker = sanitized basename + minted id");
 
-  const label = agentLabel("/tmp/repo");
-  assert.match(label, /^dev\.etium\.tick\.[0-9a-f]{8}$/);
-  assert.notEqual(label, agentLabel("/tmp/other"), "one agent per repo — labels must not collide");
+  assert.equal(agentLabel("/tmp/repo", "cafe0123"), "dev.etium.tick.repo.cafe0123");
+  assert.equal(agentLabel("/tmp/My Repo!", "cafe0123"), "dev.etium.tick.My-Repo.cafe0123"); // label-safe
+  assert.notEqual(agentLabel("/tmp/repo", "cafe0123"), agentLabel("/tmp/repo", "beef4567")); // id is the tie-breaker
 
-  const plist = launchAgentPlist(label, cmd);
-  assert.ok(plist.includes(`<string>${label}</string>`));
+  const plist = launchAgentPlist("dev.etium.tick.repo.cafe0123", cmd);
+  assert.ok(plist.includes("<string>dev.etium.tick.repo.cafe0123</string>"));
   assert.ok(plist.includes("<integer>60</integer>"));
   assert.ok(plist.includes("<key>RunAtLoad</key><true/>"));
   assert.ok(plist.includes("&amp;&amp;"), "shell && must be XML-escaped");

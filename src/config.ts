@@ -6,11 +6,15 @@
 // reconstructs the commands configure itself prints and runs. No secrets
 // live here — GitHub auth is gh's, model auth is the harness's (ADR-007).
 
+import { randomBytes } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
 export interface EtiumConfig {
   v: 1;
+  /** Mint-once deployment identity (8 hex): names this checkout's wake-up
+   * artifacts (ADR-020) and survives repo moves — never re-minted. */
+  id: string;
   library: string; // ralph | ai-engineer | none
   github: { repo: string; trusted: string; agent: string; loop: string } | null;
 }
@@ -26,9 +30,13 @@ export function readConfig(base: string): EtiumConfig | null {
   }
 }
 
-export function writeConfig(base: string, cfg: EtiumConfig): void {
+/** Write the config, minting `id` on first write and preserving it forever
+ * after — re-minting would orphan the wake-up artifacts the id names. */
+export function writeConfig(base: string, cfg: Omit<EtiumConfig, "id"> & { id?: string }): EtiumConfig {
+  const full: EtiumConfig = { ...cfg, id: cfg.id ?? readConfig(base)?.id ?? randomBytes(4).toString("hex") };
   fs.mkdirSync(base, { recursive: true });
-  fs.writeFileSync(cfgPath(base), JSON.stringify(cfg, null, 2) + "\n");
+  fs.writeFileSync(cfgPath(base), JSON.stringify(full, null, 2) + "\n");
+  return full;
 }
 
 export function ghEnv(g: NonNullable<EtiumConfig["github"]>): string {

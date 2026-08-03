@@ -680,3 +680,41 @@ ways). Re-asking the GitHub questions inside "install the wake-up"
 runtime input for tick (hidden coupling; env stays the runtime contract,
 12-factor style, and the cron/agent line remains self-contained and
 auditable).
+
+---
+
+## ADR-020 — wake-up identity is minted, not derived; artifacts are found by enumeration
+
+**Decision.** Each configured checkout gets a mint-once identity: an
+8-hex `id` written into `.etium/config.json` on first `configure` and
+preserved across every re-run (re-minting would orphan what the id
+names). Wake-up artifacts are named from it — LaunchAgent label
+`dev.etium.tick.<sanitized-basename>.<id>` (basename for humans, id as
+the tie-breaker), and every scheduled command ends with the inert marker
+`# etium:<basename>.<id>`. Four strings are frozen on-machine ABI, so any
+future etium can find and remove anything any past etium installed: the
+`dev.etium.` label prefix, that label grammar, the cron signature
+substring `etium tick --surface github`, and the marker format. Removal
+and re-install never trust name recomputation alone: they enumerate by
+prefix (macOS) or signature (cron) and match the embedded repo path or
+id — sweeping artifacts from older grammars too. Paths are realpath'd
+before hashing or matching, so symlink and `/tmp`-alias spellings cannot
+fork identities.
+
+**Why.** A pure path-hash label had two failures: humans can't read it
+(`launchctl list` full of opaque hex), and its input is unstable — a
+moved or renamed repo recomputes a different name and strands the old
+agent forever, failing `cd` in the dark. Minted identity survives moves
+(configure in the moved checkout reads the same id and finds its own
+agent); the basename restores legibility; enumeration plus
+self-describing payloads guarantees cleanup even when every naming
+convention has changed since installation. The field's first artifact —
+a hand-installed agent with a label no formula produces — is exactly
+what enumeration-based removal handles.
+
+**Rejected.** Storing a recomputable path-hash in config.json (a cached
+copy that drifts on move — duplication, not identity). Pure-basename
+labels (two same-named checkouts collide; the second silently steals the
+first's plist). systemd-style full-path escaping (reversible but long
+and ugly, and unnecessary once payloads are self-describing). Deriving
+identity at install time from anything that can change underneath it.

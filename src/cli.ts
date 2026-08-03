@@ -682,12 +682,13 @@ async function cmdConfigure(argv: string[]): Promise<number> {
       }
       if (action === "wake-on") {
         out();
-        for (const l of installWakeup(repoDir!, ghEnv(cfg!.github!))) out(l);
+        const full = writeConfig(etiumBase, cfg!); // backfills a missing id (ADR-020)
+        for (const l of installWakeup(repoDir!, ghEnv(full.github!), full.id)) out(l);
         return 0;
       }
       if (action === "wake-off") {
         out();
-        for (const l of removeWakeup(repoDir!)) out(l);
+        for (const l of removeWakeup(repoDir!, cfg?.id)) out(l);
         return 0;
       }
       if (action === "status") {
@@ -838,17 +839,17 @@ async function cmdConfigure(argv: string[]): Promise<number> {
       return 0;
     }
     const agentLogin = actAs === "me" ? ghLogin : actAs;
-    writeConfig(etiumBase, {
+    const saved = writeConfig(etiumBase, {
       v: 1,
       library,
       github: { repo: github, trusted, agent: agentLogin, loop: library === "none" ? "" : `${library}/loop.ts` },
     });
     const env = `ETIUM_GH_REPO=${github} ETIUM_GH_TRUSTED=${trusted} ETIUM_GH_AGENT=${agentLogin} ETIUM_GH_LOOP=${library === "none" ? "<path-to-your-loop>" : `${library}/loop.ts`}`;
     if (wakeup === "cron") {
-      for (const l of installWakeup(repoDir!, env)) out(l);
+      for (const l of installWakeup(repoDir!, env, saved.id)) out(l);
       out();
     } else if (wakeup === "print") {
-      for (const l of printWakeup(repoDir!, env)) out(l);
+      for (const l of printWakeup(repoDir!, env, saved.id)) out(l);
       out();
     }
     out(style("1", "Done. Next:"));
