@@ -24,6 +24,10 @@ the library path), **GitHub wiring or terminal only** (this page is
 terminal only), and **where throwaway work may go** (yours to pick when
 testing).
 
+Prefer being walked through it? `etium init` checks your machine (each
+missing dependency printed with the command that fixes it), asks the setup
+questions with sensible defaults, and applies your answers.
+
 ## Hello world, offline — the shape of a run
 
 Etium's whole model: a **loop** is a plain TypeScript file that sequences

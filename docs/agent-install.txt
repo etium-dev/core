@@ -67,7 +67,7 @@ newcomer has no idea what a "trusted login" is). After acceptance, restate the c
 "Configuration: repo /a/b, etium only, no GitHub wiring, scratch in a temp
 dir. Starting." — and proceed.
 
-The accepted items bind these inputs, referenced by the steps below (round 1: 1→`REPO_DIR`, 2→`LIBRARY`, 3→github on/off, 4→`SCRATCH_DIR`; round 2: 1→`GITHUB_REPO`, 2→`TRUSTED`, 3→`AGENT_LOGIN`, 4→`INSTALL_CRON`):
+The accepted items bind these inputs, referenced by the steps below (round 1: 1→`REPO_DIR`, 2→`LIBRARY`, 3→github on/off, 4→`SCRATCH_DIR`; round 2: 1→`GITHUB_REPO`, 2→`TRUSTED`, 3→`AGENT_LOGIN`, 4→`WAKEUP`):
 
 | input | required | meaning |
 |---|---|---|
@@ -75,15 +75,16 @@ The accepted items bind these inputs, referenced by the steps below (round 1: 1�
 | `GITHUB_REPO` | no | `owner/name` to wire the GitHub surface; omit for terminal-only install |
 | `TRUSTED` | if `GITHUB_REPO` | comma-separated GitHub logins allowed to command the engineer |
 | `AGENT_LOGIN` | if `GITHUB_REPO` | GitHub login whose issue-assignment starts an attempt |
-| `INSTALL_CRON` | if `GITHUB_REPO` | `yes` to add the crontab entry; anything else = print it only |
+| `WAKEUP` | if `GITHUB_REPO` | `watch` (foreground, nothing installed), `cron` (init installs the crontab entry), or `print` (line goes in the report) |
 | `SCRATCH_DIR` | no | writable directory for throwaway verification work; default: a fresh `mktemp -d` directory |
 | `LIBRARY` | **ask if omitted** | `ai-engineer` to clone the loop library into the repo, or `none` for etium only. Cloning writes a commit into the repo — never assume it |
 
 ## Rules
 
 - Make no changes outside `REPO_DIR` except: the global npm install
-  (step 1), the throwaway directory in step 4, and — only when
-  `INSTALL_CRON=yes` — one crontab line.
+  (step 1), throwaway work under `SCRATCH_DIR`, and — only when the
+  wake-up answer is `cron` — one crontab line (installed by `etium init`,
+  not by you).
 - **Never run `sudo`** and never download OS installers. When a step needs
   elevation (system Node, root-owned npm prefix), stop and print the exact
   command for the operator to run themselves.
@@ -145,19 +146,35 @@ other:
 
 **Verify**: `etium --version` → prints a version. Otherwise stop and report.
 
-## Step 2 — copy the package into the repository
+## Step 2 — configure with `etium init`
+
+Translate the accepted interview items into flags and run one command —
+it re-checks the machine (every unmet dependency prints as a `needs` line
+carrying its exact fix command), clones the library when chosen, and
+installs or prints the crontab entry per the wake-up answer:
 
 ```sh
 cd "$REPO_DIR"
-test -d .git                       # PASS: exit 0 (it is a git repo)
-test ! -e ai-engineer              # PASS: exit 0 (no collision; if it exists, stop and report)
-etium clone-loop ai-engineer       # PASS: exit 0; also appends .etium/ to .gitignore
+etium init --library <ai-engineer|none> --github <owner/name|off> \
+  --trusted <logins> --act-as <me|bot-login> --wakeup <watch|cron|print>
+```
+
+(Omit the last three flags when GitHub wiring is off.)
+
+**PASS**: exit 0. On exit 1: relay every `needs` line to the operator
+**verbatim** — each contains the command that fixes it — list them in the
+report as remaining steps, and stop.
+
+If the library was chosen, commit it:
+
+```sh
 git add ai-engineer .gitignore
 git commit -m "Add etium ai-engineer loop library"
 ```
 
-**Verify**: `test -f ai-engineer/loop.ts && grep -qx '.etium/' .gitignore && ls ai-engineer/templates/*.md | wc -l` →
-both tests exit 0 and the count is `7`.
+**Verify** (library chosen): `test -f ai-engineer/loop.ts && grep -qx '.etium/' .gitignore && ls ai-engineer/templates/*.md | wc -l` →
+both tests exit 0 and the count is `7`. When `LIBRARY=none` there is
+nothing to commit — continue to Step 3B.
 
 ## Step 3A — acceptance test with the library (only if `LIBRARY=ai-engineer`)
 
@@ -213,21 +230,17 @@ etium approve verify "publish?" --sync
 `rm -rf "$SCRATCH_DIR/etium-verify"`. If `GITHUB_REPO` was not provided, go
 to Step 5.
 
-## Step 4 — GitHub wiring (only if `GITHUB_REPO` is set)
+## Step 4 — GitHub verification (only if wiring was chosen)
 
-```sh
-gh auth status
-```
-
-**PASS**: exit 0. On failure, stop; report "operator must run `gh auth
-login` on this machine" as a remaining step — do not run it yourself.
+`etium init` already gated on `gh` being installed and authenticated.
+Confirm the account can push, then prove the wiring with one tick:
 
 ```sh
 gh api "repos/$GITHUB_REPO" --jq .permissions.push
 ```
 
-**PASS**: prints `true` (the authenticated account can push). Then run one
-tick by hand:
+**PASS**: prints `true`. Otherwise stop and report: "the authenticated
+account needs Write on the repository".
 
 ```sh
 cd "$REPO_DIR" && ETIUM_GH_REPO="$GITHUB_REPO" ETIUM_GH_TRUSTED="$TRUSTED" \
@@ -236,23 +249,6 @@ cd "$REPO_DIR" && ETIUM_GH_REPO="$GITHUB_REPO" ETIUM_GH_TRUSTED="$TRUSTED" \
 
 **PASS**: exit 0, and output is either `no runs` or a list of per-run
 action lines. Any `surface-error` line: stop and report it verbatim.
-
-Crontab entry (one line; substitute the real values):
-
-```
-* * * * * cd REPO_DIR && ETIUM_GH_REPO=… ETIUM_GH_TRUSTED=… ETIUM_GH_AGENT=… ETIUM_GH_LOOP=ai-engineer/loop.ts etium tick --surface github >> .etium/tick.log 2>&1
-```
-
-If `INSTALL_CRON=yes`: install it idempotently —
-
-```sh
-( crontab -l 2>/dev/null | grep -v 'etium tick --surface github'; \
-  echo '* * * * * cd '"$REPO_DIR"' && ETIUM_GH_REPO='"$GITHUB_REPO"' ETIUM_GH_TRUSTED='"$TRUSTED"' ETIUM_GH_AGENT='"$AGENT_LOGIN"' ETIUM_GH_LOOP=ai-engineer/loop.ts etium tick --surface github >> .etium/tick.log 2>&1' ) | crontab -
-crontab -l | grep -c 'etium tick --surface github'
-```
-
-**PASS**: the final count is `1`. Otherwise (or if `INSTALL_CRON` is not
-`yes`): print the crontab line in your report for the operator to install.
 
 ## Step 5 — report
 

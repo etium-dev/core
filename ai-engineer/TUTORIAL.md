@@ -22,6 +22,10 @@ cd /path/to/your-repo
 etium clone-loop ai-engineer      # → ./ai-engineer, yours to edit
 ```
 
+(`etium init` does Part 0's setup and Part 3's wiring questions
+interactively — checks with fix commands first, then the questions. The
+manual steps below show exactly what it does.)
+
 The library is a plain folder — a 97-line loop, seven persona prompts, and
 a README with the exact contract. Cloning it into your repo is the intended
 move: the templates are *yours to edit*, and the folder has no dependencies
