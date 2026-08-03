@@ -210,7 +210,7 @@ export function loadState(runDir: string): RunState {
   return fold(run, readLedger(runDir));
 }
 
-/** Derived cache for humans and cheap tooling; rebuildable via `etium fold`. */
+/** Derived cache for humans and cheap tooling; rebuildable via `etium rebuild`. */
 export function writeStateCache(runDir: string, st: RunState): void {
   const json = {
     run: st.run,

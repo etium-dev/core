@@ -6,8 +6,8 @@ engineer, including a token-free dry run. This file is the reference.
 — deterministic steps, a PASS criterion per step, stop-on-fail.
 
 The multi-persona, human-gated engineering workflow as an etium **loop
-library**: `loop.ts` + `templates/` + this contract. Copy the folder into
-your repo and adapt it — the templates are the product. The loop is
+library**: `loop.ts` + `templates/` + this contract. `etium clone-loop ai-engineer` puts it in
+your repo; adapt it — the templates are the product. The loop is
 **surface-agnostic and CLI-complete** — the test suite drives the entire
 state graph with `etium decide` alone; GitHub is a skin, provided by etium's
 built-in `github` surface (DESIGN §10.3).

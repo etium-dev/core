@@ -58,7 +58,7 @@ Well-known paths are the most language-neutral API there is. Everything below is
       task.md               # immutable for the life of the run
       loop.json             # { "loop": "<path-or-package>", "params": {...} } — resolved at creation
       events.jsonl          # THE ledger (§5)
-      state.json            # derived cache; rebuildable via `etium fold` (internal format)
+      state.json            # derived cache; rebuildable via `etium rebuild` (internal format)
       lock                  # supervisor lockfile: { pid, host, started } (internal)
       decisions/            # mailbox: pending decision files awaiting ingestion (§8)
       steps/
@@ -403,7 +403,7 @@ LOC budgets are enforced in CI and published in the README — both a feature an
 
 Testing: adapter parser tests against golden fixtures; property tests on the fold (random valid event interleavings preserve invariants); end-to-end on the `replay` harness; crash-injection (SIGKILL a real detached supervisor mid-step; assert `tick` recovers, completed steps never re-execute, interrupted steps re-execute at most from scratch); torn-last-line recovery tests. Model auth (ADR-007): `resolveEnv` passes declared-and-present vars through under `agent`, omits absent ones, leaves `host` and `env.add` precedence unchanged, and registers every passed-through value as a redaction secret unconditionally; passthrough values are redacted in raw, stderr, and `grade.txt`; a failing pre-spawn check appends no `step.started`, ends the run `error` with the remedy in the summary, and a subsequent resume executes the step under the same occurrence; changing host-env credential presence between attaches never diverges; `doctor` against a fake adapter; `exec`/`replay` declare nothing, keeping the test substrate credential-free.
 
-CLI (M0 set): `run`, `status`, `tail`, `gates`, `approve`, `reject`, `decide`, `resume`, `abandon`, `tick`, `fold`. M1 adds: `redo`, `gc`, `watch`, `doctor`.
+CLI (M0 set): `run`, `status`, `tail`, `gates`, `approve`, `reject`, `decide`, `resume`, `abandon`, `tick`, `rebuild`, `clone-loop`. M1 adds: `redo`, `gc`, `watch`, `doctor`.
 
 ---
 

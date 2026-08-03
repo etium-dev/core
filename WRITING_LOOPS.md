@@ -206,7 +206,8 @@ result instantly; the first unrecorded call executes for real. "Resume" and
 
 ## Packaging a loop for others
 
-Ship a directory, not a file:
+Ship a directory, not a file (libraries bundled with etium are copied out
+by `etium clone-loop <name>`; anything else travels as a plain folder):
 
 ```
 fix-loop/

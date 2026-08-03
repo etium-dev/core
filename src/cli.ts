@@ -27,8 +27,9 @@ usage:
   etium resume  <run>        attach a supervisor
   etium abandon <run> [--reason text]
   etium tail    <run> [--once]
-  etium tick [--surface path]…   reconcile all runs; poll/project surfaces (cron-safe, idempotent)
-  etium fold    <run>        rebuild state.json from the ledger
+  etium tick [--surface name|path]…   reconcile all runs; poll/project surfaces (cron-safe, idempotent)
+  etium rebuild <run>        rebuild state.json from the ledger
+  etium clone-loop [library] [--into dir]   copy a bundled loop library into your repo (no arg: list)
   etium --version
 
 Base directory: --dir, else $ETIUM_DIR, else ./.etium
@@ -372,6 +373,44 @@ async function cmdTail(argv: string[]): Promise<number> {
   }
 }
 
+/** Loop libraries bundled in the package: copy-and-own content (`etium
+ * clone-loop <name>`). A cloned library is the user's to edit; upgrades are
+ * a fresh clone into a scratch dir and a diff, never an auto-merge. */
+const LIBRARIES = ["ai-engineer"];
+
+function cmdCloneLoop(argv: string[]): number {
+  const { values: v, positionals } = parseArgs({
+    args: argv,
+    options: { into: { type: "string" } },
+    allowPositionals: true,
+  });
+  const packageRoot = path.resolve(path.dirname(entry), "..");
+  const name = positionals[0];
+  if (!name) {
+    process.stdout.write(`bundled loop libraries:\n`);
+    for (const l of LIBRARIES) process.stdout.write(`  ${l}    → etium clone-loop ${l}\n`);
+    return 0;
+  }
+  if (!LIBRARIES.includes(name)) {
+    process.stderr.write(`etium clone-loop: unknown library "${name}" (available: ${LIBRARIES.join(", ")})\n`);
+    return 2;
+  }
+  const src = path.join(packageRoot, name);
+  const dest = path.resolve(v.into ?? name);
+  if (fs.existsSync(dest)) {
+    process.stderr.write(`etium clone-loop: ${dest} already exists — clone-loop never overwrites. Clone into a scratch dir (--into) and diff to upgrade.\n`);
+    return 1;
+  }
+  fs.cpSync(src, dest, { recursive: true });
+  // Runs write .etium/ next to where you work; keep it out of the repo.
+  const gi = path.join(path.dirname(dest), ".gitignore");
+  const has = fs.existsSync(gi) && fs.readFileSync(gi, "utf8").split("\n").includes(".etium/");
+  if (!has) fs.appendFileSync(gi, `${fs.existsSync(gi) && !fs.readFileSync(gi, "utf8").endsWith("\n") ? "\n" : ""}.etium/\n`);
+  const rel = path.relative(process.cwd(), dest) || ".";
+  process.stdout.write(`cloned ${name} → ${rel}/ (yours to edit)\nnext: ${rel}/TUTORIAL.md, or dry-run:\n  etium run "hello" --loop ${rel}/loop.ts --worktree --harness exec --param rounds=1\n`);
+  return 0;
+}
+
 async function cmdTick(argv: string[]): Promise<number> {
   const { values: v } = parseArgs({
     args: argv,
@@ -389,14 +428,14 @@ async function cmdTick(argv: string[]): Promise<number> {
   return 0;
 }
 
-function cmdFold(argv: string[]): number {
+function cmdRebuild(argv: string[]): number {
   const { values: v, positionals } = parseArgs({
     args: argv,
     options: { dir: { type: "string" } },
     allowPositionals: true,
   });
   if (!positionals[0]) {
-    process.stderr.write("usage: etium fold <run>\n");
+    process.stderr.write("usage: etium rebuild <run>\n");
     return 2;
   }
   const runDir = resolveRunDir(base(v.dir), positionals[0]);
@@ -430,8 +469,10 @@ export async function main(argv: string[]): Promise<number> {
         return await cmdTail(rest);
       case "tick":
         return await cmdTick(rest);
-      case "fold":
-        return cmdFold(rest);
+      case "rebuild":
+        return cmdRebuild(rest);
+      case "clone-loop":
+        return cmdCloneLoop(rest);
       case "_supervise": {
         const outcome = await supervise(path.resolve(rest[0]!));
         process.stdout.write(`outcome: ${outcome}\n`);

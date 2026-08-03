@@ -432,3 +432,36 @@ back).
 copied). A plugin/registry mechanism for third-party surfaces beyond
 load-by-path (a path is a registry). Per-loop PR triggers (the baseSha
 check is universal; GitHub refuses zero-commit PRs anyway).
+
+---
+
+## ADR-013 — Loop libraries travel in the tarball; `clone-loop` copies them out
+
+**Decision.** Bundled loop libraries (today: `ai-engineer`) ship as data
+inside the npm tarball, and `etium clone-loop <name> [--into dir]` copies
+one into the user's repo — refusing to overwrite, appending `.etium/` to
+the receiving `.gitignore`, and printing the next step. Bare `etium
+clone-loop` lists what's bundled. A cloned library is the user's to edit;
+upgrading is a fresh clone into a scratch directory and a diff, never an
+auto-merge. Library source files import types from `@etium/core` (truthful
+at their destination; erased at runtime; resolved in-repo via a tsconfig
+paths mapping). The CLI verb `fold` is renamed `rebuild` in the same
+release — the help text had always defined it with that word; "fold" stays
+in prose as the event-sourcing term it is.
+
+**Why.** Copy-and-own content wants the shadcn distribution model, not a
+dependency: node_modules is precisely where adaptable content must not
+live (unеditable by convention, clobbered by updates, and Node refuses to
+type-strip `.ts` there — copying *out* is fine). Bundling in the tarball
+makes npm the only distribution channel — versioned with the release,
+integrity-checked, offline after install — and collapses the stranger's
+path to `npm install -g @etium/core && etium clone-loop ai-engineer`. The
+verb names its object because the bare verbs (`init`, `vendor`, `add`)
+were judged too abstract: `clone` imports the right git-shaped intuition —
+your own copy, nothing syncs unless you do it deliberately.
+
+**Rejected.** `npm install @etium/ai-engineer` (a dependency, not a
+clone). Git submodules (resist local edits). A loop-library registry
+(a third-party library is a repo you `degit` — documented escape hatch,
+not core machinery). Auto-update/merge of cloned libraries (violates
+copy-and-own; diff-and-take is the contract).

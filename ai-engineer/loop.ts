@@ -8,8 +8,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-// In your own project: `import type { Run } from "etium"`.
-import type { Run } from "../src/index.ts";
+import type { Run } from "@etium/core";
 
 const T = path.join(path.dirname(fileURLToPath(import.meta.url)), "templates");
 const read = (f: string) => fs.readFileSync(path.join(T, f), "utf8");

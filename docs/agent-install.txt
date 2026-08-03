@@ -66,15 +66,13 @@ major ≥ 22 (`v22.18` minimum). Otherwise stop and report.
 cd "$REPO_DIR"
 test -d .git                       # PASS: exit 0 (it is a git repo)
 test ! -e ai-engineer              # PASS: exit 0 (no collision; if it exists, stop and report)
-cp -r /tmp/etium-src/ai-engineer ai-engineer 2>/dev/null \
-  || { git clone -q --depth 1 https://github.com/etium-dev/core /tmp/etium-src && cp -r /tmp/etium-src/ai-engineer ai-engineer; }
-grep -qxF '.etium/' .gitignore 2>/dev/null || printf '.etium/\n' >> .gitignore
+etium clone-loop ai-engineer       # PASS: exit 0; also appends .etium/ to .gitignore
 git add ai-engineer .gitignore
-git commit -m "Add etium ai-engineer package"
+git commit -m "Add etium ai-engineer loop library"
 ```
 
-**Verify**: `test -f ai-engineer/loop.ts && ls ai-engineer/templates/*.md | wc -l` →
-the file test exits 0 and the count is `7`.
+**Verify**: `test -f ai-engineer/loop.ts && grep -qx '.etium/' .gitignore && ls ai-engineer/templates/*.md | wc -l` →
+both tests exit 0 and the count is `7`.
 
 ## Step 3 — acceptance test (token-free, in a throwaway clone)
 

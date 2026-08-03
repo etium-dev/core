@@ -122,14 +122,12 @@ cd /tmp/etium-src &amp;&amp; npm install &amp;&amp; npm run build &amp;&amp; npm
 <pre><code>cd "$REPO_DIR"
 test -d .git                       <span style="color:var(--dim)"># PASS: exit 0 (it is a git repo)</span>
 test ! -e ai-engineer              <span style="color:var(--dim)"># PASS: exit 0 (no collision; if it exists, stop and report)</span>
-cp -r /tmp/etium-src/ai-engineer ai-engineer 2&gt;/dev/null \
-  || { git clone -q --depth 1 https://github.com/etium-dev/core /tmp/etium-src &amp;&amp; cp -r /tmp/etium-src/ai-engineer ai-engineer; }
-grep -qxF '.etium/' .gitignore 2&gt;/dev/null || printf '.etium/\n' &gt;&gt; .gitignore
+etium clone-loop ai-engineer       <span style="color:var(--dim)"># PASS: exit 0; also appends .etium/ to .gitignore</span>
 git add ai-engineer .gitignore
-git commit -m "Add etium ai-engineer package"</code></pre>
+git commit -m "Add etium ai-engineer loop library"</code></pre>
   <p><strong>Verify</strong>:
-  <code>test -f ai-engineer/loop.ts &amp;&amp; ls ai-engineer/templates/*.md | wc -l</code>
-  → the file test exits 0 and the count is <code>7</code>.</p>
+  <code>test -f ai-engineer/loop.ts &amp;&amp; grep -qx '.etium/' .gitignore &amp;&amp; ls ai-engineer/templates/*.md | wc -l</code>
+  → both tests exit 0 and the count is <code>7</code>.</p>
 
   <h2>Step 3 — acceptance test (token-free, throwaway clone)</h2>
   <p>This proves the install without touching <code>REPO_DIR</code>'s state

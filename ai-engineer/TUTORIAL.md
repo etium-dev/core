@@ -11,12 +11,12 @@ harnesses bring their own auth, `gh` brings yours.
 
 ```sh
 npm install -g @etium/core        # Node ≥ 22.18
-git clone https://github.com/etium-dev/core etium-src
-cp -r etium-src/ai-engineer /path/to/your-repo/ai-engineer
+cd /path/to/your-repo
+etium clone-loop ai-engineer      # → ./ai-engineer, yours to edit
 ```
 
 The library is a plain folder — a 97-line loop, seven persona prompts, and
-a README with the exact contract. Copying it into your repo is the intended
+a README with the exact contract. Cloning it into your repo is the intended
 move: the templates are *yours to edit*, and the folder has no dependencies
 (type imports only — it runs anywhere). The GitHub integration is not in
 the folder at all: it's etium's built-in `github` surface, which drives any

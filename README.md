@@ -73,7 +73,7 @@ etium run "make the tests pass" --loop ralph \
 A directory. `task.md` (intent), `events.jsonl` (append-only ledger — the
 authority for control flow), `steps/NNN-name.occ/` (prompt, raw harness
 stream, artifacts), `decisions/` (gate mailbox), `state.json` (derived cache;
-rebuild anytime with `etium fold`). Grep it, `jq` it, archive it, replay it.
+rebuild anytime with `etium rebuild`). Grep it, `jq` it, archive it, replay it.
 The ledger schema is versioned JSON with a published JSON Schema and golden
 fixtures in [`schema/`](schema/) — that, the on-disk layout, and files-as-API
 are the stable surfaces; everything else is implementation.
@@ -126,8 +126,8 @@ and `et:*` filter labels. Configuration is env vars (`ETIUM_GH_REPO`,
 Custom surfaces are modules loaded by path (see DESIGN §10.3).
 
 The **[ai-engineer](ai-engineer/)** loop library is the flagship workload: a
-multi-persona triage→debug/design/plan→implement workflow you copy into your
-repo and adapt. [Tutorial](https://etium.dev/ai-engineer.html).
+multi-persona triage→debug/design/plan→implement workflow you clone into
+your repo (`etium clone-loop ai-engineer`) and adapt. [Tutorial](https://etium.dev/ai-engineer.html).
 
 ## License
 
