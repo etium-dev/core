@@ -629,13 +629,16 @@ async function cmdInit(argv: string[]): Promise<number> {
       "Loop library",
       [
         "Etium runs \"loops\": programs that sequence agent steps and human",
-        "approval gates. The ai-engineer library is a complete engineering",
-        "workflow — triage, plan, implement, each with review gates. Choosing",
-        "it adds an ai-engineer/ folder to this repository, yours to edit.",
+        "approval gates. ralph is built in — the simplest real loop: one",
+        "agent retries your goal in fresh context until a check passes. The",
+        "ai-engineer library is the full multi-persona workflow — triage,",
+        "plan, implement, each with review gates — added as an ai-engineer/",
+        "folder in this repository, yours to edit.",
       ],
       [
-        { label: "Etium only — you write the loops", value: "none" },
+        { label: "Start with ralph — built in, nothing added to the repo", value: "ralph" },
         { label: "Add the ai-engineer loop library", value: "ai-engineer" },
+        { label: "Neither — you'll write your own loops", value: "none" },
       ],
       0,
       v.library,
@@ -719,22 +722,27 @@ async function cmdInit(argv: string[]): Promise<number> {
     rl?.close();
 
     out();
-    if (library !== "none") {
+    if (library !== "none" && library !== "ralph") {
       const r = await main(["clone-loop", library]);
       if (r !== 0) return r;
     }
     if (github === "off") {
       out(style("1", "Done. Next:"));
       out();
-      out(
-        library === "none"
-          ? `  write a loop (https://etium.dev/quickstart.html) and: etium run "goal" --loop your-loop.ts`
-          : `  etium run "your goal" --loop ${library}/loop.ts --worktree`,
-      );
+      if (library === "ralph") {
+        out(`  echo "your goal, precisely stated" > PROMPT.md`);
+        out(`  etium run "your goal" --loop ralph --workspace . --param check="npm test"`);
+        out();
+        out(`  ralph iterates the agent until the check passes; swap in any check.`);
+      } else if (library === "none") {
+        out(`  write a loop (https://etium.dev/quickstart.html) and: etium run "goal" --loop your-loop.ts`);
+      } else {
+        out(`  etium run "your goal" --loop ${library}/loop.ts --worktree`);
+      }
       return 0;
     }
     const agentLogin = actAs === "me" ? ghLogin : actAs;
-    const env = `ETIUM_GH_REPO=${github} ETIUM_GH_TRUSTED=${trusted} ETIUM_GH_AGENT=${agentLogin} ETIUM_GH_LOOP=${library === "none" ? "<path-to-your-loop>" : `${library}/loop.ts`}`;
+    const env = `ETIUM_GH_REPO=${github} ETIUM_GH_TRUSTED=${trusted} ETIUM_GH_AGENT=${agentLogin} ETIUM_GH_LOOP=${library === "none" ? "<path-to-your-loop>" : library === "ralph" ? "ralph" : `${library}/loop.ts`}`;
     const cronLine = `* * * * * cd ${repoDir} && ${env} etium tick --surface github >> .etium/tick.log 2>&1`;
     if (wakeup === "cron") {
       const cur = sh("crontab", ["-l"]);

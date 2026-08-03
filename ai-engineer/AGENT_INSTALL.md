@@ -71,7 +71,7 @@ The accepted items bind these inputs, referenced by the steps below (round 1: 1�
 | `AGENT_LOGIN` | if `GITHUB_REPO` | GitHub login whose issue-assignment starts an attempt |
 | `WAKEUP` | if `GITHUB_REPO` | `watch` (foreground, nothing installed), `cron` (init installs the crontab entry), or `print` (line goes in the report) |
 | `SCRATCH_DIR` | no | writable directory for throwaway verification work; default: a fresh `mktemp -d` directory |
-| `LIBRARY` | **ask if omitted** | `ai-engineer` to clone the loop library into the repo, or `none` for etium only. Cloning writes a commit into the repo — never assume it |
+| `LIBRARY` | **ask if omitted** | `ai-engineer` (clones the library — writes a commit; never assume it), `ralph` (built-in loop, nothing added), or `none` |
 
 ## Rules
 
@@ -149,7 +149,7 @@ installs or prints the crontab entry per the wake-up answer:
 
 ```sh
 cd "$REPO_DIR"
-etium init --library <ai-engineer|none> --github <owner/name|off> \
+etium init --library <ai-engineer|ralph|none> --github <owner/name|off> \
   --trusted <logins> --act-as <me|bot-login> --wakeup <watch|cron|print>
 ```
 
