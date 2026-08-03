@@ -1,5 +1,8 @@
 # ai-engineer
 
+**New here? Start with [TUTORIAL.md](TUTORIAL.md)** — zero to a working AI
+engineer, including a token-free dry run. This file is the reference.
+
 The multi-persona, human-gated engineering workflow
 ([AI_ENGINEER_STATE_MACHINE.md](../AI_ENGINEER_STATE_MACHINE.md)'s successor)
 as an etium loop package: `loop.ts` + `templates/` + this contract, plus a
