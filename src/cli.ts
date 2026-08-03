@@ -40,8 +40,7 @@ usage:
   etium clone-loop [library] [--into dir]   copy a loop library (ralph, ai-engineer) into your repo (no arg: list)
   etium configure [--library ralph|ai-engineer|none] [--github owner/name|off] [--trusted logins]
              [--act-as login|me] [--wakeup watch|cron|print] [--git-name n] [--git-email e] [--yes]
-             check the machine, ask the setup questions, apply — and re-run any
-             time to manage state (wake-up on/off, status)
+             check the machine, ask, apply — re-run any time (wake-up on/off, status)
   etium --version
 
 Base directory: --dir, else $ETIUM_DIR, else ./.etium
@@ -525,14 +524,16 @@ async function cmdConfigure(argv: string[]): Promise<number> {
       dir: { type: "string" },
     },
   });
-  const out = (t = "") => process.stdout.write(t + "\n");
+  const STAT: Record<string, string> = { ok: "32", note: "34", needs: "31" }; // verdict colors
+  const out = (t = "") =>
+    process.stdout.write(t.replace(/^(  )(ok|note|needs)(\s)/, (_, a: string, w: string, b: string) => a + style(STAT[w]!, w) + b) + "\n");
   const interactive = process.stdin.isTTY && !v.yes;
 
   await initBanner();
-  out("Etium supervises coding agents working in this repository. Every run");
-  out("is recorded as plain files, and each run can work on its own git");
-  out("branch. Configure checks this machine, asks what's needed, and");
-  out("applies your answers — nothing here needs sudo.");
+  out("Etium runs agentic loops in this repository. Every run is recorded");
+  out("as plain files, and each run can work on its own git branch.");
+  out("Configure checks this machine, asks what's needed, and applies your");
+  out("answers — nothing here needs sudo.");
   out();
   out(style("1", "Checking this machine"));
   out();
@@ -635,7 +636,7 @@ async function cmdConfigure(argv: string[]): Promise<number> {
     if (flagVal !== undefined) return flagVal;
     if (!rl) return options[defIdx]!.value;
     out();
-    out(style("1", title));
+    out(style("1;36", title)); // questions wear the logo's teal
     out();
     for (const line of explain) out(`  ${line}`);
     out();
@@ -655,7 +656,7 @@ async function cmdConfigure(argv: string[]): Promise<number> {
     if (flagVal !== undefined) return flagVal;
     if (!rl) return def;
     out();
-    out(style("1", title));
+    out(style("1;36", title)); // questions wear the logo's teal
     out();
     for (const line of explain) out(`  ${line}`);
     out();
