@@ -83,6 +83,7 @@
     <a href="https://github.com/etium-dev/core">github</a>
     <a href="https://www.npmjs.com/package/etium">npm</a>
     <a href="https://github.com/etium-dev/core/blob/main/QUICKSTART.md">quickstart</a>
+    <a href="ai-engineer.html">ai-engineer tutorial</a>
     <a href="https://github.com/etium-dev/core/blob/main/DESIGN.md">design</a>
   </div>
 
@@ -123,6 +124,15 @@ $ etium tail &lt;run&gt;       <span class="cmt"># human-readable event stream</
   (cron-safe, idempotent) reconciles every run back to where it should be.
   That is the whole liveness story.</p>
 
+  <h2>Batteries included: the ai-engineer</h2>
+  <p>The bundled <a href="ai-engineer.html">ai-engineer package</a> is a
+  complete multi-persona workflow on these primitives: assign a GitHub issue
+  to it, and it triages, plans, implements, and reviews on its own branch —
+  parking at gates you answer with <code>/et</code> comments, opening a
+  draft PR you merge. The whole state machine is a 97-line loop; the GitHub
+  integration is one cron line. <a href="ai-engineer.html">Follow the
+  tutorial</a> — the first half runs entirely in your terminal, token-free.</p>
+
   <h2>Six primitives</h2>
   <dl class="prims">
     <dt>Task</dt><dd>a goal plus acceptance criteria; a markdown file.</dd>
@@ -148,7 +158,7 @@ $ etium tail &lt;run&gt;       <span class="cmt"># human-readable event stream</
     <tr><td>each adapter</td><td class="mono">300</td></tr>
     <tr><td>each bundled loop</td><td class="mono">150</td></tr>
   </table>
-  <p>Budgets are enforced in CI. Current core: ~1,700 lines — small enough to
+  <p>Budgets are enforced in CI. Current core: ~2,100 lines — small enough to
   read in an afternoon, and that is the credibility test.</p>
 
   <footer>

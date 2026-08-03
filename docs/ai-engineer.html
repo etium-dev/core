@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tutorial: an AI engineer for your repository — Etium</title>
+<meta name="description" content="From zero to a working AI engineer: a token-free dry run, real personas, one cron line to GitHub, and an always-on bot — all supervised by etium.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>⟳</text></svg>">
+<style>
+  :root {
+    --bg: #faf9f6; --fg: #1a1a1a; --dim: #6b6b6b; --line: #e2e0da;
+    --code-bg: #f1efe9; --accent: #0d5c4d; --accent-dim: #0d5c4d22;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12130f; --fg: #e8e6e1; --dim: #96948d; --line: #2a2b26;
+      --code-bg: #1c1d18; --accent: #6fc7b2; --accent-dim: #6fc7b222;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font: 17px/1.65 ui-serif, Georgia, "Times New Roman", serif;
+    padding: 0 1.25rem;
+  }
+  main { max-width: 44rem; margin: 0 auto; padding: 3.5rem 0 5rem; }
+  code, pre, .mono {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.85em;
+  }
+  code { background: var(--code-bg); padding: 0.1em 0.35em; border-radius: 4px; }
+  pre {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px;
+    padding: 1rem 1.2rem; overflow-x: auto; line-height: 1.55; margin: 1.4rem 0;
+  }
+  pre code { background: none; padding: 0; }
+  h1 { font-size: 2.2rem; line-height: 1.15; font-weight: 600; letter-spacing: -0.01em; margin-top: 0.8rem; }
+  h2 {
+    font-size: 1.05rem; text-transform: uppercase; letter-spacing: 0.12em;
+    color: var(--dim); font-weight: 600; margin: 3.2rem 0 1rem;
+    padding-top: 1.6rem; border-top: 1px solid var(--line);
+  }
+  p { margin: 0.9rem 0; }
+  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  .brand { font-size: 0.95rem; letter-spacing: 0.22em; text-transform: uppercase; color: var(--dim); }
+  .brand a { color: var(--dim); text-decoration: none; }
+  .lede { color: var(--dim); font-size: 1.1rem; font-style: italic; }
+  ol, ul { padding-left: 1.2rem; }
+  li { margin: 0.45rem 0; }
+  .cmt { color: var(--dim); }
+  .out { color: var(--dim); }
+  .mark { color: var(--accent); font-weight: 600; }
+  footer {
+    border-top: 1px solid var(--line); margin-top: 4rem; padding-top: 1.4rem;
+    color: var(--dim); font-size: 0.9rem;
+  }
+  footer a { margin-right: 1.2rem; }
+</style>
+</head>
+<body>
+<main>
+  <div class="brand"><a href="./">Etium</a> · ai-engineer</div>
+  <h1>Tutorial: an AI engineer for your&nbsp;repository</h1>
+  <p class="lede">From zero to a working AI engineer: first a five-minute
+  token-free dry run in your terminal, then real model runs, then wired to
+  GitHub — where assigning an issue produces a draft PR whose every stage
+  you command with comments and approve through gates.</p>
+  <p>Nothing here requires a server, a daemon, or an API key handed to
+  anything: etium supervises, harnesses bring their own auth, <code>gh</code>
+  brings yours.</p>
+
+  <h2>0 · Install</h2>
+<pre><code>npm install -g etium        <span class="cmt"># Node ≥ 22.18</span>
+git clone https://github.com/etium-dev/core etium-src
+cp -r etium-src/ai-engineer /path/to/your-repo/ai-engineer</code></pre>
+  <p>The package is a plain folder — a 97-line loop, seven persona prompts,
+  one GitHub surface file, and a <a href="https://github.com/etium-dev/core/blob/main/ai-engineer/README.md">README</a>
+  with the exact contract. Copying it into your repo is the intended move:
+  the templates are <em>yours to edit</em>, and the folder has no
+  dependencies — it runs anywhere.</p>
+  <p>You'll also want at least one coding harness installed and logged in —
+  <a href="https://pi.dev">pi</a> (<code>pi</code>, then <code>/login</code>),
+  Claude Code, or Codex. Etium never sees those credentials; see
+  <a href="https://github.com/etium-dev/core/blob/main/MODEL_AUTH.md">MODEL_AUTH.md</a>.</p>
+
+  <h2>1 · Dry run: learn the workflow for zero tokens</h2>
+  <p>The loop has a scripting hook: under <code>--harness exec</code>, a
+  <code>--param cmd.&lt;step&gt;=…</code> shell command stands in for each
+  persona. Fake personas, real workflow — every gate, option, and artifact
+  is the real thing:</p>
+<pre><code>cd /path/to/your-repo
+etium run "Add input validation to the signup form" \
+  --loop ai-engineer/loop.ts --worktree --harness exec --param rounds=1 \
+  --param cmd.triage='mkdir -p ai &amp;&amp; echo "recommend: plan" &gt; ai/INTAKE.md' \
+  --param cmd.plan='echo "1. validate email" &gt; ai/PLAN.md' \
+  --param cmd.plan-review='printf "VERDICT: approve\n" &gt; ai/REVIEW.md' \
+  --param cmd.implement='echo done &gt; ai/REPORT.md' \
+  --param cmd.implement-review='printf "VERDICT: approve\n" &gt; ai/REVIEW.md'</code></pre>
+  <p>The triage persona runs, then the run <strong>parks</strong> — zero
+  processes — at its first gate:</p>
+<pre><code>$ etium gates
+<span class="out">2026-…-add-input-validation-…  route.0  show: ai/INTAKE.md
+  → etium decide 2026-… route &lt;triage|debug|design|plan&gt;</span></code></pre>
+  <p>That's the routing gate. Notice what it <em>doesn't</em> offer:
+  <code>implement</code>. Options appear as stages earn them. Decide, with
+  guidance:</p>
+<pre><code>etium decide &lt;run&gt; route plan --note "email format only, no phone"</code></pre>
+  <p>Your note is injected into the planner's prompt. The plan stage runs
+  its builder/reviewer rounds, then the route gate reopens — now offering
+  <code>implement</code>, showing <code>ai/PLAN.md</code> as evidence.
+  Route through <code>implement</code>, then <code>wrap-up</code>, and read
+  the whole story:</p>
+<pre><code>$ etium tail &lt;run&gt; --once
+<span class="out">gate ? route.0  awaiting decision  options=triage|debug|design|plan  show=ai/INTAKE.md
+gate <span class="mark">◆</span> route.0  plan by you (cli) — email format only, no phone
+gate ? route.1  awaiting decision  options=…|plan|<span class="mark">implement</span>  show=ai/PLAN.md,ai/REVIEW.md
+gate <span class="mark">◆</span> route.1  implement by you (cli)
+gate ? route.2  awaiting decision  options=…|implement|<span class="mark">wrap-up</span>  show=ai/REPORT.md,ai/REVIEW.md
+gate <span class="mark">◆</span> route.2  wrap-up by you (cli)
+run DONE</span></code></pre>
+  <p>Because of <code>--worktree</code>, all of it happened on branch
+  <code>etium/&lt;run-id&gt;</code> in its own checkout under
+  <code>.etium/worktrees/</code> — your working tree was never touched, and
+  <code>ai/INTAKE.md</code>, <code>ai/PLAN.md</code>, <code>ai/REPORT.md</code>,
+  <code>ai/REVIEW.md</code> sit on that branch as the audit trail. Every
+  prompt, stream, and decision is under <code>.etium/runs/&lt;run&gt;/</code>;
+  <code>grep</code> works on all of it.</p>
+
+  <h2>2 · Real personas</h2>
+  <p>Drop the <code>cmd.*</code> params and the harness default takes over
+  (<code>pi</code>; use <code>--harness claude</code>, <code>--harness
+  codex</code>, or <code>--param model=…</code> as you like):</p>
+<pre><code>etium run "Add input validation to the signup form" \
+  --loop ai-engineer/loop.ts --worktree --param check="npm test"</code></pre>
+  <p>Now triage actually reads your repo and writes a real recommendation
+  into <code>ai/INTAKE.md</code>, reviewers actually object
+  (<code>VERDICT: revise</code> with stable objection keys — the builder
+  must address them next round), and <code>implement</code> must pass
+  <strong>both</strong> its reviewer and your <code>check</code> command.
+  When a reviewer still objects after <code>rounds</code> rounds (default
+  2), you get a <code>&lt;stage&gt;-stuck</code> gate:
+  <code>keep-going</code>, <code>accept</code>, or <code>wrap-up</code>.
+  Walk away at any gate; <code>kill&nbsp;-9</code> anything;
+  <code>etium tick</code> from cron reconciles. That's the operating model:
+  the AI works, parks, and waits for you.</p>
+
+  <h2>3 · Wire it to GitHub</h2>
+  <p>Now the same loop, commanded from issues instead of the terminal. On
+  the machine that will run the work (your laptop is fine), make sure
+  <code>gh auth status</code> is good for the target repo, then add one
+  cron line — this <em>is</em> the deployment:</p>
+<pre><code>* * * * *  cd /path/to/your-repo &amp;&amp; \
+  ETIUM_GH_REPO=you/your-repo ETIUM_GH_TRUSTED=your-login \
+  etium tick --surface ai-engineer/github.ts &gt;&gt; /tmp/etium-tick.log 2&gt;&amp;1</code></pre>
+  <p>Then, on GitHub:</p>
+  <ol>
+    <li><strong>Assign yourself</strong> (or the configured agent user) to
+    an issue. Within a minute, the surface creates a run on branch
+    <code>etium/issue-N-attempt-0</code>, triage runs, and a status comment
+    appears on the issue telling you exactly what it's waiting for and
+    which commands are valid.</li>
+    <li><strong>Command with comments.</strong> <code>/et plan start with
+    the retry logic</code> — the word is matched against the open gate's
+    declared options, your text becomes the note, and anyone not in
+    <code>ETIUM_GH_TRUSTED</code> is ignored.</li>
+    <li><strong>Review the draft PR.</strong> As soon as a stage produces
+    artifacts, the surface pushes the branch and opens one draft PR. The
+    <code>ai/</code> documents and the commits are the reviewable work.</li>
+    <li><strong>Finish on GitHub's own terms.</strong> Merging the PR ends
+    the run. Closing the PR or the issue abandons the attempt.
+    <code>/et stop</code> abandons it with your note as the reason.
+    Re-assigning later starts attempt #1 on a fresh branch — abandoned
+    work never blocks a retry.</li>
+  </ol>
+  <p>The <code>et:working</code> / <code>et:waiting</code> /
+  <code>et:blocked</code> labels are decoration for your issue list
+  (<code>label:et:waiting</code> = "waiting on me"); nothing ever reads
+  them back, so they can't lie for long — the next tick corrects them.</p>
+
+  <h2>4 · The always-on engineer</h2>
+  <p>Same package, same cron line, different credentials — that's the
+  entire difference. On a spare machine:</p>
+  <ol>
+    <li>Create a <strong>bot GitHub account</strong>; give it
+    <strong>Write</strong> on the repo (never admin), protect your default
+    branch, require reviews. The bot only ever opens draft PRs; merging
+    stays yours.</li>
+    <li><code>gh auth login</code> as the bot; log the harness in
+    (<code>pi</code> → <code>/login</code>) on that machine.</li>
+    <li>Install etium, clone your repo, add the cron line with
+    <code>ETIUM_GH_AGENT=&lt;bot-login&gt;</code> and
+    <code>ETIUM_GH_TRUSTED=&lt;your-login&gt;</code>.</li>
+  </ol>
+  <p>Now <strong>assigning the bot</strong> to an issue starts an attempt,
+  and you interact entirely through issue comments and PR reviews from
+  anywhere. If the machine goes offline, nothing lies — runs park, status
+  freezes, and the next tick after it returns reconciles everything.</p>
+
+  <h2>5 · Make it yours</h2>
+  <ul>
+    <li><strong>Edit the personas.</strong> <code>templates/*.md</code> are
+    plain markdown — team conventions belong in <code>conventions.md</code>,
+    stage behavior in each persona. Editing a template mid-run fails loudly
+    rather than silently replaying stale work; finish or abandon runs
+    first.</li>
+    <li><strong>Tune the knobs.</strong> <code>--param rounds=3</code>,
+    <code>--param wall=30m</code>, <code>--param check="make test"</code>,
+    per-run <code>--harness</code> / <code>--param model=…</code>.</li>
+    <li><strong>Change the workflow itself.</strong> The loop is 97 lines
+    of ordinary TypeScript — add a stage, change an option set, split a
+    persona. The
+    <a href="https://github.com/etium-dev/core/blob/main/WRITING_LOOPS.md">loop-authoring guide</a>
+    is the manual; the surface needs no changes, because it matches
+    commands against whatever options your gates declare.</li>
+  </ul>
+
+  <h2>Troubleshooting</h2>
+  <ul>
+    <li><strong>Nothing happens after assigning an issue</strong> — cron
+    isn't running the tick line, <code>gh</code> isn't authenticated on
+    that machine, or the assigner isn't in <code>ETIUM_GH_TRUSTED</code>
+    (assignments by untrusted users are ignored by design). Run the tick
+    command by hand and read its output.</li>
+    <li><strong>Your <code>/et</code> comment did nothing</strong> —
+    you're not in <code>ETIUM_GH_TRUSTED</code>, or the word isn't among
+    the open gate's options; the status comment always lists the valid
+    set. Decisions fail closed, silently on the invalid side.</li>
+    <li><strong>The run errored about harness auth</strong> — the harness
+    on the executing machine isn't logged in; the error names the exact
+    remedy (e.g. <code>pi</code> then <code>/login</code>). Fix and
+    <code>etium resume &lt;run&gt;</code> — completed steps replay from
+    the ledger, nothing reruns.</li>
+    <li><strong>You want to see what the model actually did</strong> —
+    <code>etium tail &lt;run&gt;</code>, or open
+    <code>.etium/runs/&lt;run&gt;/steps/*/</code> for the exact prompt and
+    the full raw stream of every step.</li>
+  </ul>
+
+  <footer>
+    <a href="./">etium</a>
+    <a href="https://github.com/etium-dev/core/tree/main/ai-engineer">the package on GitHub</a>
+    <a href="https://github.com/etium-dev/core/blob/main/ai-engineer/TUTORIAL.md">this tutorial as markdown</a>
+    <span>MIT license</span>
+  </footer>
+</main>
+</body>
+</html>
