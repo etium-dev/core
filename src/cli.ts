@@ -787,7 +787,11 @@ async function cmdWatch(argv: string[]): Promise<number> {
     },
   });
   const surfaces = await loadSurfaces(v.surface ?? []);
-  const everyMs = Math.max(5, Number(v.every ?? "30")) * 1000;
+  // 15s default: half of cron's floor (watch is the try-it-out mode), well
+  // inside gh's rate budget. Floor 5s; garbage input falls back, not NaN
+  // (Math.max(5, NaN) is NaN — a zero-delay hot loop against GitHub).
+  const n = Number(v.every ?? "15");
+  const everyMs = Math.max(5, Number.isFinite(n) ? n : 15) * 1000;
   process.stdout.write(`watching every ${everyMs / 1000}s — Ctrl-C to stop\n`);
   await watchLoop(base(v.dir), entry, surfaces, everyMs, (actions) => {
     for (const a of actions)
