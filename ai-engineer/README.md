@@ -2,6 +2,8 @@
 
 **New here? Start with [TUTORIAL.md](TUTORIAL.md)** — zero to a working AI
 engineer, including a token-free dry run. This file is the reference.
+**Having an AI agent do the install? Give it [AGENT_INSTALL.md](AGENT_INSTALL.md)**
+— deterministic steps, a PASS criterion per step, stop-on-fail.
 
 The multi-persona, human-gated engineering workflow
 ([AI_ENGINEER_STATE_MACHINE.md](../AI_ENGINEER_STATE_MACHINE.md)'s successor)
