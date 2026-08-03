@@ -718,3 +718,57 @@ labels (two same-named checkouts collide; the second silently steals the
 first's plist). systemd-style full-path escaping (reversible but long
 and ugly, and unnecessary once payloads are self-describing). Deriving
 identity at install time from anything that can change underneath it.
+
+---
+
+## ADR-021 — headless is the first-class path: credentials must be context-free
+
+**Decision.** Setting up and operating etium works 100% over SSH, with no
+GUI session anywhere in the path. The principle: **a bot machine's
+credentials must be readable from any execution context** — GUI-bound
+storage is a per-credential opt-in, never a requirement. Applied:
+
+- **gh sign-in**: when wiring GitHub and gh isn't (verifiably) signed in,
+  `configure` offers token sign-in first — it walks the operator through
+  creating a fine-grained token scoped to the one repository (Issues, Pull
+  requests, Contents), then runs `gh auth login --with-token
+  --insecure-storage` with the terminal inherited: the token is pasted
+  straight into gh, and etium never sees, stores, or transports it
+  (MODEL_AUTH's delegation, applied to GitHub). File-stored (0600), it
+  works from ssh, cron, launchd, and the GUI alike. The browser device
+  flow remains the interactive alternative; on macOS-over-SSH a
+  keychain-held sign-in can be knowingly kept (`unverifiable` is not
+  `unauthenticated`). Agents (flags mode) never get an interactive spawn —
+  they hard-fail with the exact command for the operator.
+- **git pushes**: after any successful sign-in, `gh auth setup-git` routes
+  git's HTTPS credentials through gh — otherwise projection pushes hit the
+  osxkeychain helper, the same GUI wall one layer down.
+- **The wake-up mechanism follows the credential**: file-held gh auth →
+  cron (which on macOS runs with nobody logged in — survives reboot to the
+  login screen); keychain-held auth → the ADR-018 LaunchAgent, the
+  GUI-coupled mode it inherently is. Cron installs verify immediately: one
+  tick runs inline and the real verdict (or the surface's error with its
+  remedy) prints — from SSH.
+- **macOS privacy protection (TCC)**: a repo under ~/Documents, ~/Desktop,
+  or ~/Downloads gets background processes blocked pending GUI approval —
+  `configure` now says so and steers bot repos elsewhere.
+- **Harness auth**: pi's `/login` TUI is terminal-native; codex's remedy
+  string now names its headless forms (`codex login --api-key`,
+  `OPENAI_API_KEY`). Both store in files — context-free once obtained.
+
+**Why.** The field sequence kept rediscovering one wall in different
+rooms: gh worked in Screen Share but not SSH (keychain), ticks worked
+from a GUI LaunchAgent but not cron (keychain), configure's gate passed
+at the console but failed over SSH (keychain probe). Patching each site
+moved the problem; naming the principle removes the class. The earlier
+blanket rejection of `--insecure-storage` (ADR-018) was right for a
+person's broad OAuth token and wrong for a bot deployment: a one-repo
+token in gh's 0600 file is CI-normal storage with a smaller blast radius
+than an all-repo token in a keychain.
+
+**Rejected.** Verifying auth "at first tick in the GUI session" (still
+assumes a GUI exists — moving the problem). Etium prompting for or piping
+the token itself (delegation: gh owns its credential end to end).
+Auto-login guidance as the primary answer (it is the workaround for
+keychain-mode, not the path). GH_TOKEN in the scheduled command line
+(secrets in crontab/plists, and etium becomes the credential handler).

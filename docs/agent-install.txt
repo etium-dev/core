@@ -59,9 +59,9 @@ lands in your report" — then continue)
 >    is the account the engineer pushes, comments, and opens PRs as.
 > 4. Wake-up: you run `etium watch` in a terminal while trying things out
 >    — nothing installed. Say **cron** and init installs the once-a-minute
->    wake-up now (a launchd agent on macOS — the scheduler that can read
->    gh's keychain token — a crontab entry on Linux); say **print** and it
->    goes in my report instead.
+>    wake-up now (cron — headless-proof when gh signs in with a token; a
+>    launchd agent when gh's sign-in is keychain-held); say **print** and
+>    it goes in my report instead.
 
 Two hard rules on answers: an item whose detection failed **has no
 default** — "yes" or an omitted number cannot accept it; if a reply leaves
@@ -86,7 +86,7 @@ The accepted items bind these inputs, referenced by the steps below (round 1: 1�
 | `GITHUB_REPO` | no | `owner/name` to wire the GitHub surface; omit for terminal-only install |
 | `TRUSTED` | if `GITHUB_REPO` | comma-separated GitHub logins allowed to command the engineer |
 | `AGENT_LOGIN` | if `GITHUB_REPO` | GitHub login whose issue-assignment starts an attempt |
-| `WAKEUP` | if `GITHUB_REPO` | `watch` (foreground, nothing installed), `cron` (init installs the always-on wake-up: launchd agent on macOS, crontab on Linux), or `print` (goes in the report) |
+| `WAKEUP` | if `GITHUB_REPO` | `watch` (foreground, nothing installed), `cron` (init installs the always-on wake-up: cron, or a launchd agent when gh's sign-in is keychain-held), or `print` (goes in the report) |
 | `SCRATCH_DIR` | no | writable directory for throwaway verification work; default: a fresh `mktemp -d` directory |
 | `LIBRARY` | yes (round 1, default `ralph`) | `ralph` (clones the reference loop — writes a commit), `ai-engineer` (clones the full workflow — writes a commit; only by explicit choice, never assumed), or `none` (nothing added) |
 
@@ -301,9 +301,13 @@ End with a report to your operator containing exactly:
 2. The commit hash created in Step 2 (only when a library was chosen).
 3. Remaining manual steps, chosen from: install the GitHub CLI and/or
    authenticate `gh` on this machine — **as the bot account when one was
-   chosen**;
-   authenticate a harness (e.g. `pi` then `/login`) before real-persona
-   runs; install the printed crontab line; assign `AGENT_LOGIN` to a GitHub
-   issue to start the first attempt.
+   chosen**; on a headless or SSH-driven machine the sturdy form is
+   `gh auth login -h github.com --with-token --insecure-storage`, pasting
+   a fine-grained token scoped to the repository (Issues, Pull requests,
+   Contents — read/write);
+   authenticate a harness before real-persona runs (pi's `/login` TUI works
+   over SSH; codex headless: `codex login --api-key` or the
+   `OPENAI_API_KEY` env var); install the printed crontab line; assign
+   `AGENT_LOGIN` to a GitHub issue to start the first attempt.
 4. Nothing else — no summaries of what the package "will" do, no edits you
    "recommend". Install reports state what was verified.

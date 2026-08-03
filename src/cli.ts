@@ -15,8 +15,9 @@ import { loadState, openGates, readLedger, writeStateCache } from "./ledger.ts";
 import { isLockLive, readLock, writeDecision } from "./lock.ts";
 import { abandonRun, createRun, supervise, superviseDetached } from "./supervisor.ts";
 import { loadSurfaces, tickOnce, watchLoop } from "./tick.ts";
-import { etiumsOnPath } from "./checks.ts";
+import { etiumsOnPath, ghUnverifiableHere } from "./checks.ts";
 import { ghEnv, readConfig, statusLines, writeConfig } from "./config.ts";
+import { ensureGhAuth } from "./ghauth.ts";
 import { installWakeup, printWakeup, removeWakeup, wakeupInstalled } from "./wakeup.ts";
 import { DEFAULT_GATE_OPTIONS, ETIUM_VERSION, type AnyEnvelope } from "./types.ts";
 
@@ -570,8 +571,11 @@ async function cmdConfigure(argv: string[]): Promise<number> {
   }
   const top = sh("git", ["rev-parse", "--show-toplevel"]);
   const repoDir = top.status === 0 ? (top.stdout || "").trim() : undefined;
-  if (repoDir) out(`  ok     repository: ${repoDir} — runs are recorded here, under .etium/`);
-  else {
+  if (repoDir) {
+    out(`  ok     repository: ${repoDir} — runs are recorded here, under .etium/`);
+    if (process.platform === "darwin" && /\/(Documents|Desktop|Downloads)(\/|$)/.test(repoDir))
+      out("  note   this folder is under macOS privacy protection (Documents/Desktop/\n         Downloads): background ticks can be blocked here without a GUI\n         approval — bot repositories are happier under ~ or ~/src");
+  } else {
     out("  needs  a repository — etium works inside the repository it supervises;");
     out("         cd into one, then run: etium configure");
     hardFail = true;
@@ -587,11 +591,12 @@ async function cmdConfigure(argv: string[]): Promise<number> {
   }
   const ghInstalled = sh("gh", ["--version"]).status === 0;
   const ghAuthed = ghInstalled && sh("gh", ["auth", "status"]).status === 0;
-  const ghLogin = ghAuthed ? (sh("gh", ["api", "user", "--jq", ".login"]).stdout || "").trim() : "";
+  let ghLogin = ghAuthed ? (sh("gh", ["api", "user", "--jq", ".login"]).stdout || "").trim() : "";
+  const ghUnverifiable = ghInstalled && !ghAuthed && ghUnverifiableHere();
   if (ghInstalled && ghAuthed) out(`  ok     gh — signed in as ${ghLogin || "unknown"} (only needed for GitHub wiring)`);
-  else if (ghInstalled) out("  note   gh installed but not signed in — fine unless GitHub should drive");
-  else out("  note   gh (GitHub CLI) not installed — fine unless GitHub should drive");
-  if (!ghAuthed) out("         the engineer; then: curl -sS https://webi.sh/gh | sh, and: gh auth login");
+  else if (ghUnverifiable) out("  note   gh installed — sign-in isn't verifiable over SSH (the login keychain\n         isn't readable here); GitHub wiring offers a headless-proof token sign-in");
+  else if (ghInstalled) out("  note   gh installed but not signed in — fine unless GitHub should drive\n         the engineer; then: gh auth login   (device flow; works over SSH)");
+  else out("  note   gh (GitHub CLI) not installed — fine unless GitHub should drive\n         the engineer; then: curl -sS https://webi.sh/gh | sh, and: gh auth login");
 
   let anyHarness = false;
   for (const ad of allAdapters()) {
@@ -760,22 +765,16 @@ async function cmdConfigure(argv: string[]): Promise<number> {
     let actAs = v["act-as"] ?? "me";
     let wakeup = v.wakeup ?? "watch";
     if (github !== "off") {
-      if (!ghInstalled || !ghAuthed) {
-        out();
-        out("GitHub wiring needs the GitHub CLI (gh), installed and signed in:");
-        out();
-        if (!ghInstalled) out("  curl -sS https://webi.sh/gh | sh   (else https://cli.github.com)");
-        out("  gh auth login                      (as the bot account, if the engineer acts as one)");
-        out();
-        out("Then run: etium configure");
-        return 1;
-      }
       if (github === "github")
         github = await askText(
           "GitHub repository",
           ["The issues of this repository will drive the engineer (owner/name)."],
           originRepo,
         );
+      const auth = await ensureGhAuth({ installed: ghInstalled, authed: ghAuthed, unverifiable: ghUnverifiable,
+        interactive: Boolean(interactive), repo: github, out, menu, sh });
+      if (!auth.ok) return 1;
+      if (auth.login) ghLogin = auth.login;
       trusted = await askText(
         "Your GitHub username",
         [
@@ -806,7 +805,7 @@ async function cmdConfigure(argv: string[]): Promise<number> {
         ["The engineer wakes on a schedule to look for new work."],
         [
           { label: "etium watch — run it in a terminal while trying things out; nothing installed", value: "watch" },
-          { label: "always-on — install the once-a-minute wake-up now (launchd agent on macOS; crontab on Linux)", value: "cron" },
+          { label: "always-on — install the once-a-minute wake-up now (cron; a launchd agent when gh's sign-in is keychain-held)", value: "cron" },
           { label: "print — show what always-on would install; you do it later", value: "print" },
         ],
         0,
@@ -845,7 +844,9 @@ async function cmdConfigure(argv: string[]): Promise<number> {
       library,
       github: { repo: github, trusted, agent: agentLogin, loop: library === "none" ? "" : `${library}/loop.ts` },
     });
-    const env = `ETIUM_GH_REPO=${github} ETIUM_GH_TRUSTED=${trusted} ETIUM_GH_AGENT=${agentLogin} ETIUM_GH_LOOP=${library === "none" ? "<path-to-your-loop>" : `${library}/loop.ts`}`;
+    // Empty agent = acts-as-me with no verifiable login here: defer to gh's
+    // runtime identity by omitting the var (the surface defaults to it).
+    const env = [`ETIUM_GH_REPO=${github}`, `ETIUM_GH_TRUSTED=${trusted}`, agentLogin ? `ETIUM_GH_AGENT=${agentLogin}` : "", `ETIUM_GH_LOOP=${library === "none" ? "<path-to-your-loop>" : `${library}/loop.ts`}`].filter(Boolean).join(" ");
     if (wakeup === "cron") {
       for (const l of installWakeup(repoDir!, env, saved.id)) out(l);
       out();
@@ -861,7 +862,7 @@ async function cmdConfigure(argv: string[]): Promise<number> {
       out(`  ${env} etium watch --surface github`);
       out();
     }
-    if (actAs !== "me") out(`  make sure this machine's gh is signed in as ${agentLogin}`);
+    if (actAs !== "me" && agentLogin) out(`  make sure this machine's gh is signed in as ${agentLogin}`);
     out(`  assign ${agentLogin || "the engineer"} to a GitHub issue to start the first attempt`);
     return 0;
   } finally {

@@ -106,6 +106,17 @@ function retireCronLines(repoDir: string, id?: string): boolean {
   return true;
 }
 
+/** gh auth stored in gh's own hosts.yml works from any context (ssh, cron,
+ * launchd, GUI); keychain-held auth works only in the GUI session. The
+ * wake-up mechanism follows the credential (ADR-021). */
+export function ghFileAuth(hostsYml = path.join(os.homedir(), ".config", "gh", "hosts.yml")): boolean {
+  try {
+    return fs.readFileSync(hostsYml, "utf8").includes("oauth_token:");
+  } catch {
+    return false;
+  }
+}
+
 // --- install / detect / remove --------------------------------------------
 
 export function wakeupInstalled(repoDir: string): boolean {
@@ -137,13 +148,39 @@ export function removeWakeup(repoDir: string, id?: string): string[] {
   return lines.length ? lines : ["No always-on wake-up was installed for this repository."];
 }
 
+/** One tick through the just-installed command, so the verdict comes from
+ * the context that will actually run it — works identically over ssh. */
+function verifyFirstTick(repoDir: string, cmd: string): string[] {
+  const log = path.join(repoDir, ".etium", "tick.log");
+  let before = 0;
+  try {
+    before = fs.statSync(log).size;
+  } catch {
+    /* first tick creates it */
+  }
+  spawnSync("/bin/sh", ["-c", cmd], { timeout: 120_000 });
+  let appended = "";
+  try {
+    appended = fs.readFileSync(log, "utf8").slice(before);
+  } catch {
+    /* no log written */
+  }
+  const err = appended.split("\n").find((l) => l.includes("surface-error"));
+  if (err) return ["", "First tick ran — and reports a problem:", `  ${err.trim()}`];
+  if (appended.trim()) return ["", "First tick succeeded — the engineer is live."];
+  return ["", `First tick wrote nothing — check ${log}`];
+}
+
 /** Install the always-on wake-up; returns the lines to print. Idempotent
  * across re-runs and label-grammar changes: anything already installed for
- * this repository is removed first, then the current form is installed. */
+ * this repository is removed first, then the current form is installed.
+ * Mechanism follows the credential (ADR-021): keychain-held gh auth needs
+ * the GUI session (launchd agent); file-held auth runs headless (cron —
+ * which on macOS runs with no one logged in at all). */
 export function installWakeup(repoDir: string, env: string, id: string): string[] {
   repoDir = canon(repoDir);
   const cmd = tickCommand(repoDir, env, id);
-  if (process.platform === "darwin") {
+  if (process.platform === "darwin" && !ghFileAuth()) {
     for (const a of etiumAgents().filter((a) => belongsTo(a.payload, repoDir, id))) {
       spawnSync("launchctl", ["bootout", `gui/${process.getuid?.() ?? 501}/${a.label}`], { stdio: "ignore" });
       try {
@@ -162,9 +199,15 @@ export function installWakeup(repoDir: string, env: string, id: string): string[
     return r.status === 0
       ? [
           `Installed the launchd agent (${label}): ticks once a minute while`,
-          "you're logged in, resumes at login. gh's token stays in your keychain.",
+          "you're logged in, resumes at login (gh's sign-in is keychain-held,",
+          "which only a GUI session can read — token sign-in lifts this).",
         ]
-      : [`Wrote ${plist} — load it with:`, "", `  launchctl bootstrap gui/${process.getuid?.() ?? 501} ${plist}`];
+      : [
+          `Could not load the agent — is a GUI session active? Wrote ${plist};`,
+          `load it with:`,
+          "",
+          `  launchctl bootstrap gui/${process.getuid?.() ?? 501} ${plist}`,
+        ];
   }
   retireCronLines(repoDir, id);
   const line = cronLine(cmd);
@@ -172,7 +215,7 @@ export function installWakeup(repoDir: string, env: string, id: string): string[
   const kept = (cur.status === 0 ? cur.stdout : "").split("\n").filter(Boolean);
   const w = spawnSync("crontab", ["-"], { input: [...kept, line, ""].join("\n"), encoding: "utf8" });
   return w.status === 0
-    ? ["Installed the crontab entry (once a minute)."]
+    ? ["Installed the crontab entry (once a minute; no GUI session needed).", ...verifyFirstTick(repoDir, cmd)]
     : ["Could not edit crontab — install this line yourself:", "", `  ${line}`];
 }
 

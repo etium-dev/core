@@ -39,7 +39,7 @@ export const codexAdapter: HarnessAdapter = {
   auth: {
     env: ["OPENAI_API_KEY"],
     check: { cmd: "codex", args: ["login", "status"] }, // exit semantics provisional (§10.2)
-    remedy: "codex login",
+    remedy: "codex login (headless: codex login --api-key, or set OPENAI_API_KEY)",
   },
   build(req: AdapterBuildRequest): BuildResult {
     const args = ["exec", "--json"];
