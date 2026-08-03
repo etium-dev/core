@@ -68,7 +68,7 @@
   deterministic steps with a PASS criterion each, stop-on-fail.</p>
 
   <h2>Setup</h2>
-<pre><code>npm install -g @etium/core     <span class="cmt"># Node ≥ 22.18; gives you `etium` on PATH</span></code></pre>
+<pre><code>npm install -g @etium/core</code></pre>
   <p>(Permission error? That's a system Node — macOS .pkg — with a
   root-owned prefix; Node via Homebrew or a version manager avoids it
   entirely. Otherwise: <code>sudo npm install -g @etium/core</code>, or a
@@ -93,7 +93,7 @@
   <strong>gates</strong> (parks until a human decides). No tokens, no model,
   no network needed to see it work — <code>exec</code> runs any command as a
   step.</p>
-<pre><code><span class="cmt">// hello.ts</span>
+<pre><code>
 export default async function (run) {
   await run.step("greet", { harness: "exec", command: "echo hello &gt; hello.txt" });
   const d = await run.gate("publish?", { show: ["hello.txt"] });
@@ -103,12 +103,12 @@ export default async function (run) {
   });
 }</code></pre>
 <pre><code>etium run "say hello" --loop hello.ts
-etium status              <span class="cmt"># run is parked at the gate; no process is resident</span>
-etium gates               <span class="cmt"># what's waiting on you</span></code></pre>
+etium status
+etium gates</code></pre>
   <p>The run parked. Nothing is running — <code>kill -9</code> anything you
   like. Now decide:</p>
 <pre><code>etium approve &lt;run&gt; "publish?" --note "ship it"
-etium tail &lt;run&gt;          <span class="cmt"># watch it resume, replay past the done step, finish</span></code></pre>
+etium tail &lt;run&gt;</code></pre>
   <p>Everything that happened is files: <code>ls .etium/runs/&lt;run&gt;/</code> —
   <code>events.jsonl</code> is the append-only ledger (authority for control
   flow), <code>steps/</code> holds each step's exact prompt and raw stream,
@@ -121,7 +121,7 @@ etium tail &lt;run&gt;          <span class="cmt"># watch it resume, replay past
   touches model credentials (see the model-auth doc in
   <a href="https://github.com/etium-dev/core">the repo</a>). One-time, per
   machine:</p>
-<pre><code>pi            <span class="cmt"># interactive; run /login and pick your provider, then quit</span></code></pre>
+<pre><code>pi</code></pre>
   <p>(API-key users can skip the login: the pi adapter passes
   <code>ANTHROPIC_API_KEY</code>, <code>OPENAI_API_KEY</code>,
   <code>GEMINI_API_KEY</code>, or <code>OPENROUTER_API_KEY</code> through

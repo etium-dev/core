@@ -8,8 +8,10 @@ etium *is*, and one that drives a real coding agent (Pi).
 Node ≥ 22.18. Then:
 
 ```sh
-npm install -g @etium/core     # gives you `etium` on PATH
+npm install -g @etium/core
 ```
+
+That gives you `etium` on PATH.
 
 (Permission error? That's a system Node (macOS .pkg) with a root-owned
 prefix — Node via Homebrew or a version manager avoids it entirely.
@@ -49,15 +51,18 @@ export default async function (run) {
 
 ```sh
 etium run "say hello" --loop hello.ts
-etium status              # run is parked at the gate; no process is resident
-etium gates               # what's waiting on you
+etium status
+etium gates
 ```
+
+`status` shows the run parked at the gate — no process is resident —
+and `gates` shows what's waiting on you.
 
 The run parked. Nothing is running — kill -9 anything you like. Now decide:
 
 ```sh
 etium approve <run> "publish?" --note "ship it"
-etium tail <run>          # watch it resume, replay past the done step, finish
+etium tail <run>
 ```
 
 Everything that happened is files: `ls .etium/runs/<run>/` — `events.jsonl`
@@ -71,8 +76,10 @@ step's exact prompt and raw stream, `decisions/` carried your approval.
 credentials (see `MODEL_AUTH.md`). One-time, per machine:
 
 ```sh
-pi            # interactive; run /login and pick your provider, then quit
+pi
 ```
+
+(interactive — run `/login`, pick your provider, then quit)
 
 (API-key users can skip the login: the pi adapter passes `ANTHROPIC_API_KEY`,
 `OPENAI_API_KEY`, `GEMINI_API_KEY`, or `OPENROUTER_API_KEY` through from your

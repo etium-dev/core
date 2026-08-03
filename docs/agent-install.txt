@@ -24,9 +24,9 @@ Read-only detections to run first (a failure just means "ask in the
 proposal instead"):
 
 ```sh
-git rev-parse --show-toplevel     # candidate repository (if run inside one)
-git remote get-url origin         # candidate owner/name
-gh api user --jq .login           # candidate GitHub username
+git rev-parse --show-toplevel
+git remote get-url origin
+gh api user --jq .login
 ```
 
 **Round 1 — send exactly this shape:**
@@ -202,10 +202,13 @@ etium gates
 `implement` must NOT be listed yet — its absence is part of the test).
 
 ```sh
-etium decide verify route plan --sync      # PASS: ends with `outcome: parked`
-etium decide verify route implement --sync # PASS: ends with `outcome: parked`
-etium decide verify route wrap-up --sync   # PASS: ends with `outcome: done`
+etium decide verify route plan --sync
+etium decide verify route implement --sync
+etium decide verify route wrap-up --sync
 ```
+
+**PASS**: the first two each end with `outcome: parked`; the third ends
+with `outcome: done`.
 
 Cleanup: `rm -rf "$SCRATCH_DIR/etium-verify"`. If every PASS held, the
 setup is functional. If `GITHUB_REPO` was not provided, go to Step 5.

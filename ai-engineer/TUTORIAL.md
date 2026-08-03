@@ -17,9 +17,9 @@ harnesses bring their own auth, `gh` brings yours.
 ## 0. Install
 
 ```sh
-npm install -g @etium/core        # Node ≥ 22.18
+npm install -g @etium/core
 cd /path/to/your-repo
-etium clone-loop ai-engineer      # → ./ai-engineer, yours to edit
+etium clone-loop ai-engineer
 ```
 
 (`etium init` does Part 0's setup and Part 3's wiring questions
@@ -117,7 +117,7 @@ Now the same loop, commanded from issues instead of the terminal. On the
 machine that will run the work (your laptop is fine):
 
 ```sh
-gh auth status        # gh must be authenticated for the target repo
+gh auth status
 ```
 
 Trying it out? Skip cron entirely — run it in the foreground while you
