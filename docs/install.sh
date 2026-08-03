@@ -11,7 +11,7 @@
 #      Node via Homebrew/apt/apk or a standalone user-local tarball.
 #   2. Picks an npm prefix: your own if writable, else ~/.local — so sudo
 #      is never needed.
-#   3. Runs: npm install -g --ignore-scripts @etium/core
+#   3. Runs: npm install -g --ignore-scripts --prefer-online @etium/core
 #   4. Offers to add the bin directory to your shell PATH.
 # It installs nothing outside your home directory except via your system
 # package manager, and only ever with your confirmation.
@@ -500,7 +500,7 @@ print_existing_global_etium_not_writable_message() {
   printf 'Etium is already installed at: %s\n\n' "$existing_etium_path" >&2
   printf 'Installing another copy under %s/.local could leave your shell using the old global etium, so this installer stopped.\n\n' "$HOME" >&2
   printf 'Update or remove the existing global install first. If it was installed with npm, you can run:\n\n' >&2
-  printf '  sudo npm install -g --ignore-scripts %s\n\n' "$ETIUM_PACKAGE" >&2
+  printf '  sudo npm install -g --ignore-scripts --prefer-online %s\n\n' "$ETIUM_PACKAGE" >&2
   printf 'or uninstall it first with:\n\n' >&2
   printf '  sudo npm uninstall -g %s\n\n' "$ETIUM_PACKAGE" >&2
   printf 'Then run this installer again.\n' >&2
@@ -778,9 +778,9 @@ print_npm_install_command() {
 
 print_npm_install_fallback_command() {
   if [ -n "${ETIUM_NPM_INSTALL_PREFIX:-}" ]; then
-    printf 'npm install -g --ignore-scripts --prefix %s %s' "$ETIUM_NPM_INSTALL_PREFIX" "$ETIUM_PACKAGE"
+    printf 'npm install -g --ignore-scripts --prefer-online --prefix %s %s' "$ETIUM_NPM_INSTALL_PREFIX" "$ETIUM_PACKAGE"
   else
-    printf 'npm install -g --ignore-scripts %s' "$ETIUM_PACKAGE"
+    printf 'npm install -g --ignore-scripts --prefer-online %s' "$ETIUM_PACKAGE"
   fi
 }
 
@@ -801,9 +801,9 @@ run_etium_install() {
 run_npm_install_etium() {
   npm_loglevel="$1"
   if [ -n "${ETIUM_NPM_INSTALL_PREFIX:-}" ]; then
-    npm install -g --ignore-scripts --prefix "$ETIUM_NPM_INSTALL_PREFIX" --no-fund --no-audit "--loglevel=$npm_loglevel" --progress=false "$ETIUM_PACKAGE"
+    npm install -g --ignore-scripts --prefer-online --prefix "$ETIUM_NPM_INSTALL_PREFIX" --no-fund --no-audit "--loglevel=$npm_loglevel" --progress=false "$ETIUM_PACKAGE"
   else
-    npm install -g --ignore-scripts --no-fund --no-audit "--loglevel=$npm_loglevel" --progress=false "$ETIUM_PACKAGE"
+    npm install -g --ignore-scripts --prefer-online --no-fund --no-audit "--loglevel=$npm_loglevel" --progress=false "$ETIUM_PACKAGE"
   fi
 }
 
