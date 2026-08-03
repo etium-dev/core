@@ -40,5 +40,5 @@ test("init (flags mode): checks, clones the library, exits 1 outside a repo", ()
   fs.mkdirSync(bare);
   const bad = spawnSync(process.execPath, [cli, "init", "--library", "none", "--github", "off"], { cwd: bare, encoding: "utf8" });
   assert.equal(bad.status, 1);
-  assert.match(bad.stdout, /needs\s+a git repository/);
+  assert.match(bad.stdout, /needs\s+a repository/);
 });
