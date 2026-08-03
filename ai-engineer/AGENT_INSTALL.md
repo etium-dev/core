@@ -6,10 +6,29 @@ optionally a loop library. Follow these steps in order. Every step ends with a
 **stop and report** the step number and the command output — do not
 improvise a fix, do not continue.
 
-## Inputs
+## Step 0 — interview the operator
 
-Obtain these from your operator before starting. If any required input is
-missing, ask; do not guess.
+Do not start until every question below has an answer. Ask **all applicable
+questions in one message** (never drip them one at a time), offering the
+defaults shown; skip any question the operator's handoff message already
+answered. Then restate the resulting configuration in one line and proceed —
+e.g. "Configuration: repo /a/b, etium only, no GitHub wiring, scratch in a
+temp dir. Starting."
+
+1. **Which repository should etium work in?** (absolute path → `REPO_DIR`)
+2. **Etium only, or also the ai-engineer loop library?** Cloning the
+   library commits an `ai-engineer/` folder into the repo — never assume
+   it. (`LIBRARY` = `ai-engineer` or `none`)
+3. **Wire it to GitHub, so issue assignment and `/et` comments drive it?**
+   If yes, follow up in the same message for: the repo (`owner/name` →
+   `GITHUB_REPO`), which GitHub logins may command it (→ `TRUSTED`), the
+   account whose issue-assignment starts work (default: the `gh`-
+   authenticated user → `AGENT_LOGIN`), and whether to install the cron
+   line now or just print it (→ `INSTALL_CRON`). If no, steps 4 is skipped.
+4. **Any constraints on where throwaway verification work may happen?**
+   (default: a fresh `mktemp -d` directory → `SCRATCH_DIR`)
+
+The answers bind these inputs, referenced by the steps below:
 
 | input | required | meaning |
 |---|---|---|
