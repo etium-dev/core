@@ -603,3 +603,43 @@ WRITING_LOOPS keeps "partial work is a diff"). An init-only identity check
 (surface-created runs never pass through init — same lesson as the harness
 presence gate). Hand-repairing the affected runs (masks the defect; replay
 heals them through the fixed loop instead).
+
+---
+
+## ADR-018 — always-on wake-up is a launchd agent on macOS, cron on Linux
+
+**Decision.** `etium init --wakeup cron` installs the once-a-minute tick
+platform-correctly: on macOS, a per-repo LaunchAgent
+(`~/Library/LaunchAgents/dev.etium.tick.<hash>.plist`, `StartInterval` 60,
+bootstrapped into the `gui/<uid>` domain; idempotent bootout-rewrite-
+bootstrap on re-init, retiring any crontab line an older etium installed
+for the repo); on Linux, the crontab line as before. Both bake init's PATH
+into the scheduled command. `print` mode installs nothing — on macOS it
+prints the command and points at re-running init, because writing a plist
+into LaunchAgents auto-loads at next login, which is an install, not a
+printout. The flag value stays `cron` (docs and the agent interview say
+"always-on"). The generators live in `src/wakeup.ts` and are unit-tested;
+the suite never invokes launchctl or crontab.
+
+**Why.** The first live deployment ran under macOS cron and authenticated
+intermittently: gh stores its token in the login keychain, and cron (like
+SSH) executes in a different audit session that cannot read it — ticks
+worked only in windows where the GUI context leaked through. Apple's
+guidance is launchd for periodic per-user jobs; the Mac CI industry runs
+agents in the `gui/` domain for exactly this keychain reason; GitHub's own
+runner service uses launchd on macOS. The agent keeps credentials where
+gh's security model puts them — the alternative remedy on the table,
+`gh auth login --insecure-storage`, moves the token to plaintext, and
+etium never instructs users to downgrade credential storage.
+
+**Rejected.** Documenting `--insecure-storage` (the flag's name is the
+verdict). A LaunchDaemon (needs sudo; has no session, so the keychain
+problem returns). Keeping cron on macOS with unlock workarounds (storing
+the keychain password to unlock the keychain is the same problem wearing
+a hat). Renaming the flag value (breaks the documented interview and
+every existing handoff).
+
+**Limitation, stated plainly.** Agents run while the user is logged in and
+resume at login. Truly headless fleets pair this with auto-login (the Mac
+CI norm; FileVault requires an unencrypted boot volume for it) — a setup
+choice etium documents but does not make.

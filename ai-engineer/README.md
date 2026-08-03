@@ -67,7 +67,11 @@ auth is `gh`'s, model auth is the harness's
 | `ETIUM_GH_WORKDIR` | checkout to branch worktrees from | cwd |
 | `ETIUM_GH_BASE` | PR base branch | `main` |
 
-The whole deployment, either mode, is one cron line:
+The whole deployment, either mode, is one scheduled tick — `etium init
+--wakeup cron` installs it platform-correctly: a **launchd agent** on macOS
+(the scheduler context that can read gh's keychain-stored token — cron
+runs in a different audit session and cannot; ADR-018), a crontab line on
+Linux:
 
 ```
 * * * * *  cd /path/to/checkout && ETIUM_GH_REPO=acme/widgets ETIUM_GH_TRUSTED=you \

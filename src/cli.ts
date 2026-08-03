@@ -15,6 +15,7 @@ import { loadState, openGates, readLedger, writeStateCache } from "./ledger.ts";
 import { isLockLive, readLock, writeDecision } from "./lock.ts";
 import { abandonRun, createRun, supervise, superviseDetached } from "./supervisor.ts";
 import { loadSurfaces, tickOnce, watchLoop } from "./tick.ts";
+import { installWakeup, printWakeup } from "./wakeup.ts";
 import { DEFAULT_GATE_OPTIONS, ETIUM_VERSION, type AnyEnvelope } from "./types.ts";
 
 const HELP = `etium — the outer loop for coding agents
@@ -774,8 +775,8 @@ async function cmdInit(argv: string[]): Promise<number> {
         ["The engineer wakes on a schedule to look for new work."],
         [
           { label: "etium watch — run it in a terminal while trying things out; nothing installed", value: "watch" },
-          { label: "cron — install a once-a-minute crontab entry now (always-on)", value: "cron" },
-          { label: "print — show the cron line; you install it yourself later", value: "print" },
+          { label: "always-on — install the once-a-minute wake-up now (launchd agent on macOS; crontab on Linux)", value: "cron" },
+          { label: "print — show what always-on would install; you do it later", value: "print" },
         ],
         0,
         v.wakeup,
@@ -808,17 +809,11 @@ async function cmdInit(argv: string[]): Promise<number> {
     }
     const agentLogin = actAs === "me" ? ghLogin : actAs;
     const env = `ETIUM_GH_REPO=${github} ETIUM_GH_TRUSTED=${trusted} ETIUM_GH_AGENT=${agentLogin} ETIUM_GH_LOOP=${library === "none" ? "<path-to-your-loop>" : `${library}/loop.ts`}`;
-    const cronLine = `* * * * * cd ${repoDir} && ${env} etium tick --surface github >> .etium/tick.log 2>&1`;
     if (wakeup === "cron") {
-      const cur = sh("crontab", ["-l"]);
-      const kept = (cur.status === 0 ? cur.stdout : "").split("\n").filter((l) => l && !l.includes("etium tick --surface github"));
-      const w = spawnSync("crontab", ["-"], { input: [...kept, cronLine, ""].join("\n"), encoding: "utf8" });
-      out(w.status === 0 ? "Installed the crontab entry." : `Could not edit crontab — install this line yourself:\n\n  ${cronLine}`);
+      for (const l of installWakeup(repoDir!, env)) out(l);
       out();
     } else if (wakeup === "print") {
-      out("Install this crontab line when you want always-on:");
-      out();
-      out(`  ${cronLine}`);
+      for (const l of printWakeup(repoDir!, env)) out(l);
       out();
     }
     out(style("1", "Done. Next:"));

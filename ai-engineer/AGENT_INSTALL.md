@@ -52,8 +52,10 @@ lands in your report" — then continue)
 >    machine's `gh` must then be authenticated **as that bot**, since it
 >    is the account the engineer pushes, comments, and opens PRs as.
 > 4. Wake-up: you run `etium watch` in a terminal while trying things out
->    — nothing installed. Say **cron** and I add the once-a-minute crontab
->    entry now; say **print** and the line goes in my report instead.
+>    — nothing installed. Say **cron** and init installs the once-a-minute
+>    wake-up now (a launchd agent on macOS — the scheduler that can read
+>    gh's keychain token — a crontab entry on Linux); say **print** and it
+>    goes in my report instead.
 
 Two hard rules on answers: an item whose detection failed **has no
 default** — "yes" or an omitted number cannot accept it; if a reply leaves
@@ -78,7 +80,7 @@ The accepted items bind these inputs, referenced by the steps below (round 1: 1�
 | `GITHUB_REPO` | no | `owner/name` to wire the GitHub surface; omit for terminal-only install |
 | `TRUSTED` | if `GITHUB_REPO` | comma-separated GitHub logins allowed to command the engineer |
 | `AGENT_LOGIN` | if `GITHUB_REPO` | GitHub login whose issue-assignment starts an attempt |
-| `WAKEUP` | if `GITHUB_REPO` | `watch` (foreground, nothing installed), `cron` (init installs the crontab entry), or `print` (line goes in the report) |
+| `WAKEUP` | if `GITHUB_REPO` | `watch` (foreground, nothing installed), `cron` (init installs the always-on wake-up: launchd agent on macOS, crontab on Linux), or `print` (goes in the report) |
 | `SCRATCH_DIR` | no | writable directory for throwaway verification work; default: a fresh `mktemp -d` directory |
 | `LIBRARY` | yes (round 1, default `ralph`) | `ralph` (clones the reference loop — writes a commit), `ai-engineer` (clones the full workflow — writes a commit; only by explicit choice, never assumed), or `none` (nothing added) |
 
