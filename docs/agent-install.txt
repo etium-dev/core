@@ -104,9 +104,11 @@ node -e 'const [a,b]=process.versions.node.split(".").map(Number); process.exit(
 fine": etium runs TypeScript loop files natively, which Node enables by
 default from 22.18 (and 23.6) — older versions pass a naive major-version
 check and then fail confusingly at the first loop. On failure, **stop and
-report**: "operator must install Node ≥ 22.18 (current: `node --version`'s
-output) — etium runs .ts loops natively, which needs it; nodejs.org or a
-package manager". Do not download or run installers yourself.
+report**: "operator must upgrade Node to ≥ 22.18 (current: `node
+--version`'s output) — etium runs .ts loops natively, which needs it. One
+command with a version manager: `nvm install --lts` or `brew upgrade
+node`; otherwise the nodejs.org installer (any current download passes)."
+Do not download or run installers yourself.
 
 ```sh
 etium --version
