@@ -518,9 +518,11 @@ async function cmdInit(argv: string[]): Promise<number> {
     }
   }
   if (!anyHarness) {
-    out("  note   no harnesses yet — harnesses are the coding agents etium");
-    out("         supervises (pi, codex; more coming); install one before");
-    out("         real runs, e.g. pi: https://pi.dev");
+    out("  needs  a coding-agent harness — harnesses are the agents etium");
+    out("         supervises; install at least one, then run etium init again:");
+    out("         pi     https://pi.dev");
+    out("         codex  https://github.com/openai/codex");
+    hardFail = true;
   }
   out();
   if (hardFail) {
@@ -579,7 +581,7 @@ async function cmdInit(argv: string[]): Promise<number> {
         "it adds an ai-engineer/ folder to this repository, yours to edit.",
       ],
       [
-        { label: "Etium only", value: "none" },
+        { label: "Etium only — you write the loops", value: "none" },
         { label: "Add the ai-engineer loop library", value: "ai-engineer" },
       ],
       0,
