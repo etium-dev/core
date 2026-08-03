@@ -26,6 +26,11 @@ readonly ETIUM_PACKAGE ETIUM_CMD ETIUM_ESC ETIUM_CR ETIUM_ETX
 etium_installer_main() {
   set -eu
 
+  if [ "${1:-}" = "--logo" ]; then
+    etium_logo_animation
+    exit 0
+  fi
+
   check_file="${TMPDIR:-/tmp}/etium-installer-checks.$$"
   run_preflight_checks >"$check_file" &
   check_pid=$!
@@ -1105,14 +1110,94 @@ draw_install_progress() {
   printf '\r\033[K  %s%s%s %s %s%s%s %s' "$orange" "$frame" "$reset" "$bar" "$bold" "$title" "$reset" "$label"
 }
 
+# The animation is the product: a runner orbits the outer loop, then the
+# loop settles. Scaffolding (guards, trap, frame redraw) follows pi's.
 etium_logo_animation() {
-  print_static_logo
+  if { [ ! -t 1 ] || [ "${TERM:-}" = "dumb" ]; } && [ "${ETIUM_LOGO_FORCE:-0}" != 1 ]; then
+    print_static_logo
+    return
+  fi
+
+  esc="${ETIUM_ESC}["
+  reset="${ETIUM_ESC}[0m"
+  hide="${esc}?25l"
+  show="${esc}?25h"
+  clear="${esc}H"
+
+  trap 'printf "%s%s\n" "$reset" "$show"; trap - INT TERM; exit 130' INT TERM
+  printf '%s%s' "$hide" "${esc}2J${esc}H"
+
+  s=0
+  while [ "$s" -lt 62 ]; do
+    draw_ring_frame "$clear" "$reset" "$((s % 28))" 0
+    s=$((s + 1))
+    sleep 0.03
+  done
+  draw_ring_frame "$clear" "$reset" 0 1
+  sleep 0.5
+
+  printf '%s%s\n' "$reset" "$show"
+  trap - INT TERM
+}
+
+# Perimeter index of cell (y,x) on the 11x5 ring, clockwise from top-left;
+# prints -1 for interior cells. 28 cells total.
+ring_index() {
+  y="$1"; x="$2"
+  if [ "$y" -eq 0 ]; then printf '%s' "$x"
+  elif [ "$x" -eq 10 ] && [ "$y" -lt 4 ]; then printf '%s' $((10 + y))
+  elif [ "$y" -eq 4 ]; then printf '%s' $((14 + 10 - x))
+  elif [ "$x" -eq 0 ] && [ "$y" -gt 0 ]; then printf '%s' $((28 - y))
+  else printf '%s' -1
+  fi
+}
+
+draw_ring_frame() {
+  clear="$1"; reset="$2"; head="$3"; settled="$4"
+
+  frame="${clear}\n"
+  for y in 0 1 2 3 4; do
+    frame="${frame}  "
+    x=0
+    while [ "$x" -le 10 ]; do
+      idx=$(ring_index "$y" "$x")
+      if [ "$idx" -ge 0 ]; then
+        if [ "$settled" = 1 ]; then
+          frame="${frame}${ETIUM_ESC}[36m██"
+        else
+          d=$(((head - idx + 28) % 28))
+          if [ "$d" -eq 0 ]; then frame="${frame}${ETIUM_ESC}[1;96m██"
+          elif [ "$d" -le 2 ]; then frame="${frame}${ETIUM_ESC}[36m██"
+          elif [ "$d" -le 5 ]; then frame="${frame}${ETIUM_ESC}[2;36m██"
+          else frame="${frame}${ETIUM_ESC}[90m██"
+          fi
+        fi
+      elif [ "$y" -eq 2 ] && [ "$x" -eq 1 ]; then
+        if [ "$settled" = 1 ]; then
+          frame="${frame}${reset}${ETIUM_ESC}[1m     E T I U M    ${reset}"
+        else
+          frame="${frame}${reset}${ETIUM_ESC}[90m     E T I U M    ${reset}"
+        fi
+        x=9
+      else
+        frame="${frame}${reset}  "
+      fi
+      x=$((x + 1))
+    done
+    frame="${frame}${reset}\n"
+  done
+  printf '%b' "$frame" 2>/dev/null || true
 }
 
 print_static_logo() {
   cat <<'EOF'
 
-  ETIUM
+  ██████████████████████
+  ██                  ██
+  ██     E T I U M    ██
+  ██                  ██
+  ██████████████████████
+
 EOF
 }
 
