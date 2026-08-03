@@ -626,19 +626,16 @@ async function cmdInit(argv: string[]): Promise<number> {
 
   try {
     const library = await menu(
-      "Loop library",
+      "Loops",
       [
         "Etium runs \"loops\": programs that sequence agent steps and human",
-        "approval gates. ralph is built in — the simplest real loop: one",
-        "agent retries your goal in fresh context until a check passes. The",
-        "ai-engineer library is the full multi-persona workflow — triage,",
-        "plan, implement, each with review gates — added as an ai-engineer/",
-        "folder in this repository, yours to edit.",
+        "approval gates. Two ship with etium today. Any run can use any",
+        "loop — this choice sets up your starting point.",
       ],
       [
-        { label: "Start with ralph — built in, nothing added to the repo", value: "ralph" },
-        { label: "Add the ai-engineer loop library", value: "ai-engineer" },
-        { label: "Neither — you'll write your own loops", value: "none" },
+        { label: "ralph — one agent iterating until your check passes (built in)", value: "ralph" },
+        { label: "ai-engineer — the multi-persona engineering workflow (cloned into this repo)", value: "ai-engineer" },
+        { label: "none — you'll write your own", value: "none" },
       ],
       0,
       v.library,
