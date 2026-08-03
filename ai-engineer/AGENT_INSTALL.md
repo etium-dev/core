@@ -36,20 +36,28 @@ gh api user --jq .login           # candidate GitHub username
 > 4. Throwaway verification work: a fresh temp directory. Name a directory
 >    to change that.
 
-**Round 2 — only if item 3 became `github`:**
+**Round 2 — only if item 3 became `github`:** (if the `gh` CLI is not
+installed, say so first in this same message — "note: the GitHub CLI isn't
+installed; I'll prepare the wiring, and installing `gh` + authenticating
+lands in your report" — then continue)
 
 > GitHub wiring. Reply **yes** to accept, or correct by number:
 > 1. GitHub repository: `<owner/name from origin — or ask>`
 > 2. Commander: `<detected gh username>` — the only username whose
 >    comments and assignments are obeyed. Teammates can be added later.
 > 3. The engineer acts **as you**: assigning yourself to an issue starts
->    it. Give a bot username to use a separate account instead.
+>    it. Give a bot username to use a separate account instead — this
+>    machine's `gh` must then be authenticated **as that bot**, since it
+>    is the account the engineer pushes, comments, and opens PRs as.
 > 4. Wake-up: you run `etium watch` in a terminal while trying things out
 >    — nothing installed. Say **cron** and I add the once-a-minute crontab
 >    entry now; say **print** and the line goes in my report instead.
 
-Never surface raw input names (a newcomer has no idea what a "trusted
-login" is). After acceptance, restate the configuration in one line — e.g.
+Two hard rules on answers: an item whose detection failed **has no
+default** — "yes" or an omitted number cannot accept it; if a reply leaves
+such an item unanswered, re-ask **just that item** before proceeding, and
+never infer its value from elsewhere. And never surface raw input names (a
+newcomer has no idea what a "trusted login" is). After acceptance, restate the configuration in one line — e.g.
 "Configuration: repo /a/b, etium only, no GitHub wiring, scratch in a temp
 dir. Starting." — and proceed.
 
@@ -249,7 +257,9 @@ End with a report to your operator containing exactly:
    (e.g. `SKIPPED — GITHUB_REPO not provided`, `SKIPPED — LIBRARY=none`).
    Never invent other status words.
 2. The commit hash created in Step 2 (only when `LIBRARY=ai-engineer`).
-3. Remaining manual steps, chosen from: authenticate `gh` on this machine;
+3. Remaining manual steps, chosen from: install the GitHub CLI and/or
+   authenticate `gh` on this machine — **as the bot account when one was
+   chosen**;
    authenticate a harness (e.g. `pi` then `/login`) before real-persona
    runs; install the printed crontab line; assign `AGENT_LOGIN` to a GitHub
    issue to start the first attempt.
