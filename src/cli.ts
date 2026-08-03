@@ -559,7 +559,7 @@ async function cmdInit(argv: string[]): Promise<number> {
   if (ghInstalled && ghAuthed) out(`  ok     gh — signed in as ${ghLogin || "unknown"} (only needed for GitHub wiring)`);
   else if (ghInstalled) out("  note   gh installed but not signed in — fine unless GitHub should drive");
   else out("  note   gh (GitHub CLI) not installed — fine unless GitHub should drive");
-  if (!ghAuthed) out("         the engineer; then: brew install gh, and: gh auth login");
+  if (!ghAuthed) out("         the engineer; then: curl -sS https://webi.sh/gh | sh, and: gh auth login");
 
   let anyHarness = false;
   for (const ad of allAdapters()) {
@@ -672,8 +672,8 @@ async function cmdInit(argv: string[]): Promise<number> {
         out();
         out("GitHub wiring needs the GitHub CLI (gh), installed and signed in:");
         out();
-        if (!ghInstalled) out("  brew install gh        (else https://cli.github.com)");
-        out("  gh auth login          (as the bot account, if the engineer acts as one)");
+        if (!ghInstalled) out("  curl -sS https://webi.sh/gh | sh   (else https://cli.github.com)");
+        out("  gh auth login                      (as the bot account, if the engineer acts as one)");
         out();
         out("Then run: etium init");
         return 1;
