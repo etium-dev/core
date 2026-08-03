@@ -127,7 +127,7 @@ Custom surfaces are modules loaded by path (see DESIGN §10.3).
 
 The **[ai-engineer](ai-engineer/)** loop library is the flagship workload: a
 multi-persona triage→debug/design/plan→implement workflow you copy into your
-repo and adapt. [Tutorial](https://etium-dev.github.io/core/ai-engineer.html).
+repo and adapt. [Tutorial](https://etium.dev/ai-engineer.html).
 
 ## License
 

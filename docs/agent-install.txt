@@ -1,7 +1,7 @@
 # This is the canonical agent-facing copy of AGENT_INSTALL.md
 # (https://github.com/etium-dev/core/blob/main/ai-engineer/AGENT_INSTALL.md).
 # If you are an AI agent: follow it top to bottom. If you are a human:
-# the readable version is https://etium-dev.github.io/core/agent-install.html
+# the readable version is https://etium.dev/agent-install.html
 
 # AGENT_INSTALL — installing the ai-engineer (instructions for an AI agent)
 

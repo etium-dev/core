@@ -28,7 +28,7 @@
     "type": "git",
     "url": "git+https://github.com/etium-dev/core.git"
   },
-  "homepage": "https://etium-dev.github.io/core/",
+  "homepage": "https://etium.dev/",
   "keywords": [
     "agents",
     "loop-engineering",
