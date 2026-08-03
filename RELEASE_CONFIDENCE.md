@@ -32,6 +32,7 @@ guard class defined later.
 | C4 | CLI grammar, exit codes, and the exact output strings the published docs grep (`outcome: parked`, the `gates` format) | Scripts, cron lines, agents following AGENT_INSTALL | §5 docs-as-tests |
 | C5 | Adapter/Surface interfaces + env config (`ETIUM_GH_*`) | Custom adapters, custom surfaces, deployed cron lines | §4 snapshots, §6 contract fixtures |
 | C6 | The tarball: files present, bin wired, clone-loop payload, zero runtime deps, Node floor | Every `npm install` | §2 Gate 1 |
+| C7 | The on-machine wake-up ABI (ADR-020: `dev.etium.` label prefix, label grammar, cron signature, id marker) | Every installed LaunchAgent and cron line — a future version that can't find them strands user machines | §7 matrix |
 
 ---
 
@@ -108,7 +109,45 @@ proves the model.
 
 ---
 
-## 7. Process guards
+## 7. Machine-state lifecycle — the wake-up install/uninstall matrix
+
+`configure` mutates machine state outside the repo (LaunchAgents, crontab).
+The bug class is stranding: an artifact the user can no longer find or
+remove. The field found it on day one (a moved-identity agent orphaned by a
+path-hash rename); this matrix makes the whole class regression-tested.
+
+**Hermetic by stubbing the schedulers**: `launchctl` and `crontab` stub
+binaries on PATH, backed by a fake store (a crontab file; a directory of
+"loaded" labels) and recording every invocation. Both platform codepaths
+then run on any CI OS — `process.platform` is forced per leg — with an
+optional real-`launchctl` smoke on the macOS runner only.
+
+- [ ] **The matrix**: {repo in place · moved · basename renamed · deleted ·
+  deleted-and-recreated fresh at the same path · reached via a symlink
+  alias · two checkouts sharing a basename} × {install · re-run install ·
+  remove · install over a seeded older-grammar artifact (legacy label,
+  unmarked cron line) · remove with a hand-made artifact in the namespace}
+  × {launchd arm · cron arm}.
+- [ ] **Invariants asserted after every cell**:
+  1. *Exactly-one*: any install sequence ends with exactly one artifact for
+     the repo (counted by enumeration), current grammar, carrying the id.
+  2. *Zero-after-remove*: remove leaves zero artifacts for the repo — the
+     machine returns to pristine.
+  3. *Enumerability*: every artifact any cell creates is findable via the
+     frozen ABI strings alone. No cell may mint an unenumerable artifact.
+  4. *Identity stability*: move / re-run / reinstall never change the id
+     (config.json byte-compared); a recreated repo mints a fresh id and the
+     old artifact still gets swept.
+  5. *No collateral*: operations on repo A never touch repo B's artifacts —
+     including the same-basename pair.
+- [ ] **The deleted-repo cell is honest about its gap**: with the repo gone,
+  `configure` has no home, so today the orphan merely *remains enumerable*
+  (assert that) — the precondition for the future machine-level sweep
+  command that owns this cell. The matrix keeps the gap visible until then.
+
+---
+
+## 8. Process guards
 
 - [ ] `RELEASING.md`: the checklist the release workflow enforces — changelog entry per release; the §2 semver gate; DESIGN §2's standing rule ("changes to core preserve the invariants or amend the list in the same change") asked explicitly in the PR template.
 - [ ] LOC budgets continue as-is (already enforced).
@@ -119,7 +158,8 @@ proves the model.
 ## Sequencing
 
 1. **Gate 0 hardening + Gate 1 artifact journey** — highest leverage; catches the bug classes actually shipped to date.
-2. **Compat corpus + digest goldens + interface snapshots** (Gate 2, §4) — the existing-clients guarantee; seed the corpus retroactively from the 0.1.0 / 0.2.1 / 0.3.0 tarballs already on npm.
-3. **Trusted-publishing release workflow + canary/promote + sentinel** (Gates 3–4).
-4. **Invariant torture suites** (§3) — the largest test-code investment; converts the design's claims into enforced properties.
-5. **Docs-runner + gh contract fixtures** (§5–6).
+2. **Wake-up lifecycle matrix** (§7) — cheap once the scheduler stubs exist, and it guards the newest code against the newest field-found bug class (stranded machine state).
+3. **Compat corpus + digest goldens + interface snapshots** (Gate 2, §4) — the existing-clients guarantee; seed the corpus retroactively from the 0.1.0 / 0.2.1 / 0.3.0 tarballs already on npm.
+4. **Trusted-publishing release workflow + canary/promote + sentinel** (Gates 3–4).
+5. **Invariant torture suites** (§3) — the largest test-code investment; converts the design's claims into enforced properties.
+6. **Docs-runner + gh contract fixtures** (§5–6).
