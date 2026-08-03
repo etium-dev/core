@@ -504,23 +504,23 @@ async function cmdInit(argv: string[]): Promise<number> {
   else out("  note   gh (GitHub CLI) not installed — fine unless GitHub should drive");
   if (!ghAuthed) out("         the engineer; then: brew install gh, and: gh auth login");
 
-  const installed: string[] = [];
-  const unauthed: string[] = [];
+  let anyHarness = false;
   for (const ad of allAdapters()) {
     if (ad.id === "exec" || ad.id === "replay") continue;
     if (sh(ad.id, ["--version"]).status !== 0) continue;
-    if (checkHarnessAuth(ad.id).ok) installed.push(ad.id);
-    else unauthed.push(ad.id);
+    anyHarness = true;
+    if (!ad.auth?.check) {
+      out(`  ok     harness ${ad.id} — installed (it manages its own sign-in: ${ad.auth?.remedy ?? "see its docs"})`);
+    } else if (checkHarnessAuth(ad.id).ok) {
+      out(`  ok     harness ${ad.id} — installed and signed in`);
+    } else {
+      out(`  needs  harness ${ad.id} sign-in — run: ${ad.auth?.remedy ?? "see its docs"}`);
+    }
   }
-  for (const id of installed) out(`  ok     harness ${id} — installed and authenticated`);
-  for (const id of unauthed) {
-    const remedy = allAdapters().find((a) => a.id === id)?.auth?.remedy ?? "see its docs";
-    out(`  needs  harness ${id} authentication — run: ${remedy}`);
-  }
-  if (installed.length === 0 && unauthed.length === 0) {
+  if (!anyHarness) {
     out("  note   no harnesses yet — harnesses are the coding agents etium");
-    out("         supervises (pi, claude, codex); install one before real runs,");
-    out("         e.g. pi: https://pi.dev");
+    out("         supervises (pi, codex; more coming); install one before");
+    out("         real runs, e.g. pi: https://pi.dev");
   }
   out();
   if (hardFail) {

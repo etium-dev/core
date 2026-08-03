@@ -101,7 +101,7 @@ export const piAdapter: HarnessAdapter = {
   auth: {
     // Credential vars pi documents (§10.2); declared values are always redacted.
     env: ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "OPENROUTER_API_KEY"],
-    remedy: "pi        # then /login",
+    remedy: "pi, then /login",
   },
   build(req: AdapterBuildRequest): BuildResult {
     const args = ["-p", "--mode", "json"];
