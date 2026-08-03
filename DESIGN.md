@@ -182,9 +182,9 @@ When every pending await in the loop is a gate with no decision, the supervisor 
 Loops are plain code. No DSL, no YAML, no build step (Node ≥ 22 type stripping runs `.ts` loop files directly).
 
 ```ts
-// loops/plan-implement.ts
-import type { Run } from "etium";
-import { t } from "etium";  // template loader, relative to this file; {{param}} interpolation
+// plan-implement — an M1 reference loop library (sketch)
+import type { Run } from "@etium/core";
+import { t } from "@etium/core";  // template loader, relative to this file; {{param}} interpolation
 
 export default async function planImplement(run: Run) {
   const plan = await run.step("plan", {
@@ -211,9 +211,9 @@ export default async function planImplement(run: Run) {
 ```
 
 ```ts
-// loops/ralph.ts
-import type { Run } from "etium";
-import { t } from "etium";
+// ralph/loop.ts — the reference loop (cloned into your repo by `etium clone-loop ralph`)
+import type { Run } from "@etium/core";
+import { t } from "@etium/core";
 
 export default async function ralph(run: Run) {
   const max = Number(run.params.iterations ?? 30);
@@ -226,7 +226,7 @@ export default async function ralph(run: Run) {
 }
 ```
 
-API surface (complete): `run.step(name, opts)`, `run.gate(name, opts?)`, `run.effect(name, fn)`, `run.abandon(reason)`, `run.task`, `run.params`, `run.id`, `run.workspace`, and `t(file)` (also available as `run.t(file)`, which is what bundled `.js` loops use to avoid importing the package). That is the whole vocabulary.
+API surface (complete): `run.step(name, opts)`, `run.gate(name, opts?)`, `run.effect(name, fn)`, `run.abandon(reason)`, `run.task`, `run.params`, `run.id`, `run.workspace`, and `t(file)` (also available as `run.t(file)`). That is the whole vocabulary.
 
 A gate is a question with a declared, finite answer set (ADR-008): `run.gate(name, { options: ["debug", "architecture", "plan"] })` returns `{ decision, note?, by }` where `decision` is the chosen element — deterministic loop code branches on it with a `switch`. Gates that declare nothing get the default set `["approve", "reject"]`; the binary gate is the degenerate case, not the definition. Free-form human input still travels in the note, whose consumer is the next prompt. Reference loops: `ralph` (M0), `plan-implement` (M1, above), `triage` (M2). Everything else is user-authored.
 
@@ -389,7 +389,7 @@ etium/                    # a single npm package: `etium` (see DECISIONS ADR-006
   src/                    # core ≤ ~3,000 LOC: ledger, fold, engine, runner, lock, mailbox, supervisor, tick
     adapters.ts           # exec, replay, codex, pi, claude, openhands — each ≤ ~300 LOC
     cli.ts
-  loops/                  # ralph (M0); plan-implement, triage (M1+) — each ≤ ~150 LOC (shipped as .js; user loops may be .ts)
+  ralph/                  # the reference loop library (M0) — copy-and-own via `etium clone-loop`, like ai-engineer/; plan-implement, triage follow (M1+); each loop ≤ ~150 LOC
   fixtures/               # captured raw streams per harness (golden transcripts)
   schema/                 # JSON Schema for envelope + events, versioned + golden example ledger
 ```

@@ -2,7 +2,7 @@
 // language-neutral contract. Keep them in sync; the schema wins on conflict.
 
 export const SCHEMA_VERSION = 1;
-export const ETIUM_VERSION = "0.6.1"; // must match package.json (enforced by test)
+export const ETIUM_VERSION = "0.7.0"; // must match package.json (enforced by test)
 
 // ---------------------------------------------------------------------------
 // Ledger envelope and event payloads (§5 of DESIGN.md)
@@ -44,7 +44,7 @@ export type DecisionVia = string;
 
 export interface RunCreatedData {
   taskSha256: string;
-  loop: string; // resolved loop module path or builtin name
+  loop: string; // resolved loop module path
   params: Record<string, string>;
   workspace: string;
   worktree?: { repo: string; branch: string; base: string; baseSha: string }; // set when the workspace is a git worktree (§4)
@@ -297,7 +297,7 @@ export interface SurfaceTask {
    * run is ever created per (surface id, key). */
   key: string;
   task: string; // task.md content
-  loop: string; // loop path or builtin name
+  loop: string; // loop module path
   params?: Record<string, string>;
   workspace?: string;
   /** Give the run its own git worktree + branch instead of a plain workspace. */

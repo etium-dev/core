@@ -10,8 +10,8 @@
 // MODEL_AUTH's delegation principle.
 //
 // Config (env): ETIUM_GH_REPO (owner/name, required), ETIUM_GH_TRUSTED
-// (comma-separated logins, required), ETIUM_GH_LOOP (loop path or builtin
-// name, required), ETIUM_GH_AGENT (login whose assignment triggers tasks;
+// (comma-separated logins, required), ETIUM_GH_LOOP (loop module path,
+// required), ETIUM_GH_AGENT (login whose assignment triggers tasks;
 // default: the authenticated user), ETIUM_GH_WORKDIR (the checkout to
 // branch from; default cwd), ETIUM_GH_BASE (PR base branch, default main),
 // ETIUM_GH_CMD (gh binary override; tests point this at a stub).

@@ -1,7 +1,6 @@
 // Harness adapters (§10). Core owns spawning, raw capture, redaction, budgets,
 // and kill; an adapter is a command builder plus a pure line parser.
 
-import { fileURLToPath } from "node:url";
 import * as path from "node:path";
 import type {
   AdapterBuildRequest,
@@ -224,9 +223,4 @@ export function resolve(
     return { adapter, parse: innerAdapter.parse?.bind(innerAdapter) };
   }
   return { adapter, parse: adapter.parse?.bind(adapter) };
-}
-
-export function bundledLoopsDir(): string {
-  // dist/adapters.js -> ../loops ; src/adapters.ts -> ../loops
-  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "loops");
 }

@@ -27,6 +27,8 @@ test("e2e: ralph with exec harness iterates until the check passes", async () =>
   const ws = path.join(b, "ws");
   fs.mkdirSync(ws, { recursive: true });
   fs.writeFileSync(path.join(ws, "PROMPT.md"), "echo hi >> out.log");
+  // No --loop: exercises the default, ralph/loop.ts — resolved from cwd,
+  // which under `node --test` is this repo's own copy of the library.
   const rc = await main([
     "run", "append until two lines",
     "--dir", b, "--workspace", ws, "--harness", "exec", "--sync",

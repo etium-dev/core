@@ -28,9 +28,10 @@ gh api user --jq .login
 > Setting up etium. Reply **yes** to accept everything, or correct any
 > item by number (for example: "2: ai-engineer"):
 > 1. Repository: `<detected absolute path — or ask: which repository should etium work in?>`
-> 2. Loop library: **none** (etium only). Say `ai-engineer` for the full
->    multi-persona workflow — it commits an `ai-engineer/` folder into the
->    repo.
+> 2. Loop library: **ralph** — the reference loop (one agent iterating
+>    until your check passes); commits a `ralph/` folder into the repo.
+>    Say `ai-engineer` for the full multi-persona workflow (commits an
+>    `ai-engineer/` folder), or `none` for etium only.
 > 3. GitHub wiring: **off** (you drive it from the terminal). Say `github`
 >    to have issue assignment and `/et` comments drive it.
 > 4. Throwaway verification work: a fresh temp directory. Name a directory
@@ -71,7 +72,7 @@ The accepted items bind these inputs, referenced by the steps below (round 1: 1�
 | `AGENT_LOGIN` | if `GITHUB_REPO` | GitHub login whose issue-assignment starts an attempt |
 | `WAKEUP` | if `GITHUB_REPO` | `watch` (foreground, nothing installed), `cron` (init installs the crontab entry), or `print` (line goes in the report) |
 | `SCRATCH_DIR` | no | writable directory for throwaway verification work; default: a fresh `mktemp -d` directory |
-| `LIBRARY` | **ask if omitted** | `ai-engineer` (clones the library — writes a commit; never assume it), `ralph` (built-in loop, nothing added), or `none` |
+| `LIBRARY` | yes (round 1, default `ralph`) | `ralph` (clones the reference loop — writes a commit), `ai-engineer` (clones the full workflow — writes a commit; only by explicit choice, never assumed), or `none` (nothing added) |
 
 ## Rules
 
@@ -149,7 +150,7 @@ installs or prints the crontab entry per the wake-up answer:
 
 ```sh
 cd "$REPO_DIR"
-etium init --library <ai-engineer|ralph|none> --github <owner/name|off> \
+etium init --library <ralph|ai-engineer|none> --github <owner/name|off> \
   --trusted <logins> --act-as <me|bot-login> --wakeup <watch|cron|print>
 ```
 
@@ -159,16 +160,17 @@ etium init --library <ai-engineer|ralph|none> --github <owner/name|off> \
 **verbatim** — each contains the command that fixes it — list them in the
 report as remaining steps, and stop.
 
-If the library was chosen, commit it:
+If a library was chosen, commit it:
 
 ```sh
-git add ai-engineer .gitignore
-git commit -m "Add etium ai-engineer loop library"
+git add "$LIBRARY" .gitignore
+git commit -m "Add etium $LIBRARY loop library"
 ```
 
-**Verify** (library chosen): `test -f ai-engineer/loop.ts && grep -qx '.etium/' .gitignore && ls ai-engineer/templates/*.md | wc -l` →
-both tests exit 0 and the count is `7`. When `LIBRARY=none` there is
-nothing to commit — continue to Step 3B.
+**Verify** (`LIBRARY=ai-engineer`): `test -f ai-engineer/loop.ts && grep -qx '.etium/' .gitignore && ls ai-engineer/templates/*.md | wc -l` →
+both tests exit 0 and the count is `7`.
+**Verify** (`LIBRARY=ralph`): `test -f ralph/loop.ts && grep -qx '.etium/' .gitignore` → exits 0.
+When `LIBRARY=none` there is nothing to commit — continue to Step 3C.
 
 ## Step 3A — acceptance test with the library (only if `LIBRARY=ai-engineer`)
 
@@ -207,7 +209,24 @@ with `outcome: done`.
 Cleanup: `rm -rf "$SCRATCH_DIR/etium-verify"`. If every PASS held, the
 setup is functional. If `GITHUB_REPO` was not provided, go to Step 5.
 
-## Step 3B — acceptance test, etium only (only if `LIBRARY=none`)
+## Step 3B — acceptance test with ralph (only if `LIBRARY=ralph`)
+
+Offline and model-free: the `exec` harness runs the prompt text as a shell
+command, so one iteration proves the clone, the template read, and the
+check sequencing. Run exactly:
+
+```sh
+git clone -q "$REPO_DIR" "$SCRATCH_DIR/etium-verify" && cd "$SCRATCH_DIR/etium-verify"
+echo 'echo ralph-was-here > proof.txt' > PROMPT.md
+etium run "verify ralph" --loop ralph/loop.ts --workspace . --harness exec \
+  --param check='test -f proof.txt' --sync
+```
+
+**PASS**: last line is `outcome: done`. Cleanup:
+`rm -rf "$SCRATCH_DIR/etium-verify"`. If `GITHUB_REPO` was not provided, go
+to Step 5.
+
+## Step 3C — acceptance test, etium only (only if `LIBRARY=none`)
 
 Entirely in scratch; nothing touches `REPO_DIR`:
 
@@ -241,8 +260,11 @@ account needs Write on the repository".
 
 ```sh
 cd "$REPO_DIR" && ETIUM_GH_REPO="$GITHUB_REPO" ETIUM_GH_TRUSTED="$TRUSTED" \
-  ETIUM_GH_AGENT="$AGENT_LOGIN" ETIUM_GH_LOOP=ai-engineer/loop.ts etium tick --surface github
+  ETIUM_GH_AGENT="$AGENT_LOGIN" ETIUM_GH_LOOP="$LIBRARY/loop.ts" etium tick --surface github
 ```
+
+(With `LIBRARY=none`, substitute the path of the operator's own loop for
+`$LIBRARY/loop.ts`.)
 
 **PASS**: exit 0, and output is either `no runs` or a list of per-run
 action lines. Any `surface-error` line: stop and report it verbatim.
@@ -255,7 +277,7 @@ End with a report to your operator containing exactly:
    verbatim output; for any SKIPPED, the gating input that caused it
    (e.g. `SKIPPED — GITHUB_REPO not provided`, `SKIPPED — LIBRARY=none`).
    Never invent other status words.
-2. The commit hash created in Step 2 (only when `LIBRARY=ai-engineer`).
+2. The commit hash created in Step 2 (only when a library was chosen).
 3. Remaining manual steps, chosen from: install the GitHub CLI and/or
    authenticate `gh` on this machine — **as the bot account when one was
    chosen**;

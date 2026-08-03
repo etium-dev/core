@@ -13,7 +13,7 @@ const rows = [
   ["adapters (src/adapters.ts)", count("src/adapters.ts"), 900],
   ["github surface (src/github.ts)", count("src/github.ts"), 450],
   ["cli (src/cli.ts)", count("src/cli.ts"), 1000],
-  ...readdirSync("loops").filter((f) => /\.(js|ts)$/.test(f)).map((f) => [`loop ${f}`, count(join("loops", f)), 150]),
+  ["ralph loop (ralph/loop.ts)", count("ralph/loop.ts"), 150],
   ["ai-engineer loop (ai-engineer/loop.ts)", count("ai-engineer/loop.ts"), 150],
 ];
 let fail = false;

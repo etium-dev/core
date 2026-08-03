@@ -32,7 +32,7 @@ the shape most serious loops share — maker/checker with a human gate.
 
 ```ts
 // fix.ts
-import type { Run } from "etium";
+import type { Run } from "@etium/core";
 
 export default async function fix(run: Run) {
   const plan = await run.step("plan", {

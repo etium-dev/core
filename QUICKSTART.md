@@ -88,11 +88,12 @@ pi
 `OPENAI_API_KEY`, `GEMINI_API_KEY`, or `OPENROUTER_API_KEY` through from your
 environment — values are redacted from everything etium writes to disk.)
 
-Now give an agent a task under the bundled `ralph` loop — iterate until the
-check passes:
+Now give an agent a task under the `ralph` reference loop — clone it, then
+iterate until the check passes:
 
 ```sh
 mkdir hello-pi && cd hello-pi
+etium clone-loop ralph
 echo "Create hello.txt containing exactly: hello world" > PROMPT.md
 etium run "pi says hello" --harness pi --workspace . \
   --param check="grep -q 'hello world' hello.txt" \
@@ -100,7 +101,8 @@ etium run "pi says hello" --harness pi --workspace . \
 etium tail <run>
 ```
 
-(`--workspace .` makes the current directory the step workspace — that's where
+(`--loop` defaults to `ralph/loop.ts` — the folder the clone just created.
+`--workspace .` makes the current directory the step workspace — that's where
 `PROMPT.md` is found and where the agent's files land. Omit it and each run
 gets a fresh empty workspace under `.etium/runs/<run>/ws/`.)
 
@@ -118,8 +120,8 @@ iterates or parks at the guard. Authenticate (`pi` → `/login`) and
 
 - **[WRITING_LOOPS.md](WRITING_LOOPS.md)** — the loop-authoring guide, built
   around a worked plan → approve → implement → escalate example.
-- `loops/ralph.js` is the whole reference loop — ~35 lines. Copy it, edit it;
-  loops are just code.
+- `ralph/loop.ts` is the whole reference loop — ~35 lines, already cloned
+  into your repo and yours to edit; loops are just code.
 - `DESIGN.md` for the contract; `PRODUCT.md` for why this exists.
 - Budgets: add `--param wall=10m`, or write a loop with per-step
   `budget: { wall, tokens, costUsd }`.

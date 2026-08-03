@@ -1,18 +1,10 @@
-// ralph — the reference loop (M0, §11): iterate a fresh-context agent step
+// ralph — the reference loop (§11): iterate a fresh-context agent step
 // against the same prompt until a check passes, under an iteration guard.
-// Bundled loops ship as .js (Node refuses to type-strip .ts inside
-// node_modules); loops in YOUR project can be .ts with zero build.
-//
-// params:
-//   prompt      template file (default PROMPT.md; loop dir then workspace)
-//   check       shell command; exit 0 ends the loop (omit = single pass)
-//   iterations  max agent steps before the guard gate (default 30)
-//   harness     codex | replay | exec … (default codex)
-//   model       passed through to the harness
-//   fixture     replay harness only
-//
-/** @param {import("../src/types.ts").Run} run */
-export default async function ralph(run) {
+// The contract (params, gates, artifacts) is README.md, next to this file.
+
+import type { Run } from "@etium/core";
+
+export default async function ralph(run: Run) {
   const max = Number(run.params.iterations ?? "30");
   const harness = run.params.harness ?? "codex";
   for (let i = 0; i < max; i++) {
@@ -30,7 +22,7 @@ export default async function ralph(run) {
   }
   const d = await run.gate("iteration-guard");
   if (d.decision === "reject") await run.abandon("iteration guard rejected");
-  // Approved: hand the (possibly noted) situation back as a fresh run of the
+  // Approved: hand the (possibly noted) situation back as a fresh pass of the
   // loop body by recursing once more through the same code path.
   await ralph(run);
 }

@@ -20,7 +20,7 @@ import { DEFAULT_GATE_OPTIONS, ETIUM_VERSION, type AnyEnvelope } from "./types.t
 const HELP = `etium — the outer loop for coding agents
 
 usage:
-  etium run [goal…] [--task file] [--loop name|path] [--harness h]
+  etium run [goal…] [--task file] [--loop path] [--harness h]
             [--param k=v]… [--approve gate]… [--sync]
             [--workspace dir | --worktree [--base ref]]   (--worktree: own branch etium/<run-id> off ref|HEAD of the repo at cwd)
   etium status [run]         one line per run, or detail for one
@@ -34,8 +34,8 @@ usage:
   etium tick [--surface name|path]…   reconcile all runs; poll/project surfaces (cron-safe, idempotent)
   etium watch [--surface name|path]… [--every seconds]   tick on an interval, foreground (Ctrl-C to stop)
   etium rebuild <run>        rebuild state.json from the ledger
-  etium clone-loop [library] [--into dir]   copy a bundled loop library into your repo (no arg: list)
-  etium init [--library ai-engineer|none] [--github owner/name|off] [--trusted logins]
+  etium clone-loop [library] [--into dir]   copy a loop library (ralph, ai-engineer) into your repo (no arg: list)
+  etium init [--library ralph|ai-engineer|none] [--github owner/name|off] [--trusted logins]
              [--act-as login|me] [--wakeup watch|cron|print] [--yes]
              check dependencies (with fix commands), ask the setup questions, apply
   etium --version
@@ -125,7 +125,7 @@ async function cmdRun(argv: string[]): Promise<number> {
   const { values: v, positionals } = parseArgs({
     args: argv,
     options: {
-      loop: { type: "string", default: "ralph" },
+      loop: { type: "string" },
       task: { type: "string" },
       harness: { type: "string" },
       param: { type: "string", multiple: true },
@@ -161,7 +161,7 @@ async function cmdRun(argv: string[]): Promise<number> {
   try {
     created = createRun(b, {
       task: taskText,
-      loop: v.loop!,
+      loop: v.loop ?? "ralph/loop.ts",
       params,
       workspace: v.workspace,
       worktree: v.worktree ? { repo: process.cwd(), base: v.base } : undefined,
@@ -170,7 +170,10 @@ async function cmdRun(argv: string[]): Promise<number> {
       idSeed: v.task ? path.basename(v.task, path.extname(v.task)) : goal,
     });
   } catch (e) {
-    process.stderr.write(`etium run: ${e instanceof Error ? e.message : String(e)}\n`);
+    let msg = e instanceof Error ? e.message : String(e);
+    if (!v.loop && msg.startsWith("loop not found"))
+      msg += `\n  (no --loop given; the default is ralph/loop.ts — put the reference loop there:\n   etium clone-loop ralph)`;
+    process.stderr.write(`etium run: ${msg}\n`);
     return 2;
   }
 
@@ -384,7 +387,7 @@ async function cmdTail(argv: string[]): Promise<number> {
 /** Loop libraries bundled in the package: copy-and-own content (`etium
  * clone-loop <name>`). A cloned library is the user's to edit; upgrades are
  * a fresh clone into a scratch dir and a diff, never an auto-merge. */
-const LIBRARIES = ["ai-engineer"];
+const LIBRARIES = ["ralph", "ai-engineer"];
 
 function cmdCloneLoop(argv: string[]): number {
   const { values: v, positionals } = parseArgs({
@@ -415,7 +418,8 @@ function cmdCloneLoop(argv: string[]): number {
   const has = fs.existsSync(gi) && fs.readFileSync(gi, "utf8").split("\n").includes(".etium/");
   if (!has) fs.appendFileSync(gi, `${fs.existsSync(gi) && !fs.readFileSync(gi, "utf8").endsWith("\n") ? "\n" : ""}.etium/\n`);
   const rel = path.relative(process.cwd(), dest) || ".";
-  process.stdout.write(`cloned ${name} → ${rel}/ (yours to edit)\nnext: ${rel}/TUTORIAL.md, or dry-run:\n  etium run "hello" --loop ${rel}/loop.ts --worktree --harness exec --param rounds=1\n`);
+  const guide = fs.existsSync(path.join(dest, "TUTORIAL.md")) ? "TUTORIAL.md" : "README.md";
+  process.stdout.write(`cloned ${name} → ${rel}/ (yours to edit) — see ${rel}/${guide}\n`);
   return 0;
 }
 
@@ -629,12 +633,13 @@ async function cmdInit(argv: string[]): Promise<number> {
       "Loops",
       [
         "Etium runs \"loops\": programs that sequence agent steps and human",
-        "approval gates. Two ship with etium today. Any run can use any",
-        "loop — this choice sets up your starting point.",
+        "approval gates. Two ship with etium; your pick is cloned into this",
+        "repo as a folder you own. Any run can use any loop — this choice",
+        "just sets up your starting point.",
       ],
       [
-        { label: "ralph — one agent iterating until your check passes (built in)", value: "ralph" },
-        { label: "ai-engineer — the multi-persona engineering workflow (cloned into this repo)", value: "ai-engineer" },
+        { label: "ralph — one agent iterating until your check passes", value: "ralph" },
+        { label: "ai-engineer — the multi-persona engineering workflow", value: "ai-engineer" },
         { label: "none — you'll write your own", value: "none" },
       ],
       0,
@@ -719,16 +724,19 @@ async function cmdInit(argv: string[]): Promise<number> {
     rl?.close();
 
     out();
-    if (library !== "none" && library !== "ralph") {
-      const r = await main(["clone-loop", library]);
-      if (r !== 0) return r;
+    if (library !== "none") {
+      if (fs.existsSync(path.resolve(library))) out(`${library}/ is already in this repo — leaving it untouched.`);
+      else {
+        const r = await main(["clone-loop", library]);
+        if (r !== 0) return r;
+      }
     }
     if (github === "off") {
       out(style("1", "Done. Next:"));
       out();
       if (library === "ralph") {
         out(`  echo "your goal, precisely stated" > PROMPT.md`);
-        out(`  etium run "your goal" --loop ralph --workspace . --param check="npm test"`);
+        out(`  etium run "your goal" --loop ralph/loop.ts --workspace . --param check="npm test"`);
         out();
         out(`  ralph iterates the agent until the check passes; swap in any check.`);
       } else if (library === "none") {
@@ -739,7 +747,7 @@ async function cmdInit(argv: string[]): Promise<number> {
       return 0;
     }
     const agentLogin = actAs === "me" ? ghLogin : actAs;
-    const env = `ETIUM_GH_REPO=${github} ETIUM_GH_TRUSTED=${trusted} ETIUM_GH_AGENT=${agentLogin} ETIUM_GH_LOOP=${library === "none" ? "<path-to-your-loop>" : library === "ralph" ? "ralph" : `${library}/loop.ts`}`;
+    const env = `ETIUM_GH_REPO=${github} ETIUM_GH_TRUSTED=${trusted} ETIUM_GH_AGENT=${agentLogin} ETIUM_GH_LOOP=${library === "none" ? "<path-to-your-loop>" : `${library}/loop.ts`}`;
     const cronLine = `* * * * * cd ${repoDir} && ${env} etium tick --surface github >> .etium/tick.log 2>&1`;
     if (wakeup === "cron") {
       const cur = sh("crontab", ["-l"]);

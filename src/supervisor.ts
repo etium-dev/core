@@ -6,7 +6,6 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
-import { bundledLoopsDir } from "./adapters.ts";
 import { executeLoop, type EngineOutcome } from "./engine.ts";
 import { LedgerWriter, loadState, writeStateCache, sha256 } from "./ledger.ts";
 import { acquireLock, isLockLive, lockPath, readLock, releaseLock } from "./lock.ts";
@@ -14,7 +13,7 @@ import { activeChildren, checkHarnessAuth, runStep, type StepAuthResult } from "
 import { ETIUM_VERSION, type LoopFn } from "./types.ts";
 
 export interface LoopConfig {
-  loop: string; // absolute module path (or builtin already resolved to one)
+  loop: string; // absolute module path
   params: Record<string, string>;
   workspace: string;
   preapprove?: string[];
@@ -31,7 +30,7 @@ export function loopConfigPath(runDir: string): string {
 
 export interface CreateRunSpec {
   task: string; // task.md content
-  loop: string; // builtin name or path to a loop module
+  loop: string; // path to a loop module (relative paths resolve from cwd)
   params?: Record<string, string>;
   workspace?: string; // default: <runDir>/ws
   /** Give the run its own git worktree at <base>/worktrees/<run-id> on a fresh
@@ -49,14 +48,9 @@ function slug(s: string): string {
   );
 }
 
-/** Resolve a builtin loop name or user path to an absolute module path. */
+/** Resolve a loop module path (absolute or cwd-relative) to an absolute one.
+ * One convention, no builtin names: loops are files in your repo (ADR-016). */
 export function resolveLoop(ref: string): string {
-  if (!ref.includes("/") && !ref.includes(".")) {
-    const cands = [path.join(bundledLoopsDir(), `${ref}.js`), path.join(bundledLoopsDir(), `${ref}.ts`)];
-    const hit = cands.find((p) => fs.existsSync(p));
-    if (!hit) throw new Error(`unknown builtin loop "${ref}"`);
-    return hit;
-  }
   const p = path.resolve(ref);
   if (!fs.existsSync(p)) throw new Error(`loop not found: ${p}`);
   return p;

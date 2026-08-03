@@ -61,12 +61,15 @@ next prompt. `kill -9` anything at any time; `etium tick` (cron-safe,
 idempotent) reconciles every run back to where it should be. That is the whole
 liveness story.
 
-The bundled reference loop is `ralph` (iterate until a check passes):
+The reference loop is `ralph` (iterate until a check passes) — like every
+etium loop library, it is cloned into your repo, where it's yours to edit:
 
 ```sh
-etium run "make the tests pass" --loop ralph \
-  --param check="npm test" --param iterations=20
+etium clone-loop ralph
+etium run "make the tests pass" --param check="npm test" --param iterations=20
 ```
+
+(`--loop` defaults to `ralph/loop.ts`; any path works.)
 
 ## What a run is
 
@@ -96,7 +99,7 @@ Budgets are enforced in CI (`npm run budget`):
 | core (ledger, engine, runner, supervisor, tick) | 3,000 |
 | each adapter | 300 |
 | the built-in github surface | 450 |
-| each bundled loop | 150 |
+| each shipped loop (ralph, ai-engineer) | 150 |
 
 Current core: ~2,100. If etium needs more than this, it is becoming the thing
 it exists to avoid.

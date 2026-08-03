@@ -20,6 +20,11 @@ test("clone-loop: copies the library, ignores .etium/, never overwrites, rejects
   assert.equal(fs.readdirSync(path.join(dest, "templates")).filter((f) => f.endsWith(".md")).length, 7);
   assert.ok(fs.readFileSync(path.join(root, ".gitignore"), "utf8").split("\n").includes(".etium/"));
 
+  const rdest = path.join(root, "ralph");
+  assert.equal(await main(["clone-loop", "ralph", "--into", rdest]), 0);
+  assert.ok(fs.existsSync(path.join(rdest, "loop.ts")));
+  assert.ok(fs.existsSync(path.join(rdest, "README.md"))); // the contract ships with the loop
+
   assert.equal(await main(["clone-loop", "ai-engineer", "--into", dest]), 1); // never overwrite
   assert.equal(await main(["clone-loop", "no-such-library"]), 2);
   assert.equal(await main(["clone-loop"]), 0); // bare form lists
@@ -40,6 +45,9 @@ test("init (flags mode): checks, clones the library, exits 1 outside a repo", ()
   assert.equal(ok.status, 0, ok.stderr);
   assert.match(ok.stdout, /ok\s+node/);
   assert.ok(fs.existsSync(path.join(repo, "ai-engineer", "loop.ts")));
+  const ok2 = spawnSync(process.execPath, [cli, "init", "--library", "ralph", "--github", "off"], { cwd: repo, encoding: "utf8", env });
+  assert.equal(ok2.status, 0, ok2.stderr);
+  assert.ok(fs.existsSync(path.join(repo, "ralph", "loop.ts")));
   const bare = path.join(root, "empty");
   fs.mkdirSync(bare);
   const bad = spawnSync(process.execPath, [cli, "init", "--library", "none", "--github", "off"], { cwd: bare, encoding: "utf8", env });

@@ -535,3 +535,35 @@ keep their classified npm flow.
 the regime where codex's certificate revocation lives). Keeping pi's
 locked-install (needs a release-metadata API we don't run). A from-source
 fallback (removed earlier; unchanged). npx (a permanent second path).
+
+---
+
+## ADR-016 — ralph is a loop library like any other; builtin loops removed
+
+**Decision.** The loop library is one convention with no privileged member:
+a library is a directory (`loop.ts` + a `README.md` contract, templates
+when it has any) shipped inside the npm tarball as copy-and-own content and
+delivered by `etium clone-loop <name>`. `ralph` — previously a bare
+`loops/ralph.js` resolved by builtin name — becomes `ralph/` (TypeScript at
+last, plus the README the authoring guide already mandates), and the
+special machinery is deleted: builtin-name resolution in `resolveLoop`,
+`bundledLoopsDir()`, and the `loops/` directory. `--loop` takes paths,
+period; its default is the path `ralph/loop.ts`, and when nothing is there
+the error teaches `etium clone-loop ralph`. `etium init` clones whichever
+library is chosen (ralph stays the default choice) and leaves an existing
+clone untouched.
+
+**Why.** Two file conventions, two distribution models, and two resolution
+mechanisms — for a library of two loops. Every oddity was downstream of
+ralph predating the convention (ADR-013, WRITING_LOOPS): the `.js`
+requirement existed only because the file executed from `node_modules`;
+the missing README under-complied with our own authoring guide; choosing
+ralph in init did nothing. Fewer ways, one mental model: loops are
+directories you clone into your repo and own. Core got smaller.
+
+**Rejected.** Keeping ralph builtin as the zero-setup default (Enter in
+init now copies a visible, stated folder — the menu label is the consent,
+and the guided path feels identical). Compiling `ralph.ts` into `dist/` to
+keep a builtin (a build artifact between the user and the ~35 lines they
+are meant to read). A `--loop ralph` name alias over the clone (a second
+resolution mechanism — the thing being deleted).
