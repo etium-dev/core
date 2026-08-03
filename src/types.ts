@@ -2,7 +2,7 @@
 // language-neutral contract. Keep them in sync; the schema wins on conflict.
 
 export const SCHEMA_VERSION = 1;
-export const ETIUM_VERSION = "0.1.0";
+export const ETIUM_VERSION = "0.2.1"; // must match package.json (enforced by test)
 
 // ---------------------------------------------------------------------------
 // Ledger envelope and event payloads (§5 of DESIGN.md)

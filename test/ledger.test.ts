@@ -4,6 +4,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fold, LedgerWriter, ledgerPath, readLedger, repairLedger } from "../src/ledger.ts";
+import { ETIUM_VERSION } from "../src/types.ts";
 
 function tmp(): string {
   const d = fs.mkdtempSync(path.join(os.tmpdir(), "etium-ledger-"));
@@ -72,4 +73,11 @@ test("fold derives status through the lifecycle", () => {
   const st = fold("r", readLedger(runDir));
   assert.equal(st.status, "completed");
   assert.equal(st.gates.get("g.0")?.decided, undefined);
+});
+
+test("ETIUM_VERSION matches package.json (the constant the ledger stamps)", () => {
+  const pkg = JSON.parse(
+    fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+  ) as { version: string };
+  assert.equal(ETIUM_VERSION, pkg.version);
 });
