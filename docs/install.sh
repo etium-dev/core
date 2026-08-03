@@ -99,14 +99,25 @@ etium_installer_main() {
   fi
   if installed_etium_is_first_on_path; then
     printf '\nRun it with: etium\nSet it up in your repository with: etium init\n'
+    print_harness_note
     if [ "${ETIUM_NODE_INSTALLED_STANDALONE:-0}" = 1 ]; then
       printf 'If etium is not found in your shell yet, add this to your shell profile:\n\n'
       printf '  export PATH="%s:$PATH"\n' "$ETIUM_STANDALONE_NODE_BIN"
     fi
   else
     print_etium_not_on_path_message
+    print_harness_note
   fi
 
+}
+
+print_harness_note() {
+  if command -v pi >/dev/null 2>&1 || command -v codex >/dev/null 2>&1; then
+    return 0
+  fi
+  printf '\nEtium supervises coding agents ("harnesses") — install at least one:\n\n'
+  printf '  pi     https://pi.dev\n'
+  printf '  codex  https://github.com/openai/codex\n'
 }
 
 run_preflight_checks() {
