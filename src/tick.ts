@@ -273,3 +273,19 @@ export async function tickOnce(
   }
   return actions;
 }
+
+/** `etium watch`: tick on an interval — the no-install foreground
+ * alternative to cron (ADR-003: sugar over tick; it holds no state). */
+export async function watchLoop(
+  base: string,
+  entry: string,
+  surfaces: Surface[],
+  everyMs: number,
+  onActions: (a: TickAction[]) => void,
+  maxLoops = Infinity,
+): Promise<void> {
+  for (let i = 0; i < maxLoops; i++) {
+    onActions(await tickOnce(base, entry, false, surfaces));
+    if (i + 1 < maxLoops) await new Promise((r) => setTimeout(r, everyMs));
+  }
+}

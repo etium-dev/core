@@ -173,3 +173,14 @@ test("surface abandons: lifecycle facts terminate runs; completed runs are skipp
   const again = await tickOnce(base, "unused-entry", true, [f.surface]);
   assert.ok(again.some((x) => x.action === "surface-skip" && /already completed/.test(x.detail ?? "")));
 });
+
+test("watchLoop: ticks on an interval and reports actions", async () => {
+  const { base, loopPath } = tmpBase();
+  const f = fakeSurface("gh");
+  f.tasks = [{ key: "evt-1", task: "work", loop: loopPath }];
+  const batches: unknown[][] = [];
+  const { watchLoop } = await import("../src/tick.ts");
+  await watchLoop(base, "unused-entry", [f.surface], 10, (a) => batches.push(a), 2);
+  assert.equal(batches.length, 2);
+  assert.ok((batches[0] as { action: string }[]).some((a) => a.action === "surface-task"));
+});

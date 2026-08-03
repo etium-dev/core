@@ -116,7 +116,15 @@ machine that will run the work (your laptop is fine):
 gh auth status        # gh must be authenticated for the target repo
 ```
 
-Add one cron line (this *is* the deployment):
+Trying it out? Skip cron entirely — run it in the foreground while you
+play (`Ctrl-C` to stop; nothing is installed):
+
+```sh
+ETIUM_GH_REPO=you/your-repo ETIUM_GH_TRUSTED=your-login \
+  ETIUM_GH_LOOP=ai-engineer/loop.ts etium watch --surface github
+```
+
+For always-on, one cron line (this *is* the deployment):
 
 ```
 * * * * *  cd /path/to/your-repo && \

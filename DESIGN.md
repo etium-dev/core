@@ -137,7 +137,7 @@ There is no daemon. Three process roles, all short-lived or step-lived:
 - **Supervisor** (one per active run): holds the lock, executes the loop function under replay, spawns step subprocesses, enforces budgets, appends events. Exits when the run completes, errors, or parks.
 - **`etium tick`**: idempotent janitor. For each run: skip live supervisors and completed runs; if the run is resumable (interrupted; running with a dead or stale lock; created but never supervised; or parked with a pending decision in the mailbox) → spawn a detached supervisor. The attaching supervisor — never tick — clears the stale lock and appends `run.interrupted` (with the dead holder's pid/host/lock age, or `no-lock` if a prior supervisor died between releasing the lock and recording an outcome), preserving Invariant 4: only the lock holder writes. Guarded by a global tick lock so overlapping cron invocations no-op. `tick` also drives pull-based surface adapters (§10.3) when invoked with `--surface <path>`: surfaces are polled first (so a decision polled this tick resumes its run this tick), runs are reconciled second, projections run last.
 
-`etium watch` is sugar: `loop { tick; sleep 30 }`. It holds no state and gets no socket. Cron calling `tick` is the supported "automation" mechanism; scheduling semantics belong to cron.
+`etium watch` is sugar: tick on an interval, foreground. It holds no state and gets no socket. Cron calling `tick` is the supported "automation" mechanism; scheduling semantics belong to cron.
 
 ### 6.2 Replay-memoized loop execution
 
@@ -403,7 +403,7 @@ LOC budgets are enforced in CI and published in the README — both a feature an
 
 Testing: adapter parser tests against golden fixtures; property tests on the fold (random valid event interleavings preserve invariants); end-to-end on the `replay` harness; crash-injection (SIGKILL a real detached supervisor mid-step; assert `tick` recovers, completed steps never re-execute, interrupted steps re-execute at most from scratch); torn-last-line recovery tests. Model auth (ADR-007): `resolveEnv` passes declared-and-present vars through under `agent`, omits absent ones, leaves `host` and `env.add` precedence unchanged, and registers every passed-through value as a redaction secret unconditionally; passthrough values are redacted in raw, stderr, and `grade.txt`; a failing pre-spawn check appends no `step.started`, ends the run `error` with the remedy in the summary, and a subsequent resume executes the step under the same occurrence; changing host-env credential presence between attaches never diverges; `doctor` against a fake adapter; `exec`/`replay` declare nothing, keeping the test substrate credential-free.
 
-CLI (M0 set): `run`, `status`, `tail`, `gates`, `approve`, `reject`, `decide`, `resume`, `abandon`, `tick`, `rebuild`, `clone-loop`. M1 adds: `redo`, `gc`, `watch`, `doctor`.
+CLI (M0 set): `run`, `status`, `tail`, `gates`, `approve`, `reject`, `decide`, `resume`, `abandon`, `tick`, `rebuild`, `clone-loop`, `watch`. M1 adds: `redo`, `gc`, `doctor`.
 
 ---
 

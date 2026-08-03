@@ -10,7 +10,7 @@ import { parseArgs } from "node:util";
 import { loadState, openGates, readLedger, writeStateCache } from "./ledger.ts";
 import { isLockLive, readLock, writeDecision } from "./lock.ts";
 import { abandonRun, createRun, supervise, superviseDetached } from "./supervisor.ts";
-import { loadSurfaces, tickOnce } from "./tick.ts";
+import { loadSurfaces, tickOnce, watchLoop } from "./tick.ts";
 import { DEFAULT_GATE_OPTIONS, ETIUM_VERSION, type AnyEnvelope } from "./types.ts";
 
 const HELP = `etium — the outer loop for coding agents
@@ -28,6 +28,7 @@ usage:
   etium abandon <run> [--reason text]
   etium tail    <run> [--once]
   etium tick [--surface name|path]…   reconcile all runs; poll/project surfaces (cron-safe, idempotent)
+  etium watch [--surface name|path]… [--every seconds]   tick on an interval, foreground (Ctrl-C to stop)
   etium rebuild <run>        rebuild state.json from the ledger
   etium clone-loop [library] [--into dir]   copy a bundled loop library into your repo (no arg: list)
   etium --version
@@ -411,6 +412,26 @@ function cmdCloneLoop(argv: string[]): number {
   return 0;
 }
 
+async function cmdWatch(argv: string[]): Promise<number> {
+  const { values: v } = parseArgs({
+    args: argv,
+    options: {
+      dir: { type: "string" },
+      surface: { type: "string", multiple: true },
+      every: { type: "string" },
+    },
+  });
+  const surfaces = await loadSurfaces(v.surface ?? []);
+  const everyMs = Math.max(5, Number(v.every ?? "30")) * 1000;
+  process.stdout.write(`watching every ${everyMs / 1000}s — Ctrl-C to stop\n`);
+  await watchLoop(base(v.dir), entry, surfaces, everyMs, (actions) => {
+    for (const a of actions)
+      if (a.action !== "skip-completed" && a.action !== "skip-parked")
+        process.stdout.write(`${a.run.padEnd(36)} ${a.action}${a.detail ? `  (${a.detail})` : ""}\n`);
+  });
+  return 0;
+}
+
 async function cmdTick(argv: string[]): Promise<number> {
   const { values: v } = parseArgs({
     args: argv,
@@ -469,6 +490,8 @@ export async function main(argv: string[]): Promise<number> {
         return await cmdTail(rest);
       case "tick":
         return await cmdTick(rest);
+      case "watch":
+        return await cmdWatch(rest);
       case "rebuild":
         return cmdRebuild(rest);
       case "clone-loop":
