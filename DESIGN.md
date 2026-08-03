@@ -412,7 +412,7 @@ CLI (M0 set): `run`, `status`, `tail`, `gates`, `approve`, `reject`, `decide`, `
 1. **Config-as-code** (`etium.config.ts`, evaluated to a plain object, core-only) — working position, confirm at M0.
 2. `redo` / `step.invalidated` fine print (M1).
 3. ~~Run-ID format and collision handling~~ — settled at M0: `YYYY-MM-DD-<goal-slug>-<rand4>`; prefix matching in the CLI.
-4. ~~npm name~~ — settled: the project is **Etium**; GitHub org `etium-dev` is held; npm does not allow parking, so publishing `etium@0.1.0` (this package) is the claim. Do this before any publicity.
+4. ~~npm name~~ — settled twice: the project is **Etium**; GitHub org `etium-dev` is held. npm's typosquat guard rejects the bare name (`etium` is too similar to `cesium`), so the package is **`@etium/core`** under the `etium` npm org — mirroring `github.com/etium-dev/core`, with the scope housing future artifacts (`@etium/mcp`). The CLI command remains `etium` (the `bin` name is independent of the package name).
 5. ~~License~~ — settled: MIT (LICENSE in repo), matching Pi and OpenHands.
 6. The `codex` adapter parser is provisional pending real fixture capture (`scripts/capture-fixtures.sh`); harden and de-flag in M0 before the dogfooding exit criterion.
 

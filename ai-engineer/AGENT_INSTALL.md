@@ -41,7 +41,7 @@ etium --version
 **PASS**: prints a version (e.g. `0.1.0`). If the command is missing, run:
 
 ```sh
-npm install -g etium
+npm install -g @etium/core
 ```
 
 If that fails (package not yet published or registry unreachable), install

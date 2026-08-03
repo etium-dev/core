@@ -21,7 +21,7 @@ example.
 ## Install
 
 ```sh
-npm install -g etium     # Node ≥ 22.18
+npm install -g @etium/core     # Node ≥ 22.18
 ```
 
 ## Sixty seconds
@@ -97,7 +97,7 @@ Budgets are enforced in CI (`npm run budget`):
 | each adapter | 300 |
 | each bundled loop | 150 |
 
-Current core: ~1,600. If etium needs more than this, it is becoming the thing
+Current core: ~2,100. If etium needs more than this, it is becoming the thing
 it exists to avoid.
 
 ## Adapters

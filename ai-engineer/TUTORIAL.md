@@ -10,7 +10,7 @@ harnesses bring their own auth, `gh` brings yours.
 ## 0. Install
 
 ```sh
-npm install -g etium        # Node ≥ 22.18
+npm install -g @etium/core        # Node ≥ 22.18
 git clone https://github.com/etium-dev/core etium-src
 cp -r etium-src/ai-engineer /path/to/your-repo/ai-engineer
 ```

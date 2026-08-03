@@ -104,7 +104,7 @@ The non-goals are the product. Core will never:
 
 Pre-release; design is public (`DESIGN.md`). Roadmap: **M0** — kernel, `exec`/`replay`/`codex` adapters, the ralph loop, crash-recovery guarantees; from day one, etium is built by a Codex loop running under etium. **M1** — worktrees, token/cost budgets, Pi and Claude Code adapters, the plan→gate→implement→verify loop. **M2** — the GitHub surface (issues become tasks, labels become gate decisions, one status comment as a ledger projection), OpenHands adapter. **M3** — trace exporters, a static HTML trace viewer, the loop-authoring guide, `etium-mcp`.
 
-MIT licensed. TypeScript, Node ≥ 22.18. `npm i -g etium`.
+MIT licensed. TypeScript, Node ≥ 22.18. `npm i -g @etium/core`.
 
 ---
 
