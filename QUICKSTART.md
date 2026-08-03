@@ -3,13 +3,15 @@
 Two hello-worlds: one that runs offline in sixty seconds and shows you what
 etium *is*, and one that drives a real coding agent (Pi).
 
-## Setup (from a checkout)
+## Setup
 
 Node ≥ 22.18. Then:
 
 ```sh
-npm install && npm run build && npm link    # gives you `etium` on PATH
+npm install -g @etium/core     # gives you `etium` on PATH
 ```
+
+(From a checkout instead: `npm install && npm run build && npm link`.)
 
 ## Hello world, offline — the shape of a run
 

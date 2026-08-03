@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quick start — Etium</title>
+<meta name="description" content="Two hello-worlds: one offline in sixty seconds that shows you what etium is, and one that drives a real coding agent.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>⟳</text></svg>">
+<style>
+  :root {
+    --bg: #faf9f6; --fg: #1a1a1a; --dim: #6b6b6b; --line: #e2e0da;
+    --code-bg: #f1efe9; --accent: #0d5c4d; --accent-dim: #0d5c4d22;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12130f; --fg: #e8e6e1; --dim: #96948d; --line: #2a2b26;
+      --code-bg: #1c1d18; --accent: #6fc7b2; --accent-dim: #6fc7b222;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font: 17px/1.65 ui-serif, Georgia, "Times New Roman", serif;
+    padding: 0 1.25rem;
+  }
+  main { max-width: 44rem; margin: 0 auto; padding: 3.5rem 0 5rem; }
+  code, pre, .mono {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.85em;
+  }
+  code { background: var(--code-bg); padding: 0.1em 0.35em; border-radius: 4px; }
+  pre {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px;
+    padding: 1rem 1.2rem; overflow-x: auto; line-height: 1.55; margin: 1.4rem 0;
+  }
+  pre code { background: none; padding: 0; }
+  h1 { font-size: 2.2rem; line-height: 1.15; font-weight: 600; letter-spacing: -0.01em; margin-top: 0.8rem; }
+  h2 {
+    font-size: 1.05rem; text-transform: uppercase; letter-spacing: 0.12em;
+    color: var(--dim); font-weight: 600; margin: 3.2rem 0 1rem;
+    padding-top: 1.6rem; border-top: 1px solid var(--line);
+  }
+  p { margin: 0.9rem 0; }
+  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  .brand { font-size: 0.95rem; letter-spacing: 0.22em; text-transform: uppercase; color: var(--dim); }
+  .brand a { color: var(--dim); text-decoration: none; }
+  .lede { color: var(--dim); font-size: 1.1rem; font-style: italic; }
+  ul { padding-left: 1.2rem; }
+  li { margin: 0.45rem 0; }
+  .cmt { color: var(--dim); }
+  footer {
+    border-top: 1px solid var(--line); margin-top: 4rem; padding-top: 1.4rem;
+    color: var(--dim); font-size: 0.9rem;
+  }
+  footer a { margin-right: 1.2rem; }
+</style>
+</head>
+<body>
+<main>
+  <div class="brand"><a href="./">Etium</a> · quick start</div>
+  <h1>Quick start</h1>
+  <p class="lede">Two hello-worlds: one that runs offline in sixty seconds and
+  shows you what etium <em>is</em>, and one that drives a real coding
+  agent (Pi).</p>
+
+  <h2>Setup</h2>
+<pre><code>npm install -g @etium/core     <span class="cmt"># Node ≥ 22.18; gives you `etium` on PATH</span></code></pre>
+
+  <h2>Hello world, offline — the shape of a run</h2>
+  <p>Etium's whole model: a <strong>loop</strong> is a plain TypeScript file
+  that sequences <strong>steps</strong> (headless subprocesses) and
+  <strong>gates</strong> (parks until a human decides). No tokens, no model,
+  no network needed to see it work — <code>exec</code> runs any command as a
+  step.</p>
+<pre><code><span class="cmt">// hello.ts</span>
+export default async function (run) {
+  await run.step("greet", { harness: "exec", command: "echo hello &gt; hello.txt" });
+  const d = await run.gate("publish?", { show: ["hello.txt"] });
+  await run.step("publish", {
+    harness: "exec",
+    command: `echo "hello, ${d.by}" &gt; published.txt`,
+  });
+}</code></pre>
+<pre><code>etium run "say hello" --loop hello.ts
+etium status              <span class="cmt"># run is parked at the gate; no process is resident</span>
+etium gates               <span class="cmt"># what's waiting on you</span></code></pre>
+  <p>The run parked. Nothing is running — <code>kill -9</code> anything you
+  like. Now decide:</p>
+<pre><code>etium approve &lt;run&gt; "publish?" --note "ship it"
+etium tail &lt;run&gt;          <span class="cmt"># watch it resume, replay past the done step, finish</span></code></pre>
+  <p>Everything that happened is files: <code>ls .etium/runs/&lt;run&gt;/</code> —
+  <code>events.jsonl</code> is the append-only ledger (authority for control
+  flow), <code>steps/</code> holds each step's exact prompt and raw stream,
+  <code>decisions/</code> carried your approval.
+  <code>grep gate .etium/runs/*/events.jsonl</code> works. That's the
+  product.</p>
+
+  <h2>Hello world with Pi — a real agent in the loop</h2>
+  <p><a href="https://pi.dev">Pi</a> authenticates itself — etium never
+  touches model credentials (see the model-auth doc in
+  <a href="https://github.com/etium-dev/core">the repo</a>). One-time, per
+  machine:</p>
+<pre><code>pi            <span class="cmt"># interactive; run /login and pick your provider, then quit</span></code></pre>
+  <p>(API-key users can skip the login: the pi adapter passes
+  <code>ANTHROPIC_API_KEY</code>, <code>OPENAI_API_KEY</code>,
+  <code>GEMINI_API_KEY</code>, or <code>OPENROUTER_API_KEY</code> through
+  from your environment — values are redacted from everything etium writes
+  to disk.)</p>
+  <p>Now give an agent a task under the bundled <code>ralph</code> loop —
+  iterate until the check passes:</p>
+<pre><code>mkdir hello-pi &amp;&amp; cd hello-pi
+echo "Create hello.txt containing exactly: hello world" &gt; PROMPT.md
+etium run "pi says hello" --harness pi --workspace . \
+  --param check="grep -q 'hello world' hello.txt" \
+  --param iterations=3
+etium tail &lt;run&gt;</code></pre>
+  <p>(<code>--workspace .</code> makes the current directory the step
+  workspace — that's where <code>PROMPT.md</code> is found and where the
+  agent's files land. Omit it and each run gets a fresh empty workspace
+  under <code>.etium/runs/&lt;run&gt;/ws/</code>.)</p>
+  <p>The step's full model conversation is captured under
+  <code>.etium/runs/&lt;run&gt;/steps/001-iterate.0/</code> —
+  <code>prompt.md</code> is exactly what was sent,
+  <code>raw.jsonl(.zst)</code> is exactly what came back. A word on failure:
+  pi ships no auth-status command and exits 0 even when the model call
+  errors, so etium can't refuse up front the way it does for harnesses with
+  a check command — instead the error surfaces as a message in
+  <code>etium tail</code> (e.g. <code>error: No API key for provider: …</code>),
+  the check step fails, and ralph iterates or parks at the guard.
+  Authenticate (<code>pi</code> → <code>/login</code>) and
+  <code>etium resume &lt;run&gt;</code>.</p>
+
+  <h2>Where to go next</h2>
+  <ul>
+    <li>The <a href="ai-engineer.html">ai-engineer tutorial</a> — a complete
+    multi-persona engineering workflow on these primitives
+    (<code>etium clone-loop ai-engineer</code>).</li>
+    <li>The loop-authoring guide and the design docs live in
+    <a href="https://github.com/etium-dev/core">the repo</a> —
+    <code>WRITING_LOOPS</code> teaches the API with a worked example;
+    <code>loops/ralph.js</code> is the whole reference loop, ~35 lines.</li>
+    <li>Budgets: add <code>--param wall=10m</code>, or write a loop with
+    per-step <code>budget: { wall, tokens, costUsd }</code>.</li>
+  </ul>
+
+  <footer>
+    <a href="./">etium</a>
+    <a href="https://github.com/etium-dev/core">GitHub</a>
+    <a href="https://www.npmjs.com/package/@etium/core">npm</a>
+    <span>MIT license</span>
+  </footer>
+</main>
+</body>
+</html>
