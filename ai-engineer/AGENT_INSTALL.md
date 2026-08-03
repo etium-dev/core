@@ -1,7 +1,7 @@
-# AGENT_INSTALL — installing the ai-engineer (instructions for an AI agent)
+# AGENT_INSTALL — setting up etium (instructions for an AI agent)
 
-You are an AI agent installing the etium ai-engineer package into a
-repository. Follow these steps in order. Every step ends with a
+You are an AI agent setting up etium for a repository — the CLI, and
+optionally a loop library. Follow these steps in order. Every step ends with a
 **Verify** command and a **PASS** criterion; if a criterion is not met,
 **stop and report** the step number and the command output — do not
 improvise a fix, do not continue.
@@ -18,15 +18,23 @@ missing, ask; do not guess.
 | `TRUSTED` | if `GITHUB_REPO` | comma-separated GitHub logins allowed to command the engineer |
 | `AGENT_LOGIN` | if `GITHUB_REPO` | GitHub login whose issue-assignment starts an attempt |
 | `INSTALL_CRON` | if `GITHUB_REPO` | `yes` to add the crontab entry; anything else = print it only |
+| `SCRATCH_DIR` | no | writable directory for throwaway work (verification clone, source fallback); default: a fresh `mktemp -d` directory |
+| `LIBRARY` | **ask if omitted** | `ai-engineer` to clone the loop library into the repo, or `none` for etium only. Cloning writes a commit into the repo — never assume it |
 
 ## Rules
 
 - Make no changes outside `REPO_DIR` except: the global npm install
   (step 1), the throwaway directory in step 4, and — only when
   `INSTALL_CRON=yes` — one crontab line.
+- **Never run `sudo`** and never download OS installers. When a step needs
+  elevation (system Node, root-owned npm prefix), stop and print the exact
+  command for the operator to run themselves.
 - Do not run interactive authentication (`gh auth login`, `pi` `/login`,
   browser flows) and do not create accounts. If auth is missing, report it
   as the operator's remaining step.
+- All throwaway work happens under `SCRATCH_DIR` (set
+  `SCRATCH_DIR="${SCRATCH_DIR:-$(mktemp -d)}"` once at the start) — never a
+  hardcoded path.
 - Do not edit anything under `ai-engineer/` during install; customization
   is a separate, later task.
 - All verification is by exit code or by the stated string being present.
@@ -34,26 +42,48 @@ missing, ask; do not guess.
 
 ## Step 1 — etium on PATH
 
+Preconditions first:
+
+```sh
+node --version && npm --version
+```
+
+**PASS**: both print; Node major ≥ 22 (`v22.18` minimum). If Node or npm is
+missing or too old, **stop and report**: "operator must install Node ≥
+22.18 (nodejs.org installer or a package manager)". Do not download or run
+installers yourself.
+
 ```sh
 etium --version
 ```
 
-**PASS**: prints a version (e.g. `0.1.0`). If the command is missing, run:
+**PASS**: prints a version — skip to Step 2. If the command is missing:
 
 ```sh
 npm install -g @etium/core
 ```
 
-If that fails (package not yet published or registry unreachable), install
-from source:
+Classify a failure by its error, and do not substitute one remedy for the
+other:
+
+- **Permission error** (`EACCES`/`EPERM`, typically a root-owned
+  `/usr/local` from a system Node): **stop and report** both operator
+  fixes verbatim — run `sudo npm install -g @etium/core`, **or** configure
+  a user-owned prefix (`npm config set prefix ~/.npm-global` and add
+  `~/.npm-global/bin` to PATH, then re-run without sudo). Do not use the
+  source fallback: `npm link` lands in the same root-owned prefix.
+- **Registry unreachable or package not found** (404, network): install
+  from source in scratch —
 
 ```sh
-git clone https://github.com/etium-dev/core /tmp/etium-src
-cd /tmp/etium-src && npm install && npm run build && npm link
+git clone https://github.com/etium-dev/core "$SCRATCH_DIR/etium-src"
+cd "$SCRATCH_DIR/etium-src" && npm install && npm run build && npm link
 ```
 
-**Verify**: `etium --version` → prints a version. Also `node --version` →
-major ≥ 22 (`v22.18` minimum). Otherwise stop and report.
+  (If `npm link` itself fails with a permission error, that is the
+  permission case above — stop and report.)
+
+**Verify**: `etium --version` → prints a version. Otherwise stop and report.
 
 ## Step 2 — copy the package into the repository
 
@@ -69,13 +99,13 @@ git commit -m "Add etium ai-engineer loop library"
 **Verify**: `test -f ai-engineer/loop.ts && grep -qx '.etium/' .gitignore && ls ai-engineer/templates/*.md | wc -l` →
 both tests exit 0 and the count is `7`.
 
-## Step 3 — acceptance test (token-free, in a throwaway clone)
+## Step 3A — acceptance test with the library (only if `LIBRARY=ai-engineer`)
 
 This proves the install without touching `REPO_DIR`'s state and without any
 model or GitHub access. Run exactly:
 
 ```sh
-git clone -q "$REPO_DIR" /tmp/etium-verify && cd /tmp/etium-verify
+git clone -q "$REPO_DIR" "$SCRATCH_DIR/etium-verify" && cd "$SCRATCH_DIR/etium-verify"
 etium run "verify install" --loop ai-engineer/loop.ts --worktree --harness exec --param rounds=1 \
   --param cmd.triage='mkdir -p ai && echo ok > ai/INTAKE.md' \
   --param cmd.plan='echo plan > ai/PLAN.md' \
@@ -100,8 +130,28 @@ etium decide verify route implement --sync # PASS: ends with `outcome: parked`
 etium decide verify route wrap-up --sync   # PASS: ends with `outcome: done`
 ```
 
-Cleanup: `rm -rf /tmp/etium-verify`. If every PASS held, the package is
-installed and functional. If `GITHUB_REPO` was not provided, go to Step 5.
+Cleanup: `rm -rf "$SCRATCH_DIR/etium-verify"`. If every PASS held, the
+setup is functional. If `GITHUB_REPO` was not provided, go to Step 5.
+
+## Step 3B — acceptance test, etium only (only if `LIBRARY=none`)
+
+Entirely in scratch; nothing touches `REPO_DIR`:
+
+```sh
+mkdir -p "$SCRATCH_DIR/etium-verify" && cd "$SCRATCH_DIR/etium-verify"
+printf 'export default async function (run) {\n  await run.step("greet", { harness: "exec", command: "echo hello > hello.txt" });\n  const d = await run.gate("publish?", { show: ["hello.txt"] });\n  await run.step("publish", { harness: "exec", command: `echo done by ${d.by} > done.txt` });\n}\n' > hello.ts
+etium run "verify" --loop hello.ts --sync
+```
+
+**PASS**: last line is `outcome: parked`.
+
+```sh
+etium approve verify "publish?" --sync
+```
+
+**PASS**: last line is `outcome: done`. Cleanup:
+`rm -rf "$SCRATCH_DIR/etium-verify"`. If `GITHUB_REPO` was not provided, go
+to Step 5.
 
 ## Step 4 — GitHub wiring (only if `GITHUB_REPO` is set)
 
@@ -130,14 +180,14 @@ action lines. Any `surface-error` line: stop and report it verbatim.
 Crontab entry (one line; substitute the real values):
 
 ```
-* * * * * cd REPO_DIR && ETIUM_GH_REPO=… ETIUM_GH_TRUSTED=… ETIUM_GH_AGENT=… ETIUM_GH_LOOP=ai-engineer/loop.ts etium tick --surface github >> /tmp/etium-tick.log 2>&1
+* * * * * cd REPO_DIR && ETIUM_GH_REPO=… ETIUM_GH_TRUSTED=… ETIUM_GH_AGENT=… ETIUM_GH_LOOP=ai-engineer/loop.ts etium tick --surface github >> .etium/tick.log 2>&1
 ```
 
 If `INSTALL_CRON=yes`: install it idempotently —
 
 ```sh
 ( crontab -l 2>/dev/null | grep -v 'etium tick --surface github'; \
-  echo '* * * * * cd '"$REPO_DIR"' && ETIUM_GH_REPO='"$GITHUB_REPO"' ETIUM_GH_TRUSTED='"$TRUSTED"' ETIUM_GH_AGENT='"$AGENT_LOGIN"' ETIUM_GH_LOOP=ai-engineer/loop.ts etium tick --surface github >> /tmp/etium-tick.log 2>&1' ) | crontab -
+  echo '* * * * * cd '"$REPO_DIR"' && ETIUM_GH_REPO='"$GITHUB_REPO"' ETIUM_GH_TRUSTED='"$TRUSTED"' ETIUM_GH_AGENT='"$AGENT_LOGIN"' ETIUM_GH_LOOP=ai-engineer/loop.ts etium tick --surface github >> .etium/tick.log 2>&1' ) | crontab -
 crontab -l | grep -c 'etium tick --surface github'
 ```
 
@@ -148,8 +198,11 @@ crontab -l | grep -c 'etium tick --surface github'
 
 End with a report to your operator containing exactly:
 
-1. Each step number with PASS/FAIL and, for any FAIL, the verbatim output.
-2. The commit hash created in Step 2.
+1. Each step number with **PASS / FAIL / SKIPPED** — for any FAIL, the
+   verbatim output; for any SKIPPED, the gating input that caused it
+   (e.g. `SKIPPED — GITHUB_REPO not provided`, `SKIPPED — LIBRARY=none`).
+   Never invent other status words.
+2. The commit hash created in Step 2 (only when `LIBRARY=ai-engineer`).
 3. Remaining manual steps, chosen from: authenticate `gh` on this machine;
    authenticate a harness (e.g. `pi` then `/login`) before real-persona
    runs; install the printed crontab line; assign `AGENT_LOGIN` to a GitHub

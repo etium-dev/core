@@ -115,7 +115,7 @@ Add one cron line (this *is* the deployment):
 * * * * *  cd /path/to/your-repo && \
   ETIUM_GH_REPO=you/your-repo ETIUM_GH_TRUSTED=your-login \
   ETIUM_GH_LOOP=ai-engineer/loop.ts \
-  etium tick --surface github >> /tmp/etium-tick.log 2>&1
+  etium tick --surface github >> .etium/tick.log 2>&1
 ```
 
 Then, on GitHub:
