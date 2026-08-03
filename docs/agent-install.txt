@@ -116,7 +116,8 @@ check and then fail confusingly at the first loop. On failure, **stop and
 report**: "operator must upgrade Node to ≥ 22.18 (current: `node
 --version`'s output) — etium runs .ts loops natively, which needs it. One
 command with a version manager: `nvm install --lts` or `brew upgrade
-node`; otherwise the nodejs.org installer (any current download passes)."
+node` — or the etium installer handles Node itself: `curl -fsSL
+https://etium.dev/install.sh | sh`."
 Do not download or run installers yourself.
 
 ```sh

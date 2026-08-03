@@ -500,3 +500,38 @@ checks; the name pathologizes a fresh machine). A full-setup wizard that
 also performs installs (never sudo, never OS installers — remedies are
 printed, operators execute). Interactive prompting for agents (flags
 exist precisely so nothing prompts).
+
+---
+
+## ADR-015 — install.sh: pi's installer, adapted, npm still the only artifact
+
+**Decision.** `curl -fsSL https://etium.dev/install.sh | sh` is the primary
+documented install. The script is pi's installer (pi.dev/install.sh, MIT,
+attribution in the header) adapted, not rewritten — it is battle-tested and
+we changed as little as possible: package/name/branding, etium's exact Node
+predicate (22.18+/23.6+/24+), the locked-install path removed (it depends
+on pi's release-metadata API; our plain npm tarball is already the
+release-gated artifact), and the epilogue points at `etium init`. What it
+does: preflights Node+npm and offers to install Node (Homebrew/apt/apk or
+a standalone user-local tarball from nodejs.org, checksum-verified); picks
+an npm prefix — the user's own when writable, else `~/.local` — so sudo is
+structurally never needed; runs `npm install -g --ignore-scripts
+@etium/core`; offers a one-line PATH update with confirmation. Non-TTY
+runs proceed with safe defaults. Verified end to end in a sandboxed HOME
+against a simulated root-owned prefix, installing the real registry
+package into `~/.local/bin`.
+
+**Why.** Field tests kept hitting the two first-contact frictions — the
+EACCES/sudo class and the Node floor — and the ecosystem's answers split
+into two shapes: Claude Code's (native binaries, signing, notarization,
+package repos — a distribution organization) and pi's (bootstrap UX around
+the unchanged npm artifact). Pi's shape keeps every release-confidence
+property intact because the installer changes *where* npm installs, not
+*what* — and copying working MIT code beats days of reimplementation
+debugging. The npm command remains documented for healthy setups; agents
+keep their classified npm flow.
+
+**Rejected.** Native per-platform binaries (deferred with costs named —
+the regime where codex's certificate revocation lives). Keeping pi's
+locked-install (needs a release-metadata API we don't run). A from-source
+fallback (removed earlier; unchanged). npx (a permanent second path).

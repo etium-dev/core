@@ -68,7 +68,12 @@
   deterministic steps with a PASS criterion each, stop-on-fail.</p>
 
   <h2>Setup</h2>
-<pre><code>npm install -g @etium/core</code></pre>
+<pre><code>curl -fsSL https://etium.dev/install.sh | sh</code></pre>
+  <p>The installer checks Node and npm (offering to install Node if
+  missing), never uses sudo — it picks a user-writable location instead —
+  and ends with <code>etium</code> on PATH. Prefer plain npm?
+  <code>npm install -g @etium/core</code> does the same when your setup is
+  already healthy.</p>
   <p>(Permission error? Your Node is system-installed — the macOS .pkg
   installer, or a Linux distro package — so its global prefix is
   root-owned. Quick fix: <code>sudo npm install -g @etium/core</code>.

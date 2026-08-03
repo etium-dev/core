@@ -8,10 +8,13 @@ etium *is*, and one that drives a real coding agent (Pi).
 Node ≥ 22.18. Then:
 
 ```sh
-npm install -g @etium/core
+curl -fsSL https://etium.dev/install.sh | sh
 ```
 
-That gives you `etium` on PATH.
+The installer checks Node and npm (offering to install Node if missing),
+never uses sudo — it picks a user-writable location instead — and ends
+with `etium` on PATH. Prefer plain npm? `npm install -g @etium/core`
+does the same when your setup is already healthy.
 
 (Permission error? Your Node is system-installed — the macOS .pkg
 installer, or a Linux distro package — so its global prefix is root-owned.

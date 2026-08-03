@@ -46,6 +46,7 @@ guard class defined later.
 
 **Gate 1 — Artifact journey** (release candidates).
 - [ ] `npm pack`; install the tarball globally in a clean container.
+- [ ] `shellcheck docs/install.sh`, then run the installer in the container matrix: healthy setup, root-owned-prefix (expects `~/.local` fallback), Node-absent (expects the offer path), non-TTY.
 - [ ] Execute the published promises verbatim: QUICKSTART offline hello-world; `clone-loop` into a fresh git repo; the AGENT_INSTALL acceptance script with its literal PASS criteria; the ai-engineer dry run to `run DONE`; `tick --surface github` against the stub `gh`.
 - This gate catches the repo-vs-package bug class (version drift, missing files, `.ts`-in-node_modules).
 

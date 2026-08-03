@@ -17,7 +17,7 @@ harnesses bring their own auth, `gh` brings yours.
 ## 0. Install
 
 ```sh
-npm install -g @etium/core
+curl -fsSL https://etium.dev/install.sh | sh
 cd /path/to/your-repo
 etium clone-loop ai-engineer
 ```
