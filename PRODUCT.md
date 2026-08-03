@@ -58,7 +58,7 @@ Walk away. The run parks at the next gate and consumes zero processes while it w
 
 **Task** — a goal plus acceptance criteria; a markdown file, wherever it came from. **Run** — one attempt; a directory. **Loop** — a program of steps and gates; a code file. **Step** — one headless harness invocation under a budget, fresh context by default. **Gate** — a named pause requiring a human decision, consumed once. **Ledger** — an append-only `events.jsonl`; state is a fold over events, and every other view is a derived projection.
 
-Around them, core provides exactly four services: a supervisor (budgets, stall warnings, kill), git worktrees for parallel runs, crash-only resume (`kill -9` anything; `etium tick` recovers), and a gate inbox. Harnesses plug in through adapters of roughly two pure functions each — build a command, parse a line. Codex, Pi, Claude Code, OpenHands, or any command via `exec`.
+Around them, core provides exactly four services: a supervisor (budgets, stall warnings, kill), git worktrees for parallel runs, crash-only resume (`kill -9` anything; `etium tick` recovers), and a gate inbox. Harnesses plug in through adapters of roughly two pure functions each — build a command, parse a line. Codex, Pi, Claude Code, OpenHands, or any command via `exec`. Surfaces plug the outer world in the same way: the built-in GitHub surface turns issue assignment into runs and `/et` comments into gate decisions, and projects status back — one cron line, any loop.
 
 ---
 
@@ -102,7 +102,7 @@ The non-goals are the product. Core will never:
 
 ## Status
 
-Pre-release; design is public (`DESIGN.md`). Roadmap: **M0** — kernel, `exec`/`replay`/`codex` adapters, the ralph loop, crash-recovery guarantees; from day one, etium is built by a Codex loop running under etium. **M1** — worktrees, token/cost budgets, Pi and Claude Code adapters, the plan→gate→implement→verify loop. **M2** — the GitHub surface (issues become tasks, labels become gate decisions, one status comment as a ledger projection), OpenHands adapter. **M3** — trace exporters, a static HTML trace viewer, the loop-authoring guide, `etium-mcp`.
+Pre-release; design is public (`DESIGN.md`). Roadmap: **M0** — kernel, `exec`/`replay`/`codex` adapters, the ralph loop, crash-recovery guarantees; from day one, etium is built by a Codex loop running under etium. **M1** — worktrees, token/cost budgets, Pi and Claude Code adapters, the plan→gate→implement→verify loop. **M2** — the built-in GitHub surface (assignment becomes a task, `/et` comments become gate decisions, one status comment as a ledger projection) with the `ai-engineer` loop library on top, OpenHands adapter. **M3** — trace exporters, a static HTML trace viewer, the loop-authoring guide, `etium-mcp`.
 
 MIT licensed. TypeScript, Node ≥ 22.18. `npm i -g @etium/core`.
 

@@ -15,10 +15,12 @@ git clone https://github.com/etium-dev/core etium-src
 cp -r etium-src/ai-engineer /path/to/your-repo/ai-engineer
 ```
 
-The package is a plain folder — a 97-line loop, seven persona prompts, one
-GitHub surface file, and a README with the exact contract. Copying it into
-your repo is the intended move: the templates are *yours to edit*, and the
-folder has no dependencies (type imports only — it runs anywhere).
+The library is a plain folder — a 97-line loop, seven persona prompts, and
+a README with the exact contract. Copying it into your repo is the intended
+move: the templates are *yours to edit*, and the folder has no dependencies
+(type imports only — it runs anywhere). The GitHub integration is not in
+the folder at all: it's etium's built-in `github` surface, which drives any
+loop you point it at.
 
 You'll also want at least one coding harness installed and logged in —
 [pi](https://pi.dev) (`pi`, then `/login`), Claude Code, or Codex. Etium
@@ -112,7 +114,8 @@ Add one cron line (this *is* the deployment):
 ```
 * * * * *  cd /path/to/your-repo && \
   ETIUM_GH_REPO=you/your-repo ETIUM_GH_TRUSTED=your-login \
-  etium tick --surface ai-engineer/github.ts >> /tmp/etium-tick.log 2>&1
+  ETIUM_GH_LOOP=ai-engineer/loop.ts \
+  etium tick --surface github >> /tmp/etium-tick.log 2>&1
 ```
 
 Then, on GitHub:

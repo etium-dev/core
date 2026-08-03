@@ -5,12 +5,12 @@ engineer, including a token-free dry run. This file is the reference.
 **Having an AI agent do the install? Give it [AGENT_INSTALL.md](AGENT_INSTALL.md)**
 — deterministic steps, a PASS criterion per step, stop-on-fail.
 
-The multi-persona, human-gated engineering workflow
-([AI_ENGINEER_STATE_MACHINE.md](../AI_ENGINEER_STATE_MACHINE.md)'s successor)
-as an etium loop package: `loop.ts` + `templates/` + this contract, plus a
-GitHub surface (`github.ts`). The loop is **surface-agnostic and
-CLI-complete** — the test suite drives the entire state graph with `etium
-decide` alone; GitHub is a skin.
+The multi-persona, human-gated engineering workflow as an etium **loop
+library**: `loop.ts` + `templates/` + this contract. Copy the folder into
+your repo and adapt it — the templates are the product. The loop is
+**surface-agnostic and CLI-complete** — the test suite drives the entire
+state graph with `etium decide` alone; GitHub is a skin, provided by etium's
+built-in `github` surface (DESIGN §10.3).
 
 ## The loop's contract
 
@@ -53,24 +53,25 @@ etium decide <run> route plan --note "start with the retry"
 
 ## Running it against GitHub
 
-`github.ts` is a surface for `etium tick` (ADR-009). Configuration is env
-vars — no secrets among them; GitHub auth is `gh`'s, model auth is the
-harness's ([MODEL_AUTH.md](../MODEL_AUTH.md)):
+Etium's built-in `github` surface drives any loop; this library is just what
+you point it at. Configuration is env vars — no secrets among them; GitHub
+auth is `gh`'s, model auth is the harness's
+([MODEL_AUTH.md](../MODEL_AUTH.md)):
 
 | var | meaning | default |
 |---|---|---|
 | `ETIUM_GH_REPO` | `owner/name` (**required**) | — |
 | `ETIUM_GH_TRUSTED` | comma-separated logins allowed to command (**required**) | — |
+| `ETIUM_GH_LOOP` | loop to run per task (**required**) — point it here | — |
 | `ETIUM_GH_AGENT` | login whose *assignment* starts an attempt | authenticated user |
 | `ETIUM_GH_WORKDIR` | checkout to branch worktrees from | cwd |
 | `ETIUM_GH_BASE` | PR base branch | `main` |
-| `ETIUM_GH_LOOP` | loop to run per task | sibling `loop.ts` |
 
 The whole deployment, either mode, is one cron line:
 
 ```
 * * * * *  cd /path/to/checkout && ETIUM_GH_REPO=acme/widgets ETIUM_GH_TRUSTED=you \
-           etium tick --surface /path/to/ai-engineer/github.ts
+           ETIUM_GH_LOOP=ai-engineer/loop.ts etium tick --surface github
 ```
 
 *Mode A (you, your machine)*: your `gh` auth, your harness login, done.

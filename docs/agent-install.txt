@@ -73,8 +73,8 @@ git add ai-engineer .gitignore
 git commit -m "Add etium ai-engineer package"
 ```
 
-**Verify**: `test -f ai-engineer/loop.ts && test -f ai-engineer/github.ts && ls ai-engineer/templates/*.md | wc -l` →
-the file tests exit 0 and the count is `7`.
+**Verify**: `test -f ai-engineer/loop.ts && ls ai-engineer/templates/*.md | wc -l` →
+the file test exits 0 and the count is `7`.
 
 ## Step 3 — acceptance test (token-free, in a throwaway clone)
 
@@ -128,7 +128,7 @@ tick by hand:
 
 ```sh
 cd "$REPO_DIR" && ETIUM_GH_REPO="$GITHUB_REPO" ETIUM_GH_TRUSTED="$TRUSTED" \
-  ETIUM_GH_AGENT="$AGENT_LOGIN" etium tick --surface ai-engineer/github.ts
+  ETIUM_GH_AGENT="$AGENT_LOGIN" ETIUM_GH_LOOP=ai-engineer/loop.ts etium tick --surface github
 ```
 
 **PASS**: exit 0, and output is either `no runs` or a list of per-run
@@ -137,15 +137,15 @@ action lines. Any `surface-error` line: stop and report it verbatim.
 Crontab entry (one line; substitute the real values):
 
 ```
-* * * * * cd REPO_DIR && ETIUM_GH_REPO=… ETIUM_GH_TRUSTED=… ETIUM_GH_AGENT=… etium tick --surface ai-engineer/github.ts >> /tmp/etium-tick.log 2>&1
+* * * * * cd REPO_DIR && ETIUM_GH_REPO=… ETIUM_GH_TRUSTED=… ETIUM_GH_AGENT=… ETIUM_GH_LOOP=ai-engineer/loop.ts etium tick --surface github >> /tmp/etium-tick.log 2>&1
 ```
 
 If `INSTALL_CRON=yes`: install it idempotently —
 
 ```sh
-( crontab -l 2>/dev/null | grep -v 'etium tick --surface ai-engineer/github.ts'; \
-  echo '* * * * * cd '"$REPO_DIR"' && ETIUM_GH_REPO='"$GITHUB_REPO"' ETIUM_GH_TRUSTED='"$TRUSTED"' ETIUM_GH_AGENT='"$AGENT_LOGIN"' etium tick --surface ai-engineer/github.ts >> /tmp/etium-tick.log 2>&1' ) | crontab -
-crontab -l | grep -c 'etium tick --surface ai-engineer/github.ts'
+( crontab -l 2>/dev/null | grep -v 'etium tick --surface github'; \
+  echo '* * * * * cd '"$REPO_DIR"' && ETIUM_GH_REPO='"$GITHUB_REPO"' ETIUM_GH_TRUSTED='"$TRUSTED"' ETIUM_GH_AGENT='"$AGENT_LOGIN"' ETIUM_GH_LOOP=ai-engineer/loop.ts etium tick --surface github >> /tmp/etium-tick.log 2>&1' ) | crontab -
+crontab -l | grep -c 'etium tick --surface github'
 ```
 
 **PASS**: the final count is `1`. Otherwise (or if `INSTALL_CRON` is not

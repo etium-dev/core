@@ -12,6 +12,7 @@ run.step(name, opts)   // one headless harness invocation under a budget
 run.gate(name, opts?)  // park until a human decides; options default to approve/reject
 run.effect(name, fn)   // record a nondeterministic value once, replay it forever
 run.abandon(reason?)   // end the run as abandoned
+run.task               // task.md content — the goal this run is an attempt at
 run.params             // strings from --param k=v (and --harness)
 run.workspace          // absolute path the steps run in
 run.t(file)            // a prompt template, relative to the loop file

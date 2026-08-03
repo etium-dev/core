@@ -107,7 +107,7 @@ Newline-delimited JSON (JSONL), append-only, single writer. Crash recovery rule:
 
 | Type | Emitted by | Data (essentials) |
 |---|---|---|
-| `run.created` | CLI | task hash, loop ref, params, etium version |
+| `run.created` | CLI | task hash, loop ref, params, worktree (repo, branch, base, baseSha)?, etium version |
 | `supervisor.started` | supervisor | pid, host — emitted on every attach (start and resume) |
 | `step.started` | supervisor | name, occ, harness, model?, prompt sha256, env profile, auth env names?, budget, config digest |
 | `step.activity` | supervisor | step ref, kind: `message` \| `tool` \| `usage`, summary (short string), usage delta?, raw: RawRef |
@@ -308,8 +308,9 @@ still fails legibly at spawn if auth is absent.
 
 ### 10.3 Surface adapter interface
 
-Pull-based, driven by `etium tick --surface <path>` (repeatable); a surface is
-a user-supplied module, loaded like a loop (ADR-009):
+Pull-based, driven by `etium tick --surface <name-or-path>` (repeatable).
+Built-in surfaces resolve by name (`github`); anything with a `/` or `.`
+loads as a user-supplied module, like a loop (ADR-009):
 
 ```ts
 interface Surface {
@@ -349,13 +350,24 @@ Semantics, all fail-closed and at-least-once:
   options), usage, seq, completion. Anything more, the surface reads from the
   run directory — files are the API.
 
-The GitHub surface (M2, shipped as a package outside core) maps: issue
-assignment → a task; **command comments** (`/et plan`, `/et approve — note`)
-→ gate decisions, validated against the gate's declared options, consumed by
-cursor advance — never labels, which are a mutable bitfield with no payload,
-no atomic consume, and no attribution; one bot-owned status comment → the
-projection, listing the currently-valid commands; a tiny write-only label set
-(`et:working` / `et:waiting` / `et:blocked`) → filter decoration only.
+**The built-in `github` surface** (`etium tick --surface github`) is
+loop-agnostic infrastructure. Inbound, it maps: assignment of the configured
+agent user (by an allowlisted human) → a task running the configured loop
+(`ETIUM_GH_LOOP`, required) on worktree branch `etium/issue-N-attempt-K`;
+**command comments** (`/et <option> [note]`, or `@<agent> <option>`) by
+allowlisted authors → gate decisions, matched against whichever open gate
+declares the option and validated against the ledger's set — never labels,
+which are a mutable bitfield with no payload, no atomic consume, and no
+attribution; `/et stop`, issue close, and PR close-unmerged → abandons; PR
+merge → the `wrap-up` option when a gate declares it (the convention for "a
+mergeable end"). Outbound, projection pushes the run's branch, opens one
+draft PR once the branch has commits past its recorded `baseSha`, rewrites
+one bot-owned status comment listing the currently-valid commands, and
+maintains a write-only decoration label (`et:working` / `et:waiting` /
+`et:blocked`) for issue-list filtering. Configuration is environment
+variables with no secret values — `ETIUM_GH_REPO`, `ETIUM_GH_TRUSTED`,
+`ETIUM_GH_AGENT`, `ETIUM_GH_LOOP`, `ETIUM_GH_WORKDIR`, `ETIUM_GH_BASE` —
+and all GitHub access goes through `gh`, whose auth is the operator's.
 Unauthorized authors are refused surface-side (§8 attribution).
 
 ### 10.4 Grader hook
@@ -366,7 +378,7 @@ Unauthorized authors are refused surface-side (§8 attribution).
 
 ## 11. Non-goals
 
-Core will never contain: model API clients or context management; an MCP router (etium's boundary is subprocess + JSONL; an `etium-mcp` extension exposing status/approve/dispatch as tools is welcome later); a workflow DSL; a server, web UI, or authoritative database (a derived SQLite index for cross-run `status` at scale is acceptable later — a projection, never a source of truth); sandboxing; an eval framework (stable traces + exporter scripts instead); a scheduler daemon (cron + `tick`); a memory system (files in the workspace); a fleet control plane — no scheduler, queue, or coordinator in core; scale is composition (many repos and machines, each running the same daemonless loop, aggregated by projections), and the strict-consistency domain stays **one machine per active run**; GitHub coupling; credential storage or brokering — no credential store, no `etium login`, no OAuth or token refresh, no secret-valued config field; adapter-declared passthrough and redaction (§9, `MODEL_AUTH.md`) are the entire model-auth surface.
+Core will never contain: model API clients or context management; an MCP router (etium's boundary is subprocess + JSONL; an `etium-mcp` extension exposing status/approve/dispatch as tools is welcome later); a workflow DSL; a server, web UI, or authoritative database (a derived SQLite index for cross-run `status` at scale is acceptable later — a projection, never a source of truth); sandboxing; an eval framework (stable traces + exporter scripts instead); a scheduler daemon (cron + `tick`); a memory system (files in the workspace); a fleet control plane — no scheduler, queue, or coordinator in core; scale is composition (many repos and machines, each running the same daemonless loop, aggregated by projections), and the strict-consistency domain stays **one machine per active run**; GitHub as authoritative state — the built-in surface writes projections and consumes events, and nothing on GitHub is ever read back as truth; credential storage or brokering — no credential store, no `etium login`, no OAuth or token refresh, no secret-valued config field; adapter-declared passthrough and redaction (§9, `MODEL_AUTH.md`) are the entire model-auth surface.
 
 ---
 
@@ -401,7 +413,7 @@ CLI (M0 set): `run`, `status`, `tail`, `gates`, `approve`, `reject`, `decide`, `
 
 **M1 — daily driver.** Git worktrees per run (landed — ADR-010); usage/cost normalization and token/cost budgets; the `claude` adapter (`pi` was pulled forward with the quick start and is fixture-validated; the model-auth pre-spawn gate also landed early — see ADR-007); creation-time preflight and `doctor`; a tick admission cap (resume at most K live supervisors per tick, oldest first; the rest stay parked until a later tick — a budget, not a scheduler); the `plan-implement` loop with predecessor defaults; `redo`, `gc`, `watch`.
 
-**M2 — team surface.** The GitHub surface and the multi-persona workflow landed early as the `ai-engineer/` package (assignment→tasks, `/et` command comments→decisions, status-comment projection, worktree branch per attempt — ADR-011); remaining: hardened env profiles and publication steps; `openhands` adapter; predecessor-system migration guide.
+**M2 — team surface.** The `github` surface is built into core (§10.3, ADR-012) and the multi-persona workflow ships as the `ai-engineer` loop library — templates and a loop that users copy and adapt (ADR-011); remaining: hardened env profiles and publication steps; `openhands` adapter; predecessor-system migration guide.
 
 **M3 — ecosystem.** Trace exporters (OTel / Braintrust / LangSmith / Laminar scripts); static HTML trace viewer generated from ledger + raw; `etium-mcp` extension. (The loop-authoring guide — `WRITING_LOOPS.md` — landed early, ahead of the first loop package.)
 

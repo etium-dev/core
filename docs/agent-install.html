@@ -128,8 +128,8 @@ grep -qxF '.etium/' .gitignore 2&gt;/dev/null || printf '.etium/\n' &gt;&gt; .gi
 git add ai-engineer .gitignore
 git commit -m "Add etium ai-engineer package"</code></pre>
   <p><strong>Verify</strong>:
-  <code>test -f ai-engineer/loop.ts &amp;&amp; test -f ai-engineer/github.ts &amp;&amp; ls ai-engineer/templates/*.md | wc -l</code>
-  → the file tests exit 0 and the count is <code>7</code>.</p>
+  <code>test -f ai-engineer/loop.ts &amp;&amp; ls ai-engineer/templates/*.md | wc -l</code>
+  → the file test exits 0 and the count is <code>7</code>.</p>
 
   <h2>Step 3 — acceptance test (token-free, throwaway clone)</h2>
   <p>This proves the install without touching <code>REPO_DIR</code>'s state
@@ -164,16 +164,16 @@ etium decide verify route wrap-up --sync   <span style="color:var(--dim)"># PASS
   <p><span class="pass">PASS</span>: prints <code>true</code>. Then run one
   tick by hand:</p>
 <pre><code>cd "$REPO_DIR" &amp;&amp; ETIUM_GH_REPO="$GITHUB_REPO" ETIUM_GH_TRUSTED="$TRUSTED" \
-  ETIUM_GH_AGENT="$AGENT_LOGIN" etium tick --surface ai-engineer/github.ts</code></pre>
+  ETIUM_GH_AGENT="$AGENT_LOGIN" ETIUM_GH_LOOP=ai-engineer/loop.ts etium tick --surface github</code></pre>
   <p><span class="pass">PASS</span>: exit 0, and output is either
   <code>no runs</code> or a list of per-run action lines. Any
   <code>surface-error</code> line: stop and report it verbatim.</p>
   <p>Crontab entry (one line; substitute the real values):</p>
-<pre><code>* * * * * cd REPO_DIR &amp;&amp; ETIUM_GH_REPO=… ETIUM_GH_TRUSTED=… ETIUM_GH_AGENT=… etium tick --surface ai-engineer/github.ts &gt;&gt; /tmp/etium-tick.log 2&gt;&amp;1</code></pre>
+<pre><code>* * * * * cd REPO_DIR &amp;&amp; ETIUM_GH_REPO=… ETIUM_GH_TRUSTED=… ETIUM_GH_AGENT=… ETIUM_GH_LOOP=ai-engineer/loop.ts etium tick --surface github &gt;&gt; /tmp/etium-tick.log 2&gt;&amp;1</code></pre>
   <p>If <code>INSTALL_CRON=yes</code>: install it idempotently —</p>
-<pre><code>( crontab -l 2&gt;/dev/null | grep -v 'etium tick --surface ai-engineer/github.ts'; \
-  echo '* * * * * cd '"$REPO_DIR"' &amp;&amp; ETIUM_GH_REPO='"$GITHUB_REPO"' ETIUM_GH_TRUSTED='"$TRUSTED"' ETIUM_GH_AGENT='"$AGENT_LOGIN"' etium tick --surface ai-engineer/github.ts &gt;&gt; /tmp/etium-tick.log 2&gt;&amp;1' ) | crontab -
-crontab -l | grep -c 'etium tick --surface ai-engineer/github.ts'</code></pre>
+<pre><code>( crontab -l 2&gt;/dev/null | grep -v 'etium tick --surface github'; \
+  echo '* * * * * cd '"$REPO_DIR"' &amp;&amp; ETIUM_GH_REPO='"$GITHUB_REPO"' ETIUM_GH_TRUSTED='"$TRUSTED"' ETIUM_GH_AGENT='"$AGENT_LOGIN"' ETIUM_GH_LOOP=ai-engineer/loop.ts etium tick --surface github &gt;&gt; /tmp/etium-tick.log 2&gt;&amp;1' ) | crontab -
+crontab -l | grep -c 'etium tick --surface github'</code></pre>
   <p><span class="pass">PASS</span>: the final count is <code>1</code>.
   Otherwise (or if <code>INSTALL_CRON</code> is not <code>yes</code>):
   print the crontab line in your report for the operator to install.</p>

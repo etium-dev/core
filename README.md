@@ -95,6 +95,7 @@ Budgets are enforced in CI (`npm run budget`):
 |---|---|
 | core (ledger, engine, runner, supervisor, tick) | 3,000 |
 | each adapter | 300 |
+| the built-in github surface | 450 |
 | each bundled loop | 150 |
 
 Current core: ~2,100. If etium needs more than this, it is becoming the thing
@@ -110,6 +111,23 @@ captures under [`fixtures/pi/`](fixtures/pi/)), `codex` (`codex exec --json`,
 neutrality, run [`scripts/capture-fixtures.sh`](scripts/capture-fixtures.sh)
 on a machine with the harnesses installed and commit the captures under
 `fixtures/`. The Claude Code adapter is next (M1), OpenHands after (M2).
+
+## Surfaces
+
+A surface connects an external system to the same gates the CLI drives:
+tasks in, decisions in, projections out, on every `etium tick`. The built-in
+**`github`** surface (`etium tick --surface github`) turns issue assignment
+into a worktree run of any loop you configure, `/et <option>` comments by
+allowlisted users into gate decisions, and close/merge into run lifecycle —
+and projects back a draft PR, one status comment listing the valid commands,
+and `et:*` filter labels. Configuration is env vars (`ETIUM_GH_REPO`,
+`ETIUM_GH_TRUSTED`, `ETIUM_GH_AGENT`, `ETIUM_GH_LOOP`, `ETIUM_GH_WORKDIR`,
+`ETIUM_GH_BASE`) — none of them secrets; GitHub auth belongs to `gh`.
+Custom surfaces are modules loaded by path (see DESIGN §10.3).
+
+The **[ai-engineer](ai-engineer/)** loop library is the flagship workload: a
+multi-persona triage→debug/design/plan→implement workflow you copy into your
+repo and adapt. [Tutorial](https://etium-dev.github.io/core/ai-engineer.html).
 
 ## License
 

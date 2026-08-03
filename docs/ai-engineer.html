@@ -151,7 +151,8 @@ run DONE</span></code></pre>
   cron line — this <em>is</em> the deployment:</p>
 <pre><code>* * * * *  cd /path/to/your-repo &amp;&amp; \
   ETIUM_GH_REPO=you/your-repo ETIUM_GH_TRUSTED=your-login \
-  etium tick --surface ai-engineer/github.ts &gt;&gt; /tmp/etium-tick.log 2&gt;&amp;1</code></pre>
+  ETIUM_GH_LOOP=ai-engineer/loop.ts \
+  etium tick --surface github &gt;&gt; /tmp/etium-tick.log 2&gt;&amp;1</code></pre>
   <p>Then, on GitHub:</p>
   <ol>
     <li><strong>Assign yourself</strong> (or the configured agent user) to
