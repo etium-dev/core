@@ -1,5 +1,12 @@
 # Tutorial: an AI engineer for your repository
 
+Etium setup is four questions — the same ones an agent asks on the agent
+path (https://etium.dev/agent-install.txt): **which repo**; **etium only or
+with the ai-engineer loop library** (this tutorial is the library path —
+Part 0 clones it); **GitHub wiring or terminal only** (Parts 1–2 are
+terminal; Part 3 wires GitHub, and you can stop before it); and **where
+throwaway work may go** (yours to pick when testing).
+
 This walks you from zero to a working AI engineer: first a five-minute
 token-free dry run in your terminal, then real model runs, then wired to
 GitHub — where assigning an issue produces a draft PR whose every stage you

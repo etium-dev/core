@@ -17,6 +17,14 @@ Otherwise: `sudo npm install -g @etium/core`, or a user-owned prefix:
 `npm config set prefix ~/.npm-global` and add `~/.npm-global/bin` to PATH. From a checkout instead: `npm install && npm
 run build && npm link`.)
 
+Etium setup is four questions, the same ones an agent asks on the
+[agent path](https://etium.dev/agent-install.txt): **which repo** (wherever
+you run `etium`), **etium only or with the ai-engineer loop library** (this
+page is etium only — the [tutorial](https://etium.dev/ai-engineer.html) is
+the library path), **GitHub wiring or terminal only** (this page is
+terminal only), and **where throwaway work may go** (yours to pick when
+testing).
+
 ## Hello world, offline — the shape of a run
 
 Etium's whole model: a **loop** is a plain TypeScript file that sequences
