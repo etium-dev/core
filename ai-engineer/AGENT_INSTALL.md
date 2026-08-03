@@ -37,7 +37,7 @@ The answers bind these inputs, referenced by the steps below:
 | `TRUSTED` | if `GITHUB_REPO` | comma-separated GitHub logins allowed to command the engineer |
 | `AGENT_LOGIN` | if `GITHUB_REPO` | GitHub login whose issue-assignment starts an attempt |
 | `INSTALL_CRON` | if `GITHUB_REPO` | `yes` to add the crontab entry; anything else = print it only |
-| `SCRATCH_DIR` | no | writable directory for throwaway work (verification clone, source fallback); default: a fresh `mktemp -d` directory |
+| `SCRATCH_DIR` | no | writable directory for throwaway verification work; default: a fresh `mktemp -d` directory |
 | `LIBRARY` | **ask if omitted** | `ai-engineer` to clone the loop library into the repo, or `none` for etium only. Cloning writes a commit into the repo — never assume it |
 
 ## Rules
@@ -91,16 +91,11 @@ other:
   a user-owned prefix (`npm config set prefix ~/.npm-global` and add
   `~/.npm-global/bin` to PATH, then re-run without sudo). Do not use the
   source fallback: `npm link` lands in the same root-owned prefix.
-- **Registry unreachable or package not found** (404, network): install
-  from source in scratch —
-
-```sh
-git clone https://github.com/etium-dev/core "$SCRATCH_DIR/etium-src"
-cd "$SCRATCH_DIR/etium-src" && npm install && npm run build && npm link
-```
-
-  (If `npm link` itself fails with a permission error, that is the
-  permission case above — stop and report.)
+- **Any other failure** (404, network, registry error): **stop and
+  report** the verbatim output. There is no alternate install path — the
+  npm tarball is the only artifact that passes release verification, and a
+  registry outage is the operator's to wait out, not yours to engineer
+  around.
 
 **Verify**: `etium --version` → prints a version. Otherwise stop and report.
 

@@ -14,8 +14,7 @@ npm install -g @etium/core     # gives you `etium` on PATH
 (Permission error? That's a system Node (macOS .pkg) with a root-owned
 prefix — Node via Homebrew or a version manager avoids it entirely.
 Otherwise: `sudo npm install -g @etium/core`, or a user-owned prefix:
-`npm config set prefix ~/.npm-global` and add `~/.npm-global/bin` to PATH. From a checkout instead: `npm install && npm
-run build && npm link`.)
+`npm config set prefix ~/.npm-global` and add `~/.npm-global/bin` to PATH.)
 
 Etium setup is four questions, the same ones an agent asks on the
 [agent path](https://etium.dev/agent-install.txt): **which repo** (wherever
