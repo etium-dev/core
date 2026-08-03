@@ -19,12 +19,22 @@ temp dir. Starting."
 2. **Etium only, or also the ai-engineer loop library?** Cloning the
    library commits an `ai-engineer/` folder into the repo — never assume
    it. (`LIBRARY` = `ai-engineer` or `none`)
-3. **Wire it to GitHub, so issue assignment and `/et` comments drive it?**
-   If yes, follow up in the same message for: the repo (`owner/name` →
-   `GITHUB_REPO`), which GitHub logins may command it (→ `TRUSTED`), the
-   account whose issue-assignment starts work (default: the `gh`-
-   authenticated user → `AGENT_LOGIN`), and whether to install the cron
-   line now or just print it (→ `INSTALL_CRON`). If no, steps 4 is skipped.
+3. **Wire it to GitHub, so assigning an issue starts work and `/et`
+   comments drive it?** If yes, ask the follow-ups below **in these plain
+   phrasings — never surface the raw input names** (a newcomer has no idea
+   what a "trusted login" is):
+   - "Which GitHub repository? (`owner/name`)" → `GITHUB_REPO`
+   - "What is **your** GitHub username? The engineer only obeys comments
+     and assignments from usernames on this list — start with just
+     yourself; teammates can be added later." → `TRUSTED`
+   - "Should the engineer act **as you**, or as a **separate bot
+     account**? As-you is the simple start: assigning yourself to an
+     issue kicks it off. If a bot, what is its username?" (default: the
+     `gh`-authenticated user) → `AGENT_LOGIN`
+   - "Install the every-minute cron line now, or just print it for you?"
+     → `INSTALL_CRON`
+
+   If no, step 4 is skipped.
 4. **Any constraints on where throwaway verification work may happen?**
    (default: a fresh `mktemp -d` directory → `SCRATCH_DIR`)
 
