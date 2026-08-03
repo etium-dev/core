@@ -69,11 +69,11 @@
 
   <h2>Setup</h2>
 <pre><code>npm install -g @etium/core</code></pre>
-  <p>(Permission error? That's a system Node — macOS .pkg — with a
-  root-owned prefix; Node via Homebrew or a version manager avoids it
-  entirely. Otherwise: <code>sudo npm install -g @etium/core</code>, or a
-  user-owned prefix: <code>npm config set prefix ~/.npm-global</code> and
-  add <code>~/.npm-global/bin</code> to PATH.)</p>
+  <p>(Permission error? Your Node is system-installed — the macOS .pkg
+  installer, or a Linux distro package — so its global prefix is
+  root-owned. Quick fix: <code>sudo npm install -g @etium/core</code>.
+  Permanent fix: install Node via Homebrew or a version manager and sudo
+  is never needed again.)</p>
   <p>Etium setup is four questions, the same ones an agent asks on the
   <a href="agent-install.txt">agent path</a>: <strong>which repo</strong>
   (wherever you run <code>etium</code>), <strong>etium only or with the

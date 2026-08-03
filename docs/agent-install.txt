@@ -132,12 +132,11 @@ npm install -g @etium/core
 Classify a failure by its error, and do not substitute one remedy for the
 other:
 
-- **Permission error** (`EACCES`/`EPERM`, typically a root-owned
-  `/usr/local` from a system Node): **stop and report** both operator
-  fixes verbatim — run `sudo npm install -g @etium/core`, **or** configure
-  a user-owned prefix (`npm config set prefix ~/.npm-global` and add
-  `~/.npm-global/bin` to PATH, then re-run without sudo). Do not use the
-  source fallback: `npm link` lands in the same root-owned prefix.
+- **Permission error** (`EACCES`/`EPERM`: a root-owned global prefix from
+  a system-installed Node — the macOS .pkg installer or a Linux distro
+  package): **stop and report** verbatim — "quick fix: run `sudo npm
+  install -g @etium/core`; permanent fix: install Node via Homebrew or a
+  version manager and sudo is never needed again".
 - **Any other failure** (404, network, registry error): **stop and
   report** the verbatim output. There is no alternate install path — the
   npm tarball is the only artifact that passes release verification, and a
