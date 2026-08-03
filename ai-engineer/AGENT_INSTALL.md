@@ -130,9 +130,11 @@ other:
 
 - **Permission error** (`EACCES`/`EPERM`: a root-owned global prefix from
   a system-installed Node — the macOS .pkg installer or a Linux distro
-  package): **stop and report** verbatim — "quick fix: run `sudo npm
-  install -g @etium/core`; permanent fix: install Node via Homebrew or a
-  version manager and sudo is never needed again".
+  package): **stop and report** verbatim — "npm's global prefix is
+  root-owned — run the etium installer, which picks a user-writable
+  prefix and never needs sudo: `curl -fsSL https://etium.dev/install.sh |
+  sh`". Never suggest sudo here: a second, root-owned install shadows the
+  first on PATH and later updates stop taking effect.
 - **Any other failure** (404, network, registry error): **stop and
   report** the verbatim output. There is no alternate install path — the
   npm tarball is the only artifact that passes release verification, and a

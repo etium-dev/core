@@ -35,6 +35,7 @@ export const execAdapter: HarnessAdapter = {
 // ---------------------------------------------------------------------------
 export const codexAdapter: HarnessAdapter = {
   id: "codex",
+  bin: "codex",
   auth: {
     env: ["OPENAI_API_KEY"],
     check: { cmd: "codex", args: ["login", "status"] }, // exit semantics provisional (§10.2)
@@ -97,6 +98,7 @@ export const codexAdapter: HarnessAdapter = {
 // ---------------------------------------------------------------------------
 export const piAdapter: HarnessAdapter = {
   id: "pi",
+  bin: "pi",
   auth: {
     // Credential vars pi documents (§10.2); declared values are always redacted.
     env: ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "OPENROUTER_API_KEY"],

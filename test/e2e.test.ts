@@ -4,7 +4,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { main } from "../src/cli.ts";
-import { readLedger, loadState } from "../src/ledger.ts";
+import { LedgerWriter, readLedger, loadState } from "../src/ledger.ts";
 import { readLock } from "../src/lock.ts";
 
 function tmpBase(): string {
@@ -112,6 +112,38 @@ test("e2e: abandon a parked run from the CLI", async () => {
   assert.equal(rc, 0);
   const st = loadState(runDir);
   assert.equal(st.completed!.status, "abandoned");
+});
+
+test("tick: a supervisor crash loop is converged to error instead of resumed forever", async () => {
+  const b = tmpBase();
+  const runDir = path.join(b, "runs", "crashy");
+  fs.mkdirSync(runDir, { recursive: true });
+  // Synthesize the field-observed shape: attaches that die before recording
+  // any progress (e.g. unhandled spawn failure killing the supervisor).
+  const w = new LedgerWriter(runDir, "crashy", 0);
+  w.append("run.created", {
+    taskSha256: "0".repeat(64),
+    loop: path.join(b, "gone.ts"),
+    params: {},
+    workspace: path.join(b, "ws"),
+    etiumVersion: "test",
+  });
+  for (let i = 0; i < 3; i++) {
+    w.append("supervisor.started", { pid: 99999, host: "t" });
+    w.append("run.interrupted", { reason: "stale-lock" });
+  }
+  w.close();
+
+  const { tickOnce } = await import("../src/tick.ts");
+  const actions = await tickOnce(b, "unused", true);
+  assert.deepEqual(actions.map((a) => a.action), ["crash-loop"]);
+  const st = loadState(runDir);
+  assert.equal(st.completed!.status, "error");
+  assert.match(st.completed!.summary!, /crashed 3× without progress/);
+
+  // Converged: later ticks have nothing to do (explicit `etium resume` stays available).
+  const again = await tickOnce(b, "unused", true);
+  assert.deepEqual(again.map((a) => a.action), ["skip-completed"]);
 });
 
 test("e2e crash-only: SIGKILL the supervisor mid-step; tick recovers; completed steps exactly-once, interrupted step at-least-once", async () => {

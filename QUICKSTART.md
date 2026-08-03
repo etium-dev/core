@@ -16,10 +16,12 @@ never uses sudo — it picks a user-writable location instead — and ends
 with `etium` on PATH. Prefer plain npm? `npm install -g @etium/core`
 does the same when your setup is already healthy.
 
-(Permission error? Your Node is system-installed — the macOS .pkg
-installer, or a Linux distro package — so its global prefix is root-owned.
-Quick fix: `sudo npm install -g @etium/core`. Permanent fix: install Node
-via Homebrew or a version manager and sudo is never needed again.)
+(Permission error from plain npm? Your Node is system-installed — the
+macOS .pkg installer, or a Linux distro package — so its global prefix is
+root-owned. Don't reach for sudo: run the installer above instead; it
+picks a user-writable prefix. A machine should have exactly one etium —
+a second install shadows the first on PATH, and updates silently start
+landing in the copy you aren't running. `etium init` detects this.)
 
 Etium setup is four questions, the same ones an agent asks on the
 [agent path](https://etium.dev/agent-install.txt): **which repo** (wherever

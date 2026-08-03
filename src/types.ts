@@ -2,7 +2,7 @@
 // language-neutral contract. Keep them in sync; the schema wins on conflict.
 
 export const SCHEMA_VERSION = 1;
-export const ETIUM_VERSION = "0.7.1"; // must match package.json (enforced by test)
+export const ETIUM_VERSION = "0.7.2"; // must match package.json (enforced by test)
 
 // ---------------------------------------------------------------------------
 // Ledger envelope and event payloads (§5 of DESIGN.md)
@@ -219,6 +219,7 @@ export type HarnessEvent =
 
 export interface HarnessAdapter {
   id: string;
+  bin?: string; // executable required on PATH, verified pre-spawn (§6.3); omit when the cmd always exists (exec, replay)
   auth?: {
     // Model auth is harness-owned (MODEL_AUTH.md, ADR-007); this is inert data core acts on.
     env?: string[]; // credential var names passed through into `agent` steps; values always redacted

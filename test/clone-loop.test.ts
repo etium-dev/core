@@ -30,6 +30,33 @@ test("clone-loop: copies the library, ignores .etium/, never overwrites, rejects
   assert.equal(await main(["clone-loop"]), 0); // bare form lists
 });
 
+test("init: two etium installs on PATH is a hard failure naming both", () => {
+  const cli = path.resolve("src/cli.ts");
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "etium-shadow-"));
+  const repo = path.join(root, "repo");
+  fs.mkdirSync(repo);
+  const g = (...a: string[]) => spawnSync("git", ["-C", repo, "-c", "user.name=t", "-c", "user.email=t@t", ...a]);
+  g("init", "-q"); g("commit", "-qm", "init", "--allow-empty");
+  const mkbin = (name: string) => {
+    const d = path.join(root, name);
+    fs.mkdirSync(d);
+    fs.writeFileSync(path.join(d, "etium"), `#!/bin/sh\necho ${name}\n`, { mode: 0o755 });
+    return d;
+  };
+  const binA = mkbin("binA");
+  const binB = mkbin("binB");
+  const stubBin = path.join(root, "stubbin");
+  fs.mkdirSync(stubBin);
+  fs.writeFileSync(path.join(stubBin, "pi"), "#!/bin/sh\necho 0.0.0-stub\n", { mode: 0o755 });
+  const env = { ...process.env, PATH: `${binA}:${binB}:${stubBin}:${process.env.PATH}` };
+  const r = spawnSync(process.execPath, [cli, "init", "--library", "none", "--github", "off"], { cwd: repo, encoding: "utf8", env });
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.stdout, /needs\s+one etium install/);
+  assert.ok(r.stdout.includes(path.join(binA, "etium")));
+  assert.ok(r.stdout.includes(path.join(binB, "etium")));
+  assert.match(r.stdout, /npm uninstall -g --prefix/);
+});
+
 test("init (flags mode): checks, clones the library, exits 1 outside a repo", () => {
   const cli = path.resolve("src/cli.ts");
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "etium-init-"));

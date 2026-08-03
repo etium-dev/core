@@ -97,6 +97,25 @@ test("checkHarnessAuth: missing binary is definitive; passing check is ok; timeo
 });
 
 // ---------------------------------------------------------------------------
+// Presence gate + spawn failure (the field-found pi-ENOENT crash class):
+// a missing harness fails the pre-spawn gate legibly; a spawn that still
+// fails becomes a step error, never a supervisor-killing 'error' event.
+// ---------------------------------------------------------------------------
+
+test("checkHarnessAuth: a declared bin missing from PATH is definitive; pi and codex declare theirs", () => {
+  assert.equal(getAdapter("pi").bin, "pi");
+  assert.equal(getAdapter("codex").bin, "codex");
+  execAdapter.bin = "etium-no-such-binary-xyz";
+  try {
+    const r = checkHarnessAuth("exec");
+    assert.equal(r.ok, false);
+    assert.match((r as { detail: string }).detail, /not installed \(no `etium-no-such-binary-xyz` on PATH\)/);
+  } finally {
+    delete execAdapter.bin;
+  }
+});
+
+// ---------------------------------------------------------------------------
 // runStep: passthrough reaches the child; values are redacted everywhere (§9)
 // ---------------------------------------------------------------------------
 
@@ -144,6 +163,21 @@ test("runStep: declared passthrough reaches the child and is redacted from raw",
   } finally {
     execAdapter.auth = undefined;
     delete process.env.ETIUM_TEST_MODELVAR;
+  }
+});
+
+test("runStep: spawn failure completes the step as error instead of killing the process", async () => {
+  const orig = execAdapter.build;
+  execAdapter.build = () => ({ cmd: "etium-no-such-binary-xyz", args: [] });
+  try {
+    const a = stepArgs({ harness: "exec", command: "unused" });
+    const r = await runStep(a);
+    assert.equal(r.status, "error");
+    assert.equal(r.exit, null);
+    const stderr = fs.readFileSync(path.join(a.stepDir, "stderr.log"), "utf8");
+    assert.match(stderr, /spawn etium-no-such-binary-xyz failed \(ENOENT\) — is etium-no-such-binary-xyz installed\?/);
+  } finally {
+    execAdapter.build = orig;
   }
 });
 

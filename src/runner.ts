@@ -63,6 +63,14 @@ export type StepAuthResult = { ok: true; authEnv: string[] } | { ok: false; deta
 export function checkHarnessAuth(harness: string, timeoutMs = 10_000): StepAuthResult {
   const adapter = getAdapter(harness);
   const authEnv = (adapter.auth?.env ?? []).filter((k) => process.env[k] !== undefined);
+  // Presence before auth: a harness that isn't installed fails here, legibly,
+  // instead of at spawn. Surface-created runs never pass through `etium init`'s
+  // checks, so this gate is where "pi isn't on this machine" must be caught.
+  if (adapter.bin) {
+    const found = spawnSync("/bin/sh", ["-c", `command -v ${adapter.bin}`], { stdio: "ignore", timeout: timeoutMs });
+    if (found.status !== 0)
+      return { ok: false, detail: `harness ${harness} is not installed (no \`${adapter.bin}\` on PATH) — install it, then: etium resume` };
+  }
   const check = adapter.auth?.check;
   if (!check) return { ok: true, authEnv };
   const remedy = adapter.auth?.remedy ? ` — run: ${adapter.auth.remedy}` : "";
@@ -177,6 +185,12 @@ export async function runStep(a: RunStepArgs): Promise<RunStepOutcome> {
     detached: true, // own process group so we can kill the whole tree
     stdio: ["pipe", "pipe", "pipe"],
   });
+  // Spawn failure (ENOENT, EACCES, bad interpreter) must become a step error,
+  // never an unhandled 'error' event that kills the supervisor mid-attach.
+  let spawnError: NodeJS.ErrnoException | undefined;
+  child.stdin.on("error", () => {
+    /* the child 'error' event carries the cause */
+  });
   if (built.stdin !== undefined) child.stdin.write(built.stdin);
   child.stdin.end();
   if (child.pid) activeChildren.add(child.pid);
@@ -240,11 +254,22 @@ export async function runStep(a: RunStepArgs): Promise<RunStepOutcome> {
   child.stderr.on("data", (c: Buffer) => stderrSplit.push(c));
 
   const { exit, signal } = await new Promise<{ exit: number | null; signal: string | null }>(
-    (res) => child.on("close", (code, sig) => res({ exit: code, signal: sig })),
+    (res) => {
+      child.on("close", (code, sig) => res({ exit: code, signal: sig }));
+      child.on("error", (e: NodeJS.ErrnoException) => {
+        spawnError = e; // 'close' may never fire for a failed spawn
+        res({ exit: null, signal: null });
+      });
+    },
   );
   if (child.pid) activeChildren.delete(child.pid);
   stdoutSplit.flush();
   stderrSplit.flush();
+  if (spawnError) {
+    const why = `spawn ${built.cmd} failed (${spawnError.code ?? spawnError.message}) — is ${built.cmd} installed?`;
+    fs.writeSync(errFd, why + "\n");
+    a.emitActivity("lifecycle", why, undefined, rawLines);
+  }
   if (wallTimer) clearTimeout(wallTimer);
   if (stallTimer) clearTimeout(stallTimer);
   fs.closeSync(rawFd);
@@ -256,6 +281,7 @@ export async function runStep(a: RunStepArgs): Promise<RunStepOutcome> {
   const metered = usage.tokensIn + usage.tokensOut + usage.costUsd > 0;
   let status: RunStepOutcome["status"];
   if (budgetHit) status = "budget";
+  else if (spawnError) status = "error";
   else if (signal) status = "killed";
   else if (exit === 0) status = "ok";
   else status = "error";

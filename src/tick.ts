@@ -6,7 +6,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
-import { loadState, writeStateCache } from "./ledger.ts";
+import { LedgerWriter, loadState, readLedger, writeStateCache } from "./ledger.ts";
 import { isLockLive, readLock, writeDecision } from "./lock.ts";
 import { decisionsDir } from "./lock.ts";
 import githubSurface from "./github.ts";
@@ -17,6 +17,26 @@ const BUILTIN_SURFACES: Record<string, Surface> = { github: githubSurface };
 
 const TICK_LOCK_STALE_MS = 5 * 60_000;
 
+/** Crash-loop guard: a supervisor that keeps dying before recording any
+ * progress (missing harness binary, unimportable loop) leaves status
+ * `running` behind, and reconcile would re-attach it forever. Count trailing
+ * attaches since the last progress event; past the threshold, converge the
+ * run to `error` (resumable with `etium resume` once the cause is fixed). */
+const PROGRESS_EVENTS = new Set([
+  "step.completed", "step.activity", "gate.opened", "gate.decided",
+  "effect.recorded", "run.parked", "budget.exceeded", "run.completed",
+]);
+const CRASH_LOOP_ATTACHES = 3;
+
+function attachesWithoutProgress(runDir: string): number {
+  let n = 0;
+  for (const e of readLedger(runDir).reverse()) {
+    if (PROGRESS_EVENTS.has(e.type)) break;
+    if (e.type === "supervisor.started") n++;
+  }
+  return n;
+}
+
 export interface TickAction {
   run: string;
   action:
@@ -24,6 +44,7 @@ export interface TickAction {
     | "skip-running"
     | "skip-parked"
     | "resume"
+    | "crash-loop"
     | "surface-task"
     | "surface-decision"
     | "surface-abandon"
@@ -243,6 +264,18 @@ export async function tickOnce(
           actions.push({ run: name, action: "skip-parked", detail: "no pending decisions" });
           continue;
         }
+      }
+      const attaches = attachesWithoutProgress(runDir);
+      if (attaches >= CRASH_LOOP_ATTACHES) {
+        const w = new LedgerWriter(runDir, st.run, st.seq);
+        w.append("run.completed", {
+          status: "error",
+          summary: `supervisor crashed ${attaches}× without progress — see supervisor.log, fix the cause, then: etium resume ${name}`,
+        });
+        w.close();
+        writeStateCache(runDir, loadState(runDir));
+        actions.push({ run: name, action: "crash-loop", detail: `${attaches} attaches without progress — ${path.join(runDir, "supervisor.log")}` });
+        continue;
       }
       // created (spawn never happened), interrupted, orphaned-running, or
       // parked-with-decisions: attach a supervisor. It reconciles the rest.

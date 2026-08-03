@@ -538,6 +538,33 @@ async function cmdInit(argv: string[]): Promise<number> {
     hardFail = true;
   }
   out(`  ok     etium ${ETIUM_VERSION}`);
+  const etiums = (() => {
+    const seen = new Map<string, string>(); // realpath -> first PATH entry serving it
+    for (const dir of (process.env.PATH ?? "").split(path.delimiter)) {
+      if (!dir) continue;
+      const p = path.join(dir, "etium");
+      try {
+        fs.accessSync(p, fs.constants.X_OK);
+        const real = fs.realpathSync(p);
+        if (!seen.has(real)) seen.set(real, p);
+      } catch {
+        /* not in this dir */
+      }
+    }
+    return [...seen.values()];
+  })();
+  if (etiums.length > 1) {
+    const [active, ...shadowed] = etiums;
+    out(`  needs  one etium install — this machine has ${etiums.length}; PATH serves the first:`);
+    out(`         ${active}   (this one runs)`);
+    for (const s of shadowed) {
+      const prefix = path.dirname(path.dirname(s));
+      const sudo = prefix.startsWith(os.homedir() + path.sep) ? "" : "sudo ";
+      out(`         ${s}   (shadowed — updates here never take effect)`);
+      out(`         remove it: ${sudo}npm uninstall -g --prefix ${prefix} @etium/core`);
+    }
+    hardFail = true;
+  }
   if (sh("git", ["--version"]).status === 0) {
     out("  ok     git — each run can work on its own isolated branch");
   } else {
