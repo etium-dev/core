@@ -14,42 +14,52 @@ improvise a fix, do not continue.
 
 ## Step 0 — interview the operator
 
-Do not start until every question below has an answer. Ask **all applicable
-questions in one message** (never drip them one at a time), offering the
-defaults shown; skip any question the operator's handoff message already
-answered. Then restate the resulting configuration in one line and proceed —
-e.g. "Configuration: repo /a/b, etium only, no GitHub wiring, scratch in a
-temp dir. Starting."
+Protocol: **propose, don't quiz.** Detect what you can, present a numbered
+proposal in which every item already has a default, and let a single word
+accept all of it; corrections come by item number. Never more than two
+rounds; never more than four numbered items in one message; skip any item
+the operator's handoff message already answered.
 
-1. **Which repository should etium work in?** (absolute path → `REPO_DIR`)
-2. **Etium only, or also the ai-engineer loop library?** Cloning the
-   library commits an `ai-engineer/` folder into the repo — never assume
-   it. (`LIBRARY` = `ai-engineer` or `none`)
-3. **Wire it to GitHub, so assigning an issue starts work and `/et`
-   comments drive it?** If yes, ask the follow-ups below **in these plain
-   phrasings — never surface the raw input names** (a newcomer has no idea
-   what a "trusted login" is):
-   - "Which GitHub repository? (`owner/name`)" → `GITHUB_REPO`
-   - "What is **your** GitHub username? The engineer only obeys comments
-     and assignments from usernames on this list — start with just
-     yourself; teammates can be added later." → `TRUSTED`
-   - "Should the engineer act **as you**, or as a **separate bot
-     account**? As-you is the simple start: assigning yourself to an
-     issue kicks it off. If a bot, what is its username?" (default: the
-     `gh`-authenticated user) → `AGENT_LOGIN`
-   - "The engineer wakes up on a schedule. While you're trying things
-     out, the simplest option is running `etium watch` in a terminal
-     whenever you're using it — nothing gets installed. For always-on,
-     it's a once-a-minute cron entry: should I add that to your crontab
-     now, leave the exact line in my report for you, or will you just use
-     `etium watch` for now?" → `INSTALL_CRON` (`yes` / anything else =
-     print; the watch choice also just prints the line for later)
+Read-only detections to run first (a failure just means "ask in the
+proposal instead"):
 
-   If no, step 4 is skipped.
-4. **Any constraints on where throwaway verification work may happen?**
-   (default: a fresh `mktemp -d` directory → `SCRATCH_DIR`)
+```sh
+git rev-parse --show-toplevel     # candidate repository (if run inside one)
+git remote get-url origin         # candidate owner/name
+gh api user --jq .login           # candidate GitHub username
+```
 
-The answers bind these inputs, referenced by the steps below:
+**Round 1 — send exactly this shape:**
+
+> Setting up etium. Reply **yes** to accept everything, or correct any
+> item by number (for example: "2: ai-engineer"):
+> 1. Repository: `<detected absolute path — or ask: which repository should etium work in?>`
+> 2. Loop library: **none** (etium only). Say `ai-engineer` for the full
+>    multi-persona workflow — it commits an `ai-engineer/` folder into the
+>    repo.
+> 3. GitHub wiring: **off** (you drive it from the terminal). Say `github`
+>    to have issue assignment and `/et` comments drive it.
+> 4. Throwaway verification work: a fresh temp directory. Name a directory
+>    to change that.
+
+**Round 2 — only if item 3 became `github`:**
+
+> GitHub wiring. Reply **yes** to accept, or correct by number:
+> 1. GitHub repository: `<owner/name from origin — or ask>`
+> 2. Commander: `<detected gh username>` — the only username whose
+>    comments and assignments are obeyed. Teammates can be added later.
+> 3. The engineer acts **as you**: assigning yourself to an issue starts
+>    it. Give a bot username to use a separate account instead.
+> 4. Wake-up: you run `etium watch` in a terminal while trying things out
+>    — nothing installed. Say **cron** and I add the once-a-minute crontab
+>    entry now; say **print** and the line goes in my report instead.
+
+Never surface raw input names (a newcomer has no idea what a "trusted
+login" is). After acceptance, restate the configuration in one line — e.g.
+"Configuration: repo /a/b, etium only, no GitHub wiring, scratch in a temp
+dir. Starting." — and proceed.
+
+The accepted items bind these inputs, referenced by the steps below (round 1: 1→`REPO_DIR`, 2→`LIBRARY`, 3→github on/off, 4→`SCRATCH_DIR`; round 2: 1→`GITHUB_REPO`, 2→`TRUSTED`, 3→`AGENT_LOGIN`, 4→`INSTALL_CRON`):
 
 | input | required | meaning |
 |---|---|---|
