@@ -31,8 +31,9 @@ temp dir. Starting."
      account**? As-you is the simple start: assigning yourself to an
      issue kicks it off. If a bot, what is its username?" (default: the
      `gh`-authenticated user) → `AGENT_LOGIN`
-   - "Install the every-minute cron line now, or just print it for you?"
-     → `INSTALL_CRON`
+   - "The engineer wakes up via a cron entry that runs once a minute.
+     Should I add it to your crontab now, or leave the exact line in my
+     report for you to add yourself?" → `INSTALL_CRON`
 
    If no, step 4 is skipped.
 4. **Any constraints on where throwaway verification work may happen?**
