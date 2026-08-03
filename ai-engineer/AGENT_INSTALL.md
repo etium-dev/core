@@ -86,16 +86,21 @@ The accepted items bind these inputs, referenced by the steps below (round 1: 1�
 
 ## Step 1 — etium on PATH
 
-Preconditions first:
+Preconditions first. Any npm bundled with a qualifying Node is fine —
+**npm has no version requirement of its own**; check only that it exists:
 
 ```sh
-node --version && npm --version
+npm --version
+node -e 'const [a,b]=process.versions.node.split(".").map(Number); process.exit((a===22&&b>=18)||(a===23&&b>=6)||a>=24?0:1)'
 ```
 
-**PASS**: both print; Node major ≥ 22 (`v22.18` minimum). If Node or npm is
-missing or too old, **stop and report**: "operator must install Node ≥
-22.18 (nodejs.org installer or a package manager)". Do not download or run
-installers yourself.
+**PASS**: both exit 0. The Node check is exact, not "new enough looks
+fine": etium runs TypeScript loop files natively, which Node enables by
+default from 22.18 (and 23.6) — older versions pass a naive major-version
+check and then fail confusingly at the first loop. On failure, **stop and
+report**: "operator must install Node ≥ 22.18 (current: `node --version`'s
+output) — etium runs .ts loops natively, which needs it; nodejs.org or a
+package manager". Do not download or run installers yourself.
 
 ```sh
 etium --version
