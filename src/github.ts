@@ -1,25 +1,24 @@
-// The GitHub surface for the ai-engineer loop (ADR-009/ADR-011): commands are
-// comments, never labels. Assignment of the agent user → a task; `/et <word>
-// [note]` comments by trusted authors → gate decisions (the word is matched
-// against whichever open gate declares it); issue close / PR close / PR merge
-// → abandons or wrap-up; one bot status comment (idempotently rewritten)
-// lists the currently-valid commands; labels are write-only decoration
-// (et:working | et:waiting | et:blocked). All GitHub access goes through the
-// `gh` CLI — auth stays gh's problem, per MODEL_AUTH's delegation principle.
+// The built-in `github` surface (§10.3, ADR-012): loop-agnostic
+// infrastructure connecting GitHub to any etium loop. Commands are comments,
+// never labels. Assignment of the agent user → a task running ETIUM_GH_LOOP;
+// `/et <word> [note]` comments by trusted authors → gate decisions (the word
+// is matched against whichever open gate declares it); issue close / PR
+// close / PR merge → abandons or wrap-up; one bot status comment
+// (idempotently rewritten) lists the currently-valid commands; labels are
+// write-only decoration (et:working | et:waiting | et:blocked). All GitHub
+// access goes through the `gh` CLI — auth stays gh's problem, per
+// MODEL_AUTH's delegation principle.
 //
 // Config (env): ETIUM_GH_REPO (owner/name, required), ETIUM_GH_TRUSTED
-// (comma-separated logins, required), ETIUM_GH_AGENT (login whose assignment
-// triggers tasks; default: the authenticated user), ETIUM_GH_WORKDIR (the
-// checkout to branch from; default cwd), ETIUM_GH_BASE (PR base branch,
-// default main), ETIUM_GH_LOOP (default: sibling loop.ts), ETIUM_GH_CMD
-// (gh binary override; tests point this at a stub).
+// (comma-separated logins, required), ETIUM_GH_LOOP (loop path or builtin
+// name, required), ETIUM_GH_AGENT (login whose assignment triggers tasks;
+// default: the authenticated user), ETIUM_GH_WORKDIR (the checkout to
+// branch from; default cwd), ETIUM_GH_BASE (PR base branch, default main),
+// ETIUM_GH_CMD (gh binary override; tests point this at a stub).
 
 import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
-import * as path from "node:path";
-import { fileURLToPath } from "node:url";
-// In your own project: `import type { … } from "etium"`.
-import type { RunView, Surface, SurfaceDecision, SurfacePollResult, SurfaceTask } from "../src/index.ts";
+import type { RunView, Surface, SurfaceDecision, SurfacePollResult, SurfaceTask } from "./types.ts";
 
 const env = (k: string, d?: string): string => {
   const v = process.env[k] ?? d;
@@ -133,7 +132,7 @@ const surface: Surface = {
         tasks.push({
           key: `issue-${issue.number}#${attempt}`,
           task: `# ${issue.title}\n\n${issue.body ?? ""}\n`,
-          loop: process.env.ETIUM_GH_LOOP ?? path.join(path.dirname(fileURLToPath(import.meta.url)), "loop.ts"),
+          loop: env("ETIUM_GH_LOOP"),
           params: { issue: String(issue.number) },
           worktree: {
             repo: process.env.ETIUM_GH_WORKDIR ?? process.cwd(),
@@ -189,12 +188,15 @@ const surface: Surface = {
     if (view.params.surface !== "github" || !issueN) return;
 
     // Push the attempt branch; make the work reviewable as a draft PR once
-    // stage artifacts exist ("architecture or planning creates the first PR").
+    // the branch has commits past its recorded base (loop-agnostic — GitHub
+    // refuses zero-commit PRs anyway).
     if (view.worktree && fs.existsSync(view.workspace)) {
       const pushed = spawnSync("git", ["-C", view.workspace, "push", "-q", "-u", "origin", view.worktree.branch], {
         encoding: "utf8",
       });
-      if (pushed.status === 0 && fs.existsSync(path.join(view.workspace, "ai")) && !prFor(view)) {
+      const head = spawnSync("git", ["-C", view.workspace, "rev-parse", "HEAD"], { encoding: "utf8" });
+      const hasCommits = (head.stdout || "").trim() !== view.worktree.baseSha;
+      if (pushed.status === 0 && hasCommits && !prFor(view)) {
         post(`repos/${REPO()}/pulls`, {
           title: `etium: ${view.id}`,
           head: view.worktree.branch,

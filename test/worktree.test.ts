@@ -51,9 +51,10 @@ test("worktree runs: own branch off base, recorded in run.created, isolated in p
     assert.ok(fs.existsSync(path.join(ws, "README.md")), "worktree checked out from base");
     assert.equal(git(ws, "rev-parse", "--abbrev-ref", "HEAD"), `etium/${runId}`);
     const created = readLedger(runDir).find((e) => e.type === "run.created")!;
-    const data = created.data as { workspace: string; worktree?: { repo: string; branch: string; base: string } };
+    const data = created.data as { workspace: string; worktree?: { repo: string; branch: string; base: string; baseSha: string } };
     assert.equal(data.workspace, ws);
-    assert.deepEqual(data.worktree, { repo, branch: `etium/${runId}`, base: "HEAD" });
+    const baseSha = git(repo, "rev-parse", "HEAD");
+    assert.deepEqual(data.worktree, { repo, branch: `etium/${runId}`, base: "HEAD", baseSha });
   }
 
   // Parallel isolation: work committed on a's branch is invisible to b and to the repo.

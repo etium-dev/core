@@ -6,15 +6,15 @@ import { join } from "node:path";
 
 const count = (p) => readFileSync(p, "utf8").split("\n").length - 1;
 const srcFiles = readdirSync("src").filter((f) => f.endsWith(".ts"));
-const core = srcFiles.filter((f) => f !== "adapters.ts" && f !== "cli.ts");
+const core = srcFiles.filter((f) => f !== "adapters.ts" && f !== "cli.ts" && f !== "github.ts");
 
 const rows = [
-  ["core (src minus adapters, cli)", core.reduce((n, f) => n + count(join("src", f)), 0), 3000],
+  ["core (src minus adapters, cli, github)", core.reduce((n, f) => n + count(join("src", f)), 0), 3000],
   ["adapters (src/adapters.ts)", count("src/adapters.ts"), 900],
+  ["github surface (src/github.ts)", count("src/github.ts"), 450],
   ["cli (src/cli.ts)", count("src/cli.ts"), 1000],
   ...readdirSync("loops").filter((f) => /\.(js|ts)$/.test(f)).map((f) => [`loop ${f}`, count(join("loops", f)), 150]),
   ["ai-engineer loop (ai-engineer/loop.ts)", count("ai-engineer/loop.ts"), 150],
-  ["ai-engineer surface (ai-engineer/github.ts)", count("ai-engineer/github.ts"), 450],
 ];
 let fail = false;
 for (const [name, loc, budget] of rows) {

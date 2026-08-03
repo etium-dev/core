@@ -47,7 +47,7 @@ export interface RunCreatedData {
   loop: string; // resolved loop module path or builtin name
   params: Record<string, string>;
   workspace: string;
-  worktree?: { repo: string; branch: string; base: string }; // set when the workspace is a git worktree (§4)
+  worktree?: { repo: string; branch: string; base: string; baseSha: string }; // set when the workspace is a git worktree (§4)
   etiumVersion: string;
 }
 export interface SupervisorStartedData {
@@ -322,7 +322,7 @@ export interface RunView {
   status: RunStatus;
   params: Record<string, string>;
   workspace: string;
-  worktree?: { repo: string; branch: string; base: string }; // set for --worktree runs; surfaces open PRs from this
+  worktree?: { repo: string; branch: string; base: string; baseSha: string }; // set for --worktree runs; surfaces open PRs from this
   openGates: GateOpenedData[];
   usage: Required<Usage>;
   seq: number;

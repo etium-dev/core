@@ -12,7 +12,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { readLedger } from "../src/ledger.ts";
 import { tickOnce } from "../src/tick.ts";
-import surface from "../ai-engineer/github.ts";
+import surface from "../src/github.ts";
 
 const STUB = `#!/usr/bin/env node
 const fs = require("node:fs");

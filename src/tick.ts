@@ -9,8 +9,11 @@ import { pathToFileURL } from "node:url";
 import { loadState, writeStateCache } from "./ledger.ts";
 import { isLockLive, readLock, writeDecision } from "./lock.ts";
 import { decisionsDir } from "./lock.ts";
+import githubSurface from "./github.ts";
 import { abandonRun, createRun, supervise, superviseDetached } from "./supervisor.ts";
 import type { RunView, Surface, SurfacePollResult } from "./types.ts";
+
+const BUILTIN_SURFACES: Record<string, Surface> = { github: githubSurface };
 
 const TICK_LOCK_STALE_MS = 5 * 60_000;
 
@@ -51,14 +54,22 @@ function acquireTickLock(base: string): boolean {
   return false;
 }
 
-/** Load surface modules by path (dynamic import; `.ts` allowed like loops). */
-export async function loadSurfaces(paths: string[]): Promise<Surface[]> {
+/** Resolve surfaces: builtin names first (`github`), else load a module by
+ * path (dynamic import; `.ts` allowed like loops). */
+export async function loadSurfaces(refs: string[]): Promise<Surface[]> {
   const out: Surface[] = [];
-  for (const p of paths) {
-    const mod = (await import(pathToFileURL(path.resolve(p)).href)) as { default?: Surface };
+  for (const ref of refs) {
+    if (!ref.includes("/") && !ref.includes(".")) {
+      const builtin = BUILTIN_SURFACES[ref];
+      if (!builtin)
+        throw new Error(`unknown builtin surface "${ref}" (available: ${Object.keys(BUILTIN_SURFACES).join(", ")})`);
+      out.push(builtin);
+      continue;
+    }
+    const mod = (await import(pathToFileURL(path.resolve(ref)).href)) as { default?: Surface };
     const s = mod.default;
     if (!s || typeof s.id !== "string" || typeof s.poll !== "function")
-      throw new Error(`surface module must default-export { id, poll, project? }: ${p}`);
+      throw new Error(`surface module must default-export { id, poll, project? }: ${ref}`);
     out.push(s);
   }
   return out;

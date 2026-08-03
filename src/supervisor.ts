@@ -76,7 +76,7 @@ export function createRun(base: string, spec: CreateRunSpec): { runId: string; r
   // Worktree first: it is the one step that can fail for external reasons, and
   // an aborted creation must leave no half-made run behind (§6.1 crash-only).
   let workspace: string;
-  let worktree: { repo: string; branch: string; base: string } | undefined;
+  let worktree: { repo: string; branch: string; base: string; baseSha: string } | undefined;
   if (spec.worktree) {
     const repo = path.resolve(spec.worktree.repo);
     const branch = spec.worktree.branch ?? `etium/${runId}`;
@@ -88,7 +88,10 @@ export function createRun(base: string, spec: CreateRunSpec): { runId: string; r
     });
     if (r.status !== 0)
       throw new Error(`git worktree add failed: ${(r.stderr || r.stdout || "").trim() || `exit ${r.status}`}`);
-    worktree = { repo, branch, base: baseRef };
+    // The fresh worktree's HEAD is the resolved base — recorded so surfaces
+    // can tell "has commits to review" without re-resolving a moving ref.
+    const sha = spawnSync("git", ["-C", workspace, "rev-parse", "HEAD"], { encoding: "utf8" });
+    worktree = { repo, branch, base: baseRef, baseSha: (sha.stdout || "").trim() };
   } else {
     workspace = spec.workspace ? path.resolve(spec.workspace) : path.join(runDir, "ws");
   }

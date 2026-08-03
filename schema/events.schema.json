@@ -74,13 +74,14 @@
         "workspace": { "type": "string" },
         "worktree": {
           "type": "object",
-          "required": ["repo", "branch", "base"],
+          "required": ["repo", "branch", "base", "baseSha"],
           "properties": {
             "repo": { "type": "string" },
             "branch": { "type": "string" },
-            "base": { "type": "string" }
+            "base": { "type": "string" },
+            "baseSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
           },
-          "description": "Present when the workspace is a git worktree created for this run (one branch per attempt)."
+          "description": "Present when the workspace is a git worktree created for this run (one branch per attempt). baseSha is the resolved base commit; a branch head differing from it has commits to review."
         },
         "etiumVersion": { "type": "string" }
       }

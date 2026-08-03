@@ -398,3 +398,37 @@ independently versioned; a directory is enough). Surfaces or personas in
 core. Labels as anything but write-only decoration (ADR-009). A suspension
 primitive (abandon + reassign-as-new-attempt covers Suspended, with
 branches preserving the work).
+
+---
+
+## ADR-012 — The github surface moves into core; ai-engineer becomes pure content
+
+**Decision.** `src/github.ts` is a built-in surface, resolved by name
+(`etium tick --surface github`, mirroring builtin-loop resolution; paths
+still load custom surfaces). `ETIUM_GH_LOOP` is required — the composition
+point between core plumbing and whichever loop library the operator points
+it at. The draft-PR trigger is loop-agnostic: `run.created.worktree` now
+records `baseSha` (the resolved base commit), and a PR opens once the
+branch head differs from it — "has commits to review" — replacing the
+ai-engineer-specific artifact-directory check. The `ai-engineer/` package
+is thereby pure content: a loop and templates that users copy into their
+repos and adapt. This supersedes ADR-011's placement of the surface; the
+rest of ADR-011 stands.
+
+**Why.** The two halves want opposite distribution models. Loops and
+personas are content — copy-and-own is correct, adaptation is the point,
+divergence from upstream is healthy. The surface is plumbing — nobody
+should edit it, everybody wants fixes, and copied plumbing rots; in core it
+ships compiled in the npm tarball (`--surface github` works straight from
+`npm install`, which a copied `.ts` never could from node_modules) and
+upgrades with the package. It also completes a symmetry: core ships harness
+adapters for the inner world behind a neutral interface; the github surface
+is the same thing for the outer world. The §11 non-goal was never "no
+GitHub code" — it is "GitHub is never authoritative state", which the
+surface upholds by construction (projections out, events in, nothing read
+back).
+
+**Rejected.** Keeping the surface in the package (plumbing rots when
+copied). A plugin/registry mechanism for third-party surfaces beyond
+load-by-path (a path is a registry). Per-loop PR triggers (the baseSha
+check is universal; GitHub refuses zero-commit PRs anyway).
