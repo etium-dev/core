@@ -46,7 +46,7 @@ function gen(seed: number): AnyEnvelope[] {
     } else if (roll < 0.7) {
       const name = `g${gateN}`;
       gateN++;
-      out.push(ev("gate.opened", { name, occ: 0, show: [] }));
+      out.push(ev("gate.opened", { name, occ: 0, options: ["approve", "reject"], show: [] }));
       openGateRefs.push({ name, occ: 0 });
     } else if (roll < 0.85 && openGateRefs.length) {
       const g = openGateRefs.shift()!;

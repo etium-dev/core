@@ -70,6 +70,7 @@ export type StepAuthFn = (
 export interface EngineCtx {
   runDir: string;
   runId: string;
+  task: string;
   writer: LedgerWriter;
   state: RunState; // folded before attach
   loopFn: LoopFn;
@@ -250,6 +251,7 @@ export async function executeLoop(ctx: EngineCtx): Promise<EngineOutcome> {
 
   const run: Run = {
     id: ctx.runId,
+    task: ctx.task,
     params: ctx.params,
     workspace: ctx.workspace,
     t: (file: string) => ({ __template: file }),

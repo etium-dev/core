@@ -62,7 +62,7 @@ test("fold derives status through the lifecycle", () => {
   assert.equal(fold("r", readLedger(runDir)).status, "created");
   w.append("supervisor.started", { pid: 1, host: "h" });
   assert.equal(fold("r", readLedger(runDir)).status, "running");
-  w.append("gate.opened", { name: "g", occ: 0, show: [] });
+  w.append("gate.opened", { name: "g", occ: 0, options: ["approve", "reject"], show: [] });
   w.append("run.parked", { gates: [{ name: "g", occ: 0 }] });
   assert.equal(fold("r", readLedger(runDir)).status, "parked");
   w.append("run.interrupted", { reason: "stale-lock" });

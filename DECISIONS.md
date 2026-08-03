@@ -352,3 +352,49 @@ gain over worktrees). Worktree removal on run completion (destroys the thing
 the human is about to review; gc owns retention). Recording the worktree
 only in loop.json (surfaces read the ledger; run.created is the durable,
 greppable record).
+
+---
+
+## ADR-011 — The ai-engineer package: the extensibility proof, outside core
+
+**Decision.** The predecessor workflow ships as `ai-engineer/` — `loop.ts`
+(the whole 18-state machine as one route loop with converge stages),
+`templates/` (seven personas under the WRITING_LOOPS conventions),
+`github.ts` (an ADR-009 surface), and a README carrying the
+params/gates/artifacts contract. It lives outside core with its own LOC
+budget rows (loop ≤ 150, surface ≤ 450). The loop is CLI-complete — the
+test suite traverses the full graph with mailbox decisions and scripted
+`exec` steps, no surface loaded — and publication-free: it commits to its
+branch and opens gates; the surface projects branch → draft PR → status
+comment → decoration labels, all idempotent, never read back (a PR *is* a
+projection — the predecessor's invariant 11 already treated PR bodies as
+untrusted). §9 now names both sanctioned publication patterns.
+
+**What building it forced into core** — the honest measure of the
+extensibility test: `run.task` (loops could not read the task, one of the
+six primitives — an API omission, not a feature); the `abandons` channel
+(observed lifecycle facts must terminate runs; decisions can't and
+shouldn't); and a one-line bug fix (tick forwarded every SurfaceTask field
+except `worktree`, caught by the package's own tests). Everything else —
+N-way routing, fail-closed option validation, attempt branches, cursor
+consumption, the status projection — ran on primitives that already
+existed. Notable emergent simplification: the predecessor's "no
+`ai-implement` without an accepted plan" guard is now just the declared
+option set — `implement` isn't offered until a plan converged, so the rule
+enforces itself.
+
+**Mechanics worth recording.** Personas compose in code (conventions +
+persona + `{{task}}`/`{{stage}}` interpolation), keeping the digest
+guarantees. `cmd.<step>` params are the dry-run hook: under `--harness
+exec` they script any step (real adapters ignore `command`), which is what
+makes the graph testable token-free and gives operators a walkthrough mode.
+The surface's config is env vars with no secret values — GitHub auth stays
+`gh`'s, model auth stays the harness's (MODEL_AUTH.md); the same cron line
+deploys mode A (you, your machine) and mode B (a bot account's machine)
+with zero code difference.
+
+**Rejected.** A workspace split for the package (ADR-006 stands until it is
+independently versioned; a directory is enough). Surfaces or personas in
+core. Labels as anything but write-only decoration (ADR-009). A suspension
+primitive (abandon + reassign-as-new-attempt covers Suspended, with
+branches preserving the work).

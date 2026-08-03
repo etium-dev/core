@@ -79,6 +79,7 @@ function runViews(runsDir: string): RunView[] {
         status: st.status,
         params: st.created?.params ?? {},
         workspace: st.created?.workspace ?? "",
+        worktree: st.created?.worktree,
         openGates: [...st.gates.values()].filter((g) => g.opened && !g.decided).map((g) => g.opened!),
         usage: st.usage,
         seq: st.seq,
@@ -139,6 +140,7 @@ async function driveSurface(base: string, runsDir: string, s: Surface, actions: 
         loop: t.loop,
         params: { ...t.params, surface: s.id, "surface.task": tag },
         workspace: t.workspace,
+        worktree: t.worktree,
         preapprove: t.preapprove,
         maxSteps: t.maxSteps,
       });

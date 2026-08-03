@@ -192,10 +192,17 @@ export async function supervise(runDir: string): Promise<SuperviseOutcome> {
     if (typeof mod.default !== "function")
       throw new Error(`loop module has no default export function: ${cfg.loop}`);
 
+    let task = "";
+    try {
+      task = fs.readFileSync(path.join(runDir, "task.md"), "utf8");
+    } catch {
+      /* pre-task runs (tests) */
+    }
     const authCache = new Map<string, StepAuthResult>(); // per attach (§6.3)
     const outcome = await executeLoop({
       runDir,
       runId,
+      task,
       writer,
       state,
       loopFn: mod.default,

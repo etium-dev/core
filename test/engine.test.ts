@@ -39,6 +39,7 @@ async function exec(runDir: string, workspace: string, loopFn: LoopFn, impl: Run
     return await executeLoop({
       runDir,
       runId: "r1",
+      task: "",
       writer,
       state,
       loopFn,
@@ -228,7 +229,8 @@ test("gate options: preapproval of a gate that does not declare approve fails lo
   const writer = new LedgerWriter(runDir, "r1", state.seq);
   try {
     const outcome = await executeLoop({
-      runDir, runId: "r1", writer, state, loopFn: loop, loopDir: workspace,
+      runDir, runId: "r1",
+      task: "", writer, state, loopFn: loop, loopDir: workspace,
       params: {}, workspace, preapprovals: ["route"], runStepImpl: fakeStepImpl([]), pollMs: 5,
     });
     assert.equal(outcome, "error");

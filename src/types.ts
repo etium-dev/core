@@ -272,6 +272,7 @@ export interface GateResult {
 
 export interface Run {
   readonly id: string;
+  readonly task: string; // task.md content — the goal this run is an attempt at
   readonly params: Record<string, string>;
   readonly workspace: string;
   step(name: string, opts: StepOptions): Promise<StepResult>;
@@ -321,6 +322,7 @@ export interface RunView {
   status: RunStatus;
   params: Record<string, string>;
   workspace: string;
+  worktree?: { repo: string; branch: string; base: string }; // set for --worktree runs; surfaces open PRs from this
   openGates: GateOpenedData[];
   usage: Required<Usage>;
   seq: number;

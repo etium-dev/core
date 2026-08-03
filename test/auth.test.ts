@@ -12,7 +12,8 @@ import { getAdapter } from "../src/adapters.ts";
 import { LedgerWriter, loadState, readLedger } from "../src/ledger.ts";
 import { executeLoop, type RunStepImpl, type StepAuthFn } from "../src/engine.ts";
 import { main } from "../src/cli.ts";
-import type { LoopFn, RunStepArgs, StepOptions, StepStartedData } from "../src/types.ts";
+import type { LoopFn, StepOptions, StepStartedData } from "../src/types.ts";
+import type { RunStepArgs } from "../src/engine.ts";
 
 // ---------------------------------------------------------------------------
 // resolveEnv: declared passthrough (§9)
@@ -190,6 +191,7 @@ async function attach(runDir: string, workspace: string, loopFn: LoopFn, stepAut
     return await executeLoop({
       runDir,
       runId: "r1",
+      task: "",
       writer,
       state,
       loopFn,
