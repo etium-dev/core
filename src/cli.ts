@@ -7,6 +7,10 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
+import { spawnSync } from "node:child_process";
+import * as readline from "node:readline/promises";
+import { allAdapters } from "./adapters.ts";
+import { checkHarnessAuth } from "./runner.ts";
 import { loadState, openGates, readLedger, writeStateCache } from "./ledger.ts";
 import { isLockLive, readLock, writeDecision } from "./lock.ts";
 import { abandonRun, createRun, supervise, superviseDetached } from "./supervisor.ts";
@@ -31,6 +35,9 @@ usage:
   etium watch [--surface name|path]… [--every seconds]   tick on an interval, foreground (Ctrl-C to stop)
   etium rebuild <run>        rebuild state.json from the ledger
   etium clone-loop [library] [--into dir]   copy a bundled loop library into your repo (no arg: list)
+  etium init [--library ai-engineer|none] [--github owner/name|off] [--trusted logins]
+             [--act-as login|me] [--wakeup watch|cron|print] [--yes]
+             check dependencies (with fix commands), ask the setup questions, apply
   etium --version
 
 Base directory: --dir, else $ETIUM_DIR, else ./.etium
@@ -412,6 +419,151 @@ function cmdCloneLoop(argv: string[]): number {
   return 0;
 }
 
+
+// ---------------------------------------------------------------------------
+// etium init (§9, ADR-014): checks → questions → apply. Checks are neutral
+// and didactic — every "needs" line carries the exact command that fixes it.
+// Humans get prompts with detections pre-filled; agents pass the same
+// answers as flags and nothing prompts.
+// ---------------------------------------------------------------------------
+
+const sh = (cmd: string, args: string[]) =>
+  spawnSync(cmd, args, { encoding: "utf8", timeout: 10_000 });
+
+async function cmdInit(argv: string[]): Promise<number> {
+  const { values: v } = parseArgs({
+    args: argv,
+    options: {
+      library: { type: "string" },
+      github: { type: "string" },
+      trusted: { type: "string" },
+      "act-as": { type: "string" },
+      wakeup: { type: "string" },
+      yes: { type: "boolean" },
+      dir: { type: "string" },
+    },
+  });
+  const out = (t: string) => process.stdout.write(t + "\n");
+
+  // ---- 1. Checks (stop here, with commands, if anything hard is missing)
+  out("Checking this machine:");
+  let hardFail = false;
+  const [maj, min] = process.versions.node.split(".").map(Number);
+  const nodeOk = (maj === 22 && min! >= 18) || (maj === 23 && min! >= 6) || maj! >= 24;
+  if (nodeOk) out(`  ok     node ${process.versions.node}`);
+  else {
+    out(`  needs  node ≥ 22.18 (you have ${process.versions.node}; etium runs .ts loops natively) — run: nvm install --lts   (or: brew upgrade node)`);
+    hardFail = true;
+  }
+  out(`  ok     etium ${ETIUM_VERSION}`);
+  if (sh("git", ["--version"]).status === 0) out("  ok     git");
+  else {
+    out("  needs  git — run: xcode-select --install   (macOS; else https://git-scm.com)");
+    hardFail = true;
+  }
+  const top = sh("git", ["rev-parse", "--show-toplevel"]);
+  const repoDir = top.status === 0 ? (top.stdout || "").trim() : undefined;
+  if (repoDir) out(`  ok     repository: ${repoDir}`);
+  else {
+    out("  needs  a git repository — cd into the repository etium should work with, then re-run: etium init");
+    hardFail = true;
+  }
+  const ghInstalled = sh("gh", ["--version"]).status === 0;
+  const ghAuthed = ghInstalled && sh("gh", ["auth", "status"]).status === 0;
+  const ghLogin = ghAuthed ? (sh("gh", ["api", "user", "--jq", ".login"]).stdout || "").trim() : "";
+  out(ghInstalled
+    ? ghAuthed
+      ? `  ok     gh (authenticated as ${ghLogin || "unknown"})`
+      : "  note   gh installed, not authenticated — needed only for GitHub wiring: gh auth login"
+    : "  note   gh not installed — needed only for GitHub wiring: brew install gh   (else https://cli.github.com)");
+  for (const ad of allAdapters()) {
+    if (ad.id === "exec" || ad.id === "replay") continue;
+    if (sh(ad.id, ["--version"]).status !== 0) {
+      out(`  note   harness ${ad.id}: not installed (optional)`);
+      continue;
+    }
+    const auth = checkHarnessAuth(ad.id);
+    out(auth.ok
+      ? `  ok     harness ${ad.id}`
+      : `  needs  harness ${ad.id} authentication — run: ${ad.auth?.remedy ?? "see its docs"}`);
+  }
+  if (hardFail) {
+    out("\nFix the `needs` lines above, then re-run: etium init");
+    return 1;
+  }
+
+  // ---- 2. Questions (flags answer them; otherwise prompt with defaults)
+  const interactive = process.stdin.isTTY && !v.yes;
+  const rl = interactive ? readline.createInterface({ input: process.stdin, output: process.stdout }) : undefined;
+  const ask = async (q: string, def: string): Promise<string> => {
+    if (!rl) return def;
+    const a = (await rl.question(`${q} [${def}] `)).trim();
+    return a || def;
+  };
+  try {
+    const library = v.library ?? (await ask(
+      "Loop library — `ai-engineer` is the full multi-persona workflow (commits an ai-engineer/ folder here); `none` is etium only.",
+      "none"));
+    let github = v.github ?? (await ask(
+      "GitHub wiring — `owner/name` lets issue assignment and /et comments drive the engineer; `off` means you drive it from the terminal.",
+      "off"));
+    let trusted = v.trusted ?? "";
+    let actAs = v["act-as"] ?? "me";
+    let wakeup = v.wakeup ?? "watch";
+    if (github !== "off") {
+      if (!ghInstalled || !ghAuthed) {
+        out("\nGitHub wiring needs `gh`, installed and authenticated:");
+        if (!ghInstalled) out("  run: brew install gh   (else https://cli.github.com)");
+        out("  run: gh auth login   (as the bot account, if the engineer will act as one)");
+        out("Then re-run: etium init");
+        return 1;
+      }
+      trusted = v.trusted ?? (await ask(
+        "Your GitHub username — only usernames on this list may command the engineer (comma-separate to add teammates).",
+        ghLogin || "your-login"));
+      actAs = v["act-as"] ?? (await ask(
+        "The engineer acts as — `me` (assigning yourself to an issue starts it) or a bot username (that account must be the one `gh` is authenticated as).",
+        "me"));
+      wakeup = v.wakeup ?? (await ask(
+        "Wake-up — `watch` (run in a terminal while trying it out; nothing installed), `cron` (install a once-a-minute crontab entry now), or `print` (show the cron line, install it yourself later).",
+        "watch"));
+    }
+    rl?.close();
+
+    // ---- 3. Apply + next steps
+    out("");
+    if (library !== "none") {
+      const r = await main(["clone-loop", library]);
+      if (r !== 0) return r;
+    }
+    if (github === "off") {
+      out("Done. Next:");
+      out(library === "none"
+        ? `  write a loop (https://etium.dev/quickstart.html) and: etium run "goal" --loop your-loop.ts`
+        : `  etium run "your goal" --loop ${library}/loop.ts --worktree`);
+      return 0;
+    }
+    const agentLogin = actAs === "me" ? ghLogin : actAs;
+    const env = `ETIUM_GH_REPO=${github} ETIUM_GH_TRUSTED=${trusted} ETIUM_GH_AGENT=${agentLogin} ETIUM_GH_LOOP=${library === "none" ? "<path-to-your-loop>" : `${library}/loop.ts`}`;
+    const cronLine = `* * * * * cd ${repoDir} && ${env} etium tick --surface github >> .etium/tick.log 2>&1`;
+    if (wakeup === "cron") {
+      const cur = sh("crontab", ["-l"]);
+      const kept = (cur.status === 0 ? cur.stdout : "").split("\n").filter((l) => l && !l.includes("etium tick --surface github"));
+      const w = spawnSync("crontab", ["-"], { input: [...kept, cronLine, ""].join("\n"), encoding: "utf8" });
+      out(w.status === 0 ? "Installed the crontab entry." : `Could not edit crontab — install this line yourself:\n  ${cronLine}`);
+    } else if (wakeup === "print") {
+      out(`Install this crontab line when you want always-on:\n  ${cronLine}`);
+    }
+    out("Done. Next:");
+    if (wakeup === "watch") out(`  ${env} etium watch --surface github`);
+    if (actAs !== "me") out(`  ensure this machine's gh is authenticated as ${agentLogin} (it acts as that account)`);
+    out(`  assign ${agentLogin || "the engineer"} to a GitHub issue to start the first attempt`);
+    return 0;
+  } finally {
+    rl?.close();
+  }
+}
+
 async function cmdWatch(argv: string[]): Promise<number> {
   const { values: v } = parseArgs({
     args: argv,
@@ -492,6 +644,8 @@ export async function main(argv: string[]): Promise<number> {
         return await cmdTick(rest);
       case "watch":
         return await cmdWatch(rest);
+      case "init":
+        return await cmdInit(rest);
       case "rebuild":
         return cmdRebuild(rest);
       case "clone-loop":

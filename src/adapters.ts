@@ -202,6 +202,10 @@ const registry = new Map<string, HarnessAdapter>(
   [execAdapter, codexAdapter, piAdapter, replayAdapter].map((a) => [a.id, a]),
 );
 
+export function allAdapters(): HarnessAdapter[] {
+  return [...registry.values()];
+}
+
 export function getAdapter(id: string): HarnessAdapter {
   const a = registry.get(id);
   if (!a) throw new Error(`unknown harness: ${id} (available: ${[...registry.keys()].join(", ")})`);

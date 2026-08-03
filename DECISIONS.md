@@ -465,3 +465,38 @@ clone). Git submodules (resist local edits). A loop-library registry
 (a third-party library is a repo you `degit` — documented escape hatch,
 not core machinery). Auto-update/merge of cloned libraries (violates
 copy-and-own; diff-and-take is the contract).
+
+---
+
+## ADR-014 — `etium init`: checks, then questions, then apply — in the binary
+
+**Decision.** Setup lives in etium, not in prose: `etium init` first checks
+the machine (Node floor, git, repository, `gh` + its authenticated
+identity, each installed harness's auth via the adapter declarations) and
+stops with a `needs <thing> — run: <exact command>` line per unmet
+dependency; when checks pass it asks the setup questions — loop library,
+GitHub wiring, commander, acting identity, wake-up — as TTY prompts with
+detections pre-filled, or takes every answer as a flag (`--library`,
+`--github`, `--trusted`, `--act-as`, `--wakeup`) so an agent that
+interviewed the operator in chat runs it non-interactively; then it
+applies: clones the library, installs the crontab entry (wake-up `cron`)
+or prints it (`print`), and ends with copy-paste next steps. Named `init`,
+not `doctor`: it announces a beginning, not an illness — and checks that
+exist only inside a setup flow don't need a second verb. This supersedes
+the standalone-`doctor` plan (ADR-007's CLI note, the M1 list).
+
+**Why.** Field tests kept finding drift between documented remedies and
+the binary — prose instructions age; code ships, versions, and gets
+tested. The split that survives: remedies for dependencies that exist
+*before* etium (Node, npm, installing etium itself) must stay didactic
+prose in AGENT_INSTALL; everything after `etium --version` succeeds is the
+binary's job. Choices keep two front-ends over one implementation because
+their best UX differs: an agent interviewing in natural language beats a
+TTY wizard, and a TTY prompt beats making a human read a doc — but both
+feed the same flags.
+
+**Rejected.** A separate `doctor` verb (a second way to run the same
+checks; the name pathologizes a fresh machine). A full-setup wizard that
+also performs installs (never sudo, never OS installers — remedies are
+printed, operators execute). Interactive prompting for agents (flags
+exist precisely so nothing prompts).

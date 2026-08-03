@@ -3,6 +3,7 @@
 // overwritten, with .etium/ kept out of the receiving repo's git.
 
 import { test } from "node:test";
+import { spawnSync } from "node:child_process";
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as os from "node:os";
@@ -22,4 +23,22 @@ test("clone-loop: copies the library, ignores .etium/, never overwrites, rejects
   assert.equal(await main(["clone-loop", "ai-engineer", "--into", dest]), 1); // never overwrite
   assert.equal(await main(["clone-loop", "no-such-library"]), 2);
   assert.equal(await main(["clone-loop"]), 0); // bare form lists
+});
+
+test("init (flags mode): checks, clones the library, exits 1 outside a repo", () => {
+  const cli = path.resolve("src/cli.ts");
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "etium-init-"));
+  const repo = path.join(root, "repo");
+  fs.mkdirSync(repo);
+  const g = (...a: string[]) => spawnSync("git", ["-C", repo, "-c", "user.name=t", "-c", "user.email=t@t", ...a]);
+  g("init", "-q"); g("commit", "-qm", "init", "--allow-empty");
+  const ok = spawnSync(process.execPath, [cli, "init", "--library", "ai-engineer", "--github", "off"], { cwd: repo, encoding: "utf8" });
+  assert.equal(ok.status, 0, ok.stderr);
+  assert.match(ok.stdout, /ok\s+node/);
+  assert.ok(fs.existsSync(path.join(repo, "ai-engineer", "loop.ts")));
+  const bare = path.join(root, "empty");
+  fs.mkdirSync(bare);
+  const bad = spawnSync(process.execPath, [cli, "init", "--library", "none", "--github", "off"], { cwd: bare, encoding: "utf8" });
+  assert.equal(bad.status, 1);
+  assert.match(bad.stdout, /needs\s+a git repository/);
 });
