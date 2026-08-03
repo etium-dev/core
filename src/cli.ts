@@ -433,14 +433,67 @@ const sh = (cmd: string, args: string[]) =>
 const TTY = () => process.stdout.isTTY === true;
 const style = (code: string, t: string) => (TTY() ? `\x1b[${code}m${t}\x1b[0m` : t);
 
-function initBanner(): void {
+const RING_LEN = 28;
+function ringIndex(y: number, x: number): number {
+  if (y === 0) return x;
+  if (x === 10 && y < 4) return 10 + y;
+  if (y === 4) return 14 + 10 - x;
+  if (x === 0 && y > 0) return 28 - y;
+  return -1;
+}
+
+function ringFrame(head: number, settled: boolean): string {
+  const esc = "\x1b[";
+  const rows: string[] = [];
+  for (let y = 0; y < 5; y++) {
+    let row = "  ";
+    for (let x = 0; x <= 10; x++) {
+      const idx = ringIndex(y, x);
+      if (idx >= 0) {
+        let color = "36";
+        if (!settled) {
+          const d = (head - idx + RING_LEN) % RING_LEN;
+          color = d === 0 ? "1;96" : d <= 2 ? "36" : d <= 5 ? "2;36" : "90";
+        }
+        row += `${esc}${color}m██${esc}0m`;
+      } else if (y === 2 && x === 1) {
+        row += `${esc}1m     E T I U M    ${esc}0m`;
+        x = 9;
+      } else {
+        row += "  ";
+      }
+    }
+    rows.push(row);
+  }
+  return rows.join("\n");
+}
+
+/** One lap of the runner around the outer loop, drawn in place (no screen
+ * clear — init shares the user's scrollback). Static ring when not a TTY. */
+async function ringAnimation(): Promise<void> {
+  const o = (t: string) => process.stdout.write(t);
+  o("\n");
+  if (!TTY() && process.env.ETIUM_LOGO_FORCE !== "1") {
+    o(ringFrame(0, true).replace(/\x1b\[[0-9;]*m/g, "") + "\n");
+    return;
+  }
+  const restore = () => o("\x1b[?25h");
+  process.once("SIGINT", restore);
+  o("\x1b[?25l");
+  o(ringFrame(0, false) + "\n");
+  for (let s = 1; s <= RING_LEN; s++) {
+    await new Promise((r) => setTimeout(r, 30));
+    o(`\x1b[5A\r${ringFrame(s % RING_LEN, false)}\n`);
+  }
+  await new Promise((r) => setTimeout(r, 30));
+  o(`\x1b[5A\r${ringFrame(0, true)}\n`);
+  restore();
+  process.removeListener("SIGINT", restore);
+}
+
+async function initBanner(): Promise<void> {
   const o = (t: string) => process.stdout.write(t + "\n");
-  o("");
-  o(style("36", "  ██████████████████████"));
-  o(style("36", "  ██                  ██"));
-  o(`${style("36", "  ██")}${style("1", "     E T I U M    ")}${style("36", "██")}`);
-  o(style("36", "  ██                  ██"));
-  o(style("36", "  ██████████████████████"));
+  await ringAnimation();
   o("");
   o(`  ${style("1", "Etium Setup")}`);
   o(`  ${style("2", "The outer loop for coding agents")}`);
@@ -462,7 +515,7 @@ async function cmdInit(argv: string[]): Promise<number> {
   });
   const out = (t = "") => process.stdout.write(t + "\n");
 
-  initBanner();
+  await initBanner();
   out("Etium supervises coding agents working in this repository. Every run");
   out("is recorded as plain files, and each run can work on its own git");
   out("branch. Setup checks this machine, asks a few questions, and applies");
