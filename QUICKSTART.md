@@ -11,9 +11,10 @@ Node ≥ 22.18. Then:
 npm install -g @etium/core     # gives you `etium` on PATH
 ```
 
-(Permission error from a system Node? `sudo npm install -g @etium/core`, or
-use a user-owned prefix: `npm config set prefix ~/.npm-global` and add
-`~/.npm-global/bin` to PATH. From a checkout instead: `npm install && npm
+(Permission error? That's a system Node (macOS .pkg) with a root-owned
+prefix — Node via Homebrew or a version manager avoids it entirely.
+Otherwise: `sudo npm install -g @etium/core`, or a user-owned prefix:
+`npm config set prefix ~/.npm-global` and add `~/.npm-global/bin` to PATH. From a checkout instead: `npm install && npm
 run build && npm link`.)
 
 ## Hello world, offline — the shape of a run
