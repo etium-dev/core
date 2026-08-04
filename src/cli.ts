@@ -38,7 +38,7 @@ usage:
   etium tick [--surface name|path]…   reconcile all runs; poll/project surfaces (cron-safe, idempotent)
   etium watch [--surface name|path]… [--every seconds]   tick on an interval, foreground (Ctrl-C to stop)
   etium rebuild <run>        rebuild state.json from the ledger
-  etium clone-loop [library] [--into dir]   copy a loop library (ralph, ai-engineer) into your repo (no arg: list)
+  etium clone-loop [library] [--into dir] [--replace]   copy a loop library (ralph, ai-engineer) into your repo (no arg: list)
   etium configure [--library ralph|ai-engineer|none] [--github owner/name|off]
              [--wakeup watch|cron|print] [--git-name n] [--git-email e] [--yes]
              check the machine, ask, apply — re-run any time (wake-up on/off, status)
@@ -390,13 +390,14 @@ async function cmdTail(argv: string[]): Promise<number> {
 
 /** Loop libraries bundled in the package: copy-and-own content (`etium
  * clone-loop <name>`). A cloned library is the user's to edit; upgrades are
- * a fresh clone into a scratch dir and a diff, never an auto-merge. */
+ * an explicit `--replace` (the existing copy moves aside to .old, never
+ * deleted) and a diff, never an auto-merge and never a silent overwrite. */
 const LIBRARIES = ["ralph", "ai-engineer"];
 
 function cmdCloneLoop(argv: string[]): number {
   const { values: v, positionals } = parseArgs({
     args: argv,
-    options: { into: { type: "string" } },
+    options: { into: { type: "string" }, replace: { type: "boolean" } },
     allowPositionals: true,
   });
   const packageRoot = path.resolve(path.dirname(entry), "..");
@@ -413,8 +414,15 @@ function cmdCloneLoop(argv: string[]): number {
   const src = path.join(packageRoot, name);
   const dest = path.resolve(v.into ?? name);
   if (fs.existsSync(dest)) {
-    process.stderr.write(`etium clone-loop: ${dest} already exists — clone-loop never overwrites. Clone into a scratch dir (--into) and diff to upgrade.\n`);
-    return 1;
+    if (!v.replace) {
+      process.stderr.write(`etium clone-loop: ${dest} already exists — clone-loop never overwrites. Re-run with --replace to swap in the packaged version (your copy moves aside to .old first).\n`);
+      return 1;
+    }
+    // Regret insurance: the existing copy always moves aside, never dies.
+    let old = `${dest}.old`;
+    for (let i = 2; fs.existsSync(old); i++) old = `${dest}.old.${i}`;
+    fs.renameSync(dest, old);
+    process.stdout.write(`moved ${path.relative(process.cwd(), dest)}/ → ${path.relative(process.cwd(), old)}/ — your copy, kept for rollback; delete it once satisfied\n`);
   }
   fs.cpSync(src, dest, { recursive: true });
   // Runs write .etium/ next to where you work; keep it out of the repo.
@@ -734,6 +742,21 @@ async function cmdConfigure(argv: string[]): Promise<number> {
       0,
       v.library,
     );
+    let libReplace = false;
+    if (library !== "none" && fs.existsSync(path.resolve(library)))
+      libReplace = (await menu(
+        `Existing ${library}/`,
+        [
+          `This repo already has ${library}/ — your copy, possibly edited.`,
+          `Replacing moves it aside to ${library}.old (kept for rollback) and`,
+          `clones the packaged version fresh.`,
+        ],
+        [
+          { label: `keep — leave ${library}/ exactly as it is`, value: "keep" },
+          { label: `replace — move yours to ${library}.old, clone fresh`, value: "replace" },
+        ],
+        0,
+      )) === "replace";
 
     const originUrl = (sh("git", ["remote", "get-url", "origin"]).stdout || "").trim();
     const originRepo = /github\.com[:/]([^/]+\/[^/.]+)/.exec(originUrl)?.[1] ?? "";
@@ -742,8 +765,8 @@ async function cmdConfigure(argv: string[]): Promise<number> {
       (await menu(
         "GitHub wiring",
         [
-          "With GitHub wiring, assigning an issue to the engineer starts a run,",
-          "and /et comments on the issue drive it. Without it, you drive runs",
+          "With GitHub wiring, a `/et <what you want>` comment on an issue",
+          "starts a run, and /et comments drive it. Without it, you drive runs",
           "from this terminal — you can always wire GitHub up later.",
         ],
         [
@@ -783,9 +806,9 @@ async function cmdConfigure(argv: string[]): Promise<number> {
 
     out();
     if (library !== "none") {
-      if (fs.existsSync(path.resolve(library))) out(`${library}/ is already in this repo — leaving it untouched.`);
+      if (fs.existsSync(path.resolve(library)) && !libReplace) out(`${library}/ is already in this repo — leaving it untouched.`);
       else {
-        const r = await main(["clone-loop", library]);
+        const r = await main(["clone-loop", library, ...(libReplace ? ["--replace"] : [])]);
         if (r !== 0) return r;
       }
     }

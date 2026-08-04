@@ -30,6 +30,22 @@ test("clone-loop: copies the library, ignores .etium/, never overwrites, rejects
   assert.equal(await main(["clone-loop"]), 0); // bare form lists
 });
 
+test("clone-loop --replace: moves the existing copy to .old (never deletes), then clones fresh", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "etium-replace-"));
+  const dest = path.join(root, "ai-engineer");
+  assert.equal(await main(["clone-loop", "ai-engineer", "--into", dest]), 0);
+  fs.writeFileSync(path.join(dest, "loop.ts"), "// my edited copy\n");
+
+  assert.equal(await main(["clone-loop", "ai-engineer", "--into", dest, "--replace"]), 0);
+  assert.equal(fs.readFileSync(path.join(dest + ".old", "loop.ts"), "utf8"), "// my edited copy\n");
+  assert.ok(fs.readFileSync(path.join(dest, "loop.ts"), "utf8").includes("aiEngineer"), "fresh packaged copy in place");
+
+  // A second replace never clobbers the first rollback either.
+  assert.equal(await main(["clone-loop", "ai-engineer", "--into", dest, "--replace"]), 0);
+  assert.ok(fs.existsSync(dest + ".old.2"));
+  assert.equal(fs.readFileSync(path.join(dest + ".old", "loop.ts"), "utf8"), "// my edited copy\n");
+});
+
 test("configure: sets the git identity itself (from flags when non-interactive; hard-fails without)", () => {
   const cli = path.resolve("src/cli.ts");
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "etium-ident-"));

@@ -860,3 +860,30 @@ An `interpret` gate option listed in the status comment (it is plumbing,
 not a command a human should type). Free-text decisions written straight
 into the ledger (the vocabulary is the contract; interpretation must end
 in a declared word or a question).
+
+---
+
+## ADR-024 — clone-loop replaces only on request, and always leaves a rollback
+
+**Decision.** `clone-loop` into an existing directory still refuses by
+default. `--replace` is the consent: the existing copy moves aside to
+`<dir>.old` (then `.old.2`, `.old.3`… — a rollback is never clobbered,
+nothing is ever deleted) and the packaged version is cloned fresh.
+Interactive `configure` asks the question itself when the chosen library
+already exists — keep (default) or replace — and delegates to
+`clone-loop --replace`, the same code path. Flags mode keeps the existing
+copy untouched, as before: replacement never happens without an explicit
+yes.
+
+**Why.** Copy-and-own (ADR-013) made upgrades a hand-rolled
+move-aside-and-diff — a documented workaround where the tool should act.
+The user's consent is the overwrite; the backup is not a question worth
+asking, so it is automatic. Suffixed rollbacks keep the guarantee
+monotone: no sequence of replaces loses an edited copy.
+
+**Rejected.** Silent overwrite on re-run (the user's copy is the product;
+ADR-013 stands). Auto-merging package changes into an edited clone (a
+diff the user runs beats a merge the tool guesses). Deleting the backup
+after a successful clone (satisfaction is the user's call, not the
+tool's). A confirmation for creating the backup itself (regret insurance
+should not be declinable).
