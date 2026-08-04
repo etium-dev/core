@@ -667,35 +667,34 @@ async function cmdConfigure(argv: string[]): Promise<number> {
     // instead of re-interrogating; flags mean an agent is driving — skip it.
     if (interactive && !flagsGiven && (cfg !== null || wakeOn)) {
       out(style("1", "This repository is already configured."));
-      const opts = [{ label: `${style("32", "Re-run setup — walk the questions again")}`, value: "setup" }];
-      if (wakeOn) opts.push({ label: style("31", "Remove the always-on wake-up"), value: "wake-off" });
-      else if (cfg?.github?.loop)
-        opts.push({ label: style("32", "Install the always-on wake-up (ticks once a minute)"), value: "wake-on" });
-      opts.push({ label: "Show status — what's configured here", value: "status" });
-      opts.push({ label: style("2", "Nothing — exit"), value: "exit" });
-      const action = await menu("Choose an action", [], opts, 0);
-      if (action === "exit") {
-        out("\nChose to do nothing. Exiting.");
-        return 0;
-      }
-      if (action === "wake-on") {
+      // Actions return to this menu; only exit and setup leave it. State is
+      // recomputed each pass — installing the wake-up flips its menu entry.
+      for (;;) {
+        const c = readConfig(etiumBase);
+        const on = wakeupInstalled(repoDir!);
+        const opts = [{ label: style("32", "Run setup for this repo"), value: "setup" }];
+        if (on) opts.push({ label: style("31", "Remove the always-on wake-up"), value: "wake-off" });
+        else if (c?.github?.loop)
+          opts.push({ label: style("32", "Install the always-on wake-up (ticks once a minute)"), value: "wake-on" });
+        opts.push({ label: "Show status — what's configured here", value: "status" });
+        opts.push({ label: style("2", "Nothing — exit"), value: "exit" });
+        const action = await menu("Choose an action", [], opts, 0);
+        if (action === "setup") break; // into the questions
+        if (action === "exit") {
+          out("\nChose to do nothing. Exiting.");
+          return 0;
+        }
         out();
-        const full = writeConfig(etiumBase, cfg!); // backfills a missing id (ADR-020)
-        const w = installWakeup(repoDir!, ghEnv(full.github!), full.id);
-        for (const l of w.lines) out(l);
-        return w.ok ? 0 : 1;
-      }
-      if (action === "wake-off") {
+        if (action === "wake-on") {
+          const full = writeConfig(etiumBase, c!); // backfills a missing id (ADR-020)
+          for (const l of installWakeup(repoDir!, ghEnv(full.github!), full.id).lines) out(l);
+        } else if (action === "wake-off") {
+          for (const l of removeWakeup(repoDir!, c?.id)) out(l);
+        } else {
+          for (const l of statusLines(c, on, etiumBase, process.cwd(), c?.github ? repoLogin(repoDir!) : undefined)) out(l);
+        }
         out();
-        for (const l of removeWakeup(repoDir!, cfg?.id)) out(l);
-        return 0;
       }
-      if (action === "status") {
-        out();
-        for (const l of statusLines(cfg, wakeOn, etiumBase, process.cwd(), cfg?.github ? repoLogin(repoDir!) : undefined)) out(l);
-        return 0;
-      }
-      // "setup" falls through into the questions.
     }
     if (!gitIdentOk) {
       const name = await askText(
