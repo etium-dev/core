@@ -177,8 +177,9 @@ run DONE</span></code></pre>
     or just <code>/et go</code>. Within a minute, the surface creates a run
     on branch <code>etium/issue-N-attempt-0</code>, the interpreter maps
     your words to a stage and heads straight into it (or asks you to
-    clarify), and a status comment appears on the issue telling you exactly
-    what it's waiting for and which commands are valid.</li>
+    clarify), and the bot starts narrating on the issue — appended
+    comments for each state change, telling you exactly what it's waiting
+    for and which commands are valid.</li>
     <li><strong>Command with comments.</strong> <code>/et plan start with
     the retry logic</code> — an exact option word decides the open gate and
     your text becomes the note. Anything else — <code>/et actually, wrap
@@ -250,8 +251,8 @@ run DONE</span></code></pre>
     <li><strong>Your <code>/et</code> command was "misheard"</strong> —
     freestyle text goes to the interpreter, which acts only when your
     intent maps cleanly to an option and otherwise asks you to rephrase;
-    the status comment always lists the exact valid words when you'd
-    rather be literal.</li>
+    the latest gate comment always lists the exact valid words when
+    you'd rather be literal.</li>
     <li><strong>The run errored about harness auth</strong> — the harness
     on the executing machine isn't logged in; the error names the exact
     remedy (e.g. <code>pi</code> then <code>/login</code>). Fix and

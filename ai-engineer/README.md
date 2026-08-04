@@ -57,7 +57,7 @@ interpreter's working state (its reading of a freestyle message, or its
 question back) — shown at the gate, never committed on its own.
 
 The loop publishes nothing — it commits to its branch and opens gates. The
-surface projects branch → draft PR → status comment → labels.
+surface projects branch → draft PR → appended narration comments → labels.
 
 ## Running it from the terminal (no GitHub)
 
@@ -113,8 +113,11 @@ labels as commands):
   declares it, validated fail-closed by core. Anything else is delivered
   as `consider` with your full text: the interpreter maps it to the
   vocabulary or asks you to rephrase. `/et stop` abandons.
-- The bot's status comment on the issue always lists the currently-valid
-  commands, plus "just say what you want" when freestyle is open. Labels
+- The bot narrates state changes as appended comments — stage
+  transitions, gate openings (with the currently-valid commands, "just
+  say what you want" when freestyle is open, the shown artifact's key
+  points, and a link to the file on the branch), decisions, completion.
+  Comments are never edited; the thread is the run's history. Labels
   `et:working|waiting|blocked` are decoration for issue lists; nothing
   ever reads them back.
 - Closing the issue abandons the attempt; closing the PR unmerged abandons

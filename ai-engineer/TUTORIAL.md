@@ -134,8 +134,9 @@ Then, on GitHub:
    `/et propose a design`, or just `/et go`. Within a minute, the surface
    creates a run on branch `etium/issue-N-attempt-0`, the interpreter
    maps your words to a stage and heads straight into it (or asks you to
-   clarify), and a status comment appears on the issue telling you exactly
-   what it's waiting for and which commands are valid.
+   clarify), and the bot starts narrating on the issue — appended
+   comments for each state change, telling you exactly what it's waiting
+   for and which commands are valid.
 2. **Command with comments.** `/et plan start with the retry logic` — an
    exact option word decides the open gate and your text becomes the note.
    Anything else — `/et actually, wrap this up` — goes to the loop's
@@ -198,7 +199,7 @@ and the loop's params/gates/artifacts contract: [README.md](README.md).
   command by hand and read its output.
 - **Your `/et` command was "misheard"** — freestyle text goes to the
   interpreter, which acts only when your intent maps cleanly to an option
-  and otherwise asks you to rephrase; the status comment always lists the
+  and otherwise asks you to rephrase; the latest gate comment always lists the
   exact valid words when you'd rather be literal.
 - **The run errored about harness auth** — the harness on the executing
   machine isn't logged in; the error names the exact remedy (e.g. `pi`

@@ -1025,3 +1025,44 @@ human's attention," so the surface needs no gate-name pattern matching.
 spam). An append-only log section inside the single status comment
 (unbounded growth, still no notification). Surface-side heuristics for
 which gates matter (the loop knows; the surface should not guess).
+
+---
+
+## ADR-029 — append-only narration; key points and links, never excerpts
+
+**Decision.** The github surface's mutable status comment is gone
+(supersedes the one-status-comment model and ADR-028's two-tier split).
+Outbound projection is append-only narration: per tick, one comment
+covering the run's notable ledger events since the last posted marker
+(`<!-- et:seq <run> <seq> -->` — the thread itself is the projection
+cursor; no new state files). Narrated events: attempt start, persona
+step starts/completions (commits skipped; adjacent complete→start pairs
+read as one "X complete → Y" transition), gate openings (reason
+headline, valid commands, freestyle hint), decisions with author and
+note, budget kills, completion with token usage. Comments are never
+edited. Raw first-N-line excerpts are gone everywhere: a shown artifact
+is presented as its **key points** — its `VERDICT:`/`ACTION:` first line
+and its markdown headings, extracted structurally — plus a link to the
+file on the run's branch, added only once the file is actually
+committed. Summaries stay model-free (Invariant 1): prose belongs to the
+loop (gate `reason`, the documents' own structure), never to the
+surface.
+
+**Why.** The rewritten dashboard erased history and never notified —
+both bitten in the field — and its 8-line excerpt showed whatever
+happened to open the file (a design's preamble) instead of what
+mattered (the reviewer's blockers). Appended comments are events, which
+is what the whole system already is: they persist, they notify, they
+read in order, and the marker scheme makes them idempotent without any
+surface-side state. Heading extraction is honest summarization the
+surface can do without calling a model, and the templates already pin
+the machine-readable lines (`VERDICT:`, `ACTION:`) that make it work;
+the branch link hands the reader the full text one click away.
+
+**Rejected.** Model-generated summaries in the surface (Invariant 1).
+Keeping the mutable dashboard alongside narration (two places to read,
+and its excerpt problem stays). One comment per ledger event (a tick
+can carry several; a batched narration reads as one coherent
+transition). Per-run cursor files for projection state (the posted
+markers already are that state, and they survive anything the run dir
+doesn't).

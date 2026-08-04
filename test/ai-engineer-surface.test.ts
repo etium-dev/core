@@ -58,7 +58,10 @@ const SLOOP = `export default async function (run) {
   for (;;) {
     const d = await run.gate("route", { options: ["plan", "wrap-up", "consider"], show: ["ai/NOTES.md"], reason: "stub needs a human here" });
     if (d.decision === "wrap-up") return;
-    if (d.decision === "plan") await run.step("plan", { harness: "exec", command: "echo planned > planned.txt" });
+    if (d.decision === "plan") {
+      await run.step("plan", { harness: "exec", command: "echo planned > planned.txt" });
+      await run.step("plan-check", { harness: "exec", command: "true" });
+    }
     // consider: record and re-open — interpretation is the real loop's job
   }
 }
@@ -144,25 +147,33 @@ test("kickoff comment → worktree run with directive; read-only commenter ignor
 
   const w = writes();
   assert.ok(w.some((x) => /\/pulls$/.test(x.path) && x.body.body?.includes("Closes #7")), "draft PR created");
-  const status = w.find((x) => /issues\/7\/comments$/.test(x.path))!;
-  assert.match(status.body.body!, /\/et plan/);
-  assert.match(status.body.body!, /\/et wrap-up/);
-  assert.ok(!status.body.body!.includes("/et consider"), "consider is internal, not a listed command");
-  assert.match(status.body.body!, /just say what you want/); // freestyle invitation
-  assert.match(status.body.body!, /notes-content/); // excerpt of the gate's first show file
-  assert.match(status.body.body!, /stub needs a human here/); // the gate's reason is the headline
+
+  // Append-only narration (ADR-029): one comment covering the events so
+  // far, never an edited status.
+  assert.ok(!w.some((x) => x.method === "PATCH"), "nothing is ever edited");
+  const narr = w.filter((x) => x.method === "POST" && /issues\/7\/comments$/.test(x.path));
+  assert.equal(narr.length, 1, "one narration comment per tick");
+  const nb = narr[0]!.body.body!;
+  assert.match(nb, /<!-- et:seq /); // the projection cursor rides in the marker
+  assert.match(nb, /▶ attempt .* on `etium\/issue-7-attempt-0`/);
+  assert.match(nb, /▶ \*\*work\*\*/);
+  assert.match(nb, /✓ \*\*work\*\* ok/);
+  assert.match(nb, /⏸ \*\*route\*\* — stub needs a human here/); // the gate's reason is the headline
+  assert.match(nb, /\/et plan/);
+  assert.match(nb, /\/et wrap-up/);
+  assert.ok(!nb.includes("/et consider"), "consider is internal, not a listed command");
+  assert.match(nb, /just say what you want/); // freestyle invitation
+  assert.match(nb, /notes-content/); // the artifact's key points, not a raw excerpt…
+  assert.ok(!nb.includes("```"), "…never a fenced snippet");
+  assert.match(nb, /blob\/etium\/issue-7-attempt-0\/ai\/NOTES\.md/); // link to the file on the branch
   assert.ok(w.some((x) => /issues\/7\/labels$/.test(x.path) && x.body.labels?.includes("et:waiting")));
 
-  // A reasoned gate escalates: one immutable comment per gate occurrence…
-  const esc = w.filter((x) => x.method === "POST" && /issues\/7\/comments$/.test(x.path) && x.body.body?.startsWith("<!-- et:gate "));
-  assert.equal(esc.length, 1, "one escalation comment per reasoned gate occurrence");
-  assert.match(esc[0]!.body.body!, /needs a decision — stub needs a human here/);
-  // …and never a second one once it exists on the issue.
-  fixture(stubDir, "repo-comments.json", []); // quiet stream: no new decisions, same gate occurrence
-  fixture(stubDir, "comments-7.json", [{ id: 900, body: esc[0]!.body.body, created_at: soon(2), user: { login: "agentbot" } }]);
+  // Once posted comments are visible, a quiet tick appends nothing.
+  fixture(stubDir, "repo-comments.json", []);
+  fixture(stubDir, "comments-7.json", [{ id: 900, body: nb, created_at: soon(2), user: { login: "agentbot" } }]);
   await tick();
-  const esc2 = writes().filter((x) => x.method === "POST" && /issues\/7\/comments$/.test(x.path) && x.body.body?.startsWith("<!-- et:gate "));
-  assert.equal(esc2.length, 1, "escalation comment never reposted");
+  const narr2 = writes().filter((x) => x.method === "POST" && /issues\/7\/comments$/.test(x.path));
+  assert.equal(narr2.length, 1, "no re-narration of already-posted events");
   // Every gh call carried the deployment's own config dir (ADR-022).
   const envs = fs.readFileSync(path.join(stubDir, "envs.txt"), "utf8").trim().split("\n");
   const expected = path.join(workdir, ".etium", "gh");
@@ -207,6 +218,10 @@ test("exact /et word decides; freestyle → consider with the full text; read-on
   assert.deepEqual({ decision: d.decision, by: d.by, via: d.via, note: d.note },
     { decision: "plan", by: "carlospche", via: "github", note: "start with the retry" });
   assert.ok(fs.existsSync(path.join(base, "worktrees", runId, "planned.txt")), "loop proceeded on the decision");
+  assert.ok(
+    writes().some((x) => /issues\/7\/comments$/.test(x.path) && /\*\*plan\*\* complete → \*\*plan-check\*\*/.test(x.body.body ?? "")),
+    "adjacent complete→start narrates as one transition",
+  );
 
   // No exact option match → the whole message is delivered as `consider`.
   fixture(stubDir, "repo-comments.json", [

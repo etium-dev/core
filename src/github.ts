@@ -5,8 +5,11 @@
 // (ADR-023); `/et <word> [note]` comments by trusted authors → gate
 // decisions (an exact word is matched against whichever open gate declares
 // it; anything else is delivered as `consider` when declared); issue close /
-// PR close / PR merge → abandons or wrap-up; one bot status comment
-// (idempotently rewritten) lists the currently-valid commands; labels are
+// PR close / PR merge → abandons or wrap-up. Outbound is append-only
+// narration (ADR-029): one comment per tick covering the run's notable
+// ledger events since the last posted marker — state changes, gate
+// openings with their commands and the shown artifact's key points +
+// branch link, decisions, completion. Nothing is ever edited; labels are
 // write-only decoration (et:working | et:waiting | et:blocked). All GitHub
 // access goes through the `gh` CLI — auth stays gh's problem, per
 // MODEL_AUTH's delegation principle.
@@ -26,7 +29,8 @@ import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { defaultParams, ghConfigDir } from "./config.ts";
-import type { GateOpenedData, RunView, Surface, SurfaceDecision, SurfacePollResult, SurfaceTask } from "./types.ts";
+import { readLedger } from "./ledger.ts";
+import type { AnyEnvelope, GateOpenedData, RunView, Surface, SurfaceDecision, SurfacePollResult, SurfaceTask } from "./types.ts";
 
 const env = (k: string, d?: string): string => {
   const v = process.env[k] ?? d;
@@ -55,7 +59,6 @@ function gh(args: string[], input?: unknown): unknown {
 }
 const api = (p: string) => gh(["api", p]);
 const post = (p: string, body: unknown) => gh(["api", "-X", "POST", p, "--input", "-"], body);
-const patch = (p: string, body: unknown) => gh(["api", "-X", "PATCH", p, "--input", "-"], body);
 const del = (p: string) => {
   try {
     gh(["api", "-X", "DELETE", p]);
@@ -106,46 +109,72 @@ function prFor(view: RunView): { number: number; state: string; merged_at?: stri
   return prs[0];
 }
 
-// Context excerpt: the gate's first shown artifact — the stage's document,
-// the reviewer's blockers, the interpreter's question.
-function excerpt(view: RunView, src?: string): string[] {
-  const p = src ? [view.workspace, view.dir].map((d) => path.join(d, src)).find((f) => fs.existsSync(f)) : undefined;
-  if (!p) return [];
-  const ex = fs.readFileSync(p, "utf8").split("\n").slice(0, 8).join("\n").trim();
-  return ex ? ["", "```", ex, "```"] : [];
-}
-
 function commandLines(g: GateOpenedData): string[] {
-  const lines = [g.options.filter((o) => o !== "consider").map((o) => `\`${PREFIX} ${o}\``).join(" · ")];
-  if (g.options.includes("consider")) lines.push(`…or just say what you want: \`${PREFIX} <your words>\``);
+  const lines = ["reply with one of: " + g.options.filter((o) => o !== "consider").map((o) => `\`${PREFIX} ${o}\``).join(" · ")];
+  if (g.options.includes("consider")) lines.push(`…or just say what you want: \`${PREFIX} <your words>\` (\`${PREFIX} stop\` abandons)`);
   return lines;
 }
 
-/** A reasoned gate is an escalation: it gets its own immutable comment —
- * history the rewritten dashboard can't keep, and an edit never notifies. */
-function escalationBody(view: RunView, g: GateOpenedData, marker: string): string {
-  return [marker, `**AI engineer** needs a decision — ${g.reason}`, ...commandLines(g), ...excerpt(view, g.show[0])].join("\n");
+// Never excerpt raw lines (ADR-029): an artifact's key points are its own
+// structure — a VERDICT:/ACTION: first line and its headings — plus a link
+// to the file on the run's branch (only once it is actually committed).
+// Summaries stay model-free (Invariant 1); prose is the loop's job.
+function keyPoints(view: RunView, src?: string): string[] {
+  const p = src ? [view.workspace, view.dir].map((d) => path.join(d, src)).find((f) => fs.existsSync(f)) : undefined;
+  if (!p || !src) return [];
+  const text = fs.readFileSync(p, "utf8").split("\n");
+  const first = text.find((l) => l.trim())?.trim();
+  const out: string[] = [];
+  if (first && /^[A-Z]+:/.test(first)) out.push(`**${first}**`);
+  out.push(...text.filter((l) => /^#{1,3} /.test(l)).map((l) => `- ${l.replace(/^#+ /, "")}`));
+  if (!out.length && first) out.push(first);
+  const branch = view.worktree?.branch;
+  if (branch && spawnSync("git", ["-C", view.workspace, "cat-file", "-e", `HEAD:${src}`]).status === 0)
+    out.push(`[${src}](https://github.com/${REPO()}/blob/${branch}/${encodeURI(src)})`);
+  return out;
 }
 
-function statusBody(view: RunView): string {
-  const lines = [`<!-- et:status ${view.id} -->`, `**AI engineer** — run \`${view.id}\``];
-  if (view.completed) {
-    lines.push(`state: **${view.completed.status}**${view.completed.summary ? ` — ${view.completed.summary}` : ""}`);
-  } else if (view.openGates.length) {
-    for (const g of view.openGates) {
-      if (g.reason) lines.push(`**${g.reason}**`);
-      lines.push(`waiting on **${g.name}** — reply with one of:`);
-      lines.push(...commandLines(g));
-      lines.push(...excerpt(view, g.show[0]));
-    }
-    lines.push(`(add a note after the command; \`${PREFIX} stop\` abandons the attempt)`);
-  } else {
-    lines.push(`state: **working** (${view.status})`);
+const NOTABLE = new Set(["run.created", "step.started", "step.completed", "gate.opened", "gate.decided", "budget.exceeded", "run.completed"]);
+
+/** One appended comment per tick, narrating the ledger's notable events
+ * since the last posted marker — state changes, never a rewritten status
+ * (ADR-029). Consecutive complete→start pairs read as one transition. */
+function transitionsBody(view: RunView, events: AnyEnvelope[], marker: string): string | undefined {
+  type Item = { done?: string; start?: string; lines: string[] };
+  const items: Item[] = [];
+  for (const e of events) {
+    if (e.type === "run.created")
+      items.push({ lines: [`▶ attempt \`${view.id}\`${view.worktree ? ` on \`${view.worktree.branch}\`` : ""}`] });
+    else if (e.type === "step.started" && e.data.name !== "commit")
+      items.push({ start: e.data.name, lines: [`▶ **${e.data.name}**`] });
+    else if (e.type === "step.completed" && e.data.step.name !== "commit") {
+      const ok = e.data.status === "ok" && e.data.passed !== false;
+      items.push({ done: ok ? e.data.step.name : undefined, lines: [`${ok ? "✓" : "✗"} **${e.data.step.name}** ${e.data.status}${e.data.passed === false ? " — did not pass" : ""}`] });
+    } else if (e.type === "gate.opened") {
+      const g = e.data;
+      items.push({ lines: [g.reason ? `⏸ **${g.name}** — ${g.reason}` : `⏸ waiting on **${g.name}**`, ...commandLines(g), ...keyPoints(view, g.show[0])] });
+    } else if (e.type === "gate.decided")
+      items.push({ lines: [`◆ **${e.data.name}**: ${e.data.decision} by ${e.data.by}${e.data.note ? ` — ${e.data.note}` : ""}`] });
+    else if (e.type === "budget.exceeded")
+      items.push({ lines: [`⛔ budget ${e.data.budget} exceeded (${e.data.step.name})`] });
+    else if (e.type === "run.completed")
+      items.push({ lines: [`**${e.data.status}**${e.data.summary ? ` — ${e.data.summary}` : ""}`] });
   }
-  const tok = view.usage.tokensIn + view.usage.tokensOut;
-  if (tok) lines.push(`usage: ${tok} tokens${view.usage.costUsd ? ` · $${view.usage.costUsd.toFixed(4)}` : ""}`);
-  if (view.lastEventTs) lines.push(`updated: ${view.lastEventTs}`);
-  return lines.join("\n");
+  const lines: string[] = [];
+  for (let i = 0; i < items.length; i++) {
+    const a = items[i]!;
+    const b = items[i + 1];
+    if (a.done && b?.start) {
+      lines.push(`**${a.done}** complete → **${b.start}**`);
+      i++;
+    } else lines.push(...a.lines);
+  }
+  if (!lines.length) return undefined;
+  if (events.some((e) => e.type === "run.completed")) {
+    const tok = view.usage.tokensIn + view.usage.tokensOut;
+    if (tok) lines.push(`usage: ${tok} tokens${view.usage.costUsd ? ` · $${view.usage.costUsd.toFixed(4)}` : ""}`);
+  }
+  return [marker, ...lines].join("\n");
 }
 
 const surface: Surface = {
@@ -279,21 +308,19 @@ const surface: Surface = {
       }
     }
 
-    // One bot-owned status comment, rewritten in place (never read back)…
-    const marker = `<!-- et:status ${view.id} -->`;
-    const body = statusBody(view);
+    // Append-only narration (ADR-029): nothing is ever edited — the thread
+    // is the run's history. The last posted marker is the projection cursor.
     const comments = (api(`repos/${REPO()}/issues/${issueN}/comments?per_page=100`) ?? []) as Comment[];
-    const existing = comments.find((c) => c.body.startsWith(marker));
-    if (existing) {
-      if (existing.body !== body) patch(`repos/${REPO()}/issues/comments/${existing.id}`, { body });
-    } else {
-      post(`repos/${REPO()}/issues/${issueN}/comments`, { body });
+    let lastSeq = 0;
+    const markerRe = new RegExp(`<!-- et:seq ${view.id} (\\d+) -->`);
+    for (const c of comments) {
+      const m = markerRe.exec(c.body);
+      if (m) lastSeq = Math.max(lastSeq, Number(m[1]));
     }
-    // …plus one immutable comment per reasoned gate occurrence (ADR-028).
-    for (const g of view.openGates.filter((x) => x.reason)) {
-      const gm = `<!-- et:gate ${view.id} ${g.name}.${g.occ} -->`;
-      if (!comments.some((c) => c.body.startsWith(gm)))
-        post(`repos/${REPO()}/issues/${issueN}/comments`, { body: escalationBody(view, g, gm) });
+    const evts = readLedger(view.dir).filter((e) => e.seq > lastSeq && NOTABLE.has(e.type));
+    if (evts.length) {
+      const body = transitionsBody(view, evts, `<!-- et:seq ${view.id} ${evts.at(-1)!.seq} -->`);
+      if (body) post(`repos/${REPO()}/issues/${issueN}/comments`, { body });
     }
 
     // Decoration labels: write-only, mutually exclusive, best-effort.

@@ -124,10 +124,10 @@ by anyone with Write on the repository into runs and gate decisions — a
 `/et <anything>` comment on an issue kickstarts a worktree run of any loop
 you configure, an exact `/et <option>` decides the open gate, and freestyle
 text is handed to the loop to interpret — and close/merge into run
-lifecycle, projecting back a draft PR, one status comment listing the valid
-commands, an immutable escalation comment whenever a gate carries a
-`reason` (so "why it's stuck" persists and notifies), and `et:*` filter
-labels. The deployment acts
+lifecycle, projecting back a draft PR, append-only narration comments —
+each state change, each gate with its valid commands and the shown
+artifact's key points plus a branch link, each decision — and `et:*`
+filter labels. Comments are never edited; the thread is the history. The deployment acts
 as the repository's own gh sign-in (`.etium/gh`, created by `etium
 configure`). Configuration is env vars (`ETIUM_GH_REPO`, `ETIUM_GH_LOOP`,
 `ETIUM_GH_WORKDIR`, `ETIUM_GH_BASE`) — none of them secrets. Deployment

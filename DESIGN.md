@@ -317,7 +317,7 @@ interface Surface {
   id: string;                       // becomes `via` on decisions; namespaces the cursor
   poll(ctx: { cursor: string | null; runs: RunView[] }):
     { tasks: SurfaceTask[]; decisions: SurfaceDecision[]; cursor: string | null };
-  project?(run: RunView): void | Promise<void>;  // e.g. upsert one status comment
+  project?(run: RunView): void | Promise<void>;  // e.g. append narration comments
 }
 ```
 
@@ -366,7 +366,8 @@ attribution; `/et stop`, issue close, and PR close-unmerged → abandons; PR
 merge → the `wrap-up` option when a gate declares it (the convention for "a
 mergeable end"). Outbound, projection pushes the run's branch, opens one
 draft PR once the branch has commits past its recorded `baseSha`, rewrites
-one bot-owned status comment listing the currently-valid commands, and
+append-only narration comments (one per tick, covering the run's notable
+ledger events since the last posted marker — never edited), and
 maintains a write-only decoration label (`et:working` / `et:waiting` /
 `et:blocked`) for issue-list filtering. Configuration is environment
 variables with no secret values — `ETIUM_GH_REPO`, `ETIUM_GH_LOOP`,
@@ -442,7 +443,7 @@ CLI (M0 set): `run`, `status`, `tail`, `gates`, `approve`, `reject`, `decide`, `
 | Personas (Debugger, Architect, Planner, …) | Prompt template files owned by the loop |
 | Lifecycle states (PlanLoop, PlanReady, …) | Position in loop code + open gates — derived from the ledger, never stored |
 | Command labels (`ai-plan`, `ai-implement`) | Gate decisions via the GitHub surface; consumed-once and one-command semantics preserved |
-| `ai-running` + status comments | Idempotent projections of the ledger |
+| `ai-running` + status comments | Idempotent append-only projections of the ledger |
 | Heartbeats, watchdog, reconciliation | Supervisor lockfile + `etium tick` |
 | Queued blind spot | Eliminated — the supervisor runs where compute runs; Actions is at most a thin trigger calling `etium run`/`tick` |
 | Convergence rules, escalation reports | Reference-loop logic emitting a `needs-human` gate with a report artifact |
