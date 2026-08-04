@@ -283,8 +283,9 @@ End with a report to your operator containing exactly:
 3. Remaining manual steps, chosen from: install the GitHub CLI; create
    the repository's deployment sign-in when configure reported none —
    `GH_CONFIG_DIR="$REPO_DIR/.etium/gh" gh auth login -h github.com
-   --with-token --insecure-storage`, pasting a classic `repo`-scope token
-   for the account the engineer should act as;
+   --with-token --insecure-storage`, pasting a classic token with the
+   `repo` and `read:org` scopes (gh requires both) for the account the
+   engineer should act as;
    authenticate a harness before real-persona runs (pi's `/login` TUI works
    over SSH; codex headless: `codex login --api-key` or the
    `OPENAI_API_KEY` env var); install the printed always-on wake-up;

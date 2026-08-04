@@ -158,8 +158,9 @@ On a spare machine:
    admin), protect your default branch, require reviews. The bot only ever
    opens draft PRs; merging stays yours.
 2. Install etium, clone your repo, run `etium configure`: sign the
-   deployment in with a classic `repo`-scope token for the bot, and log
-   the harness in (`pi` → `/login`).
+   deployment in with a classic token for the bot (configure links the
+   token page with the right scopes pre-selected), and log the harness in
+   (`pi` → `/login`).
 
 Now **assigning the bot** to an issue starts an attempt, and you interact
 entirely through issue comments and PR reviews from anywhere. If the

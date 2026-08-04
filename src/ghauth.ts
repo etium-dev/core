@@ -138,11 +138,11 @@ export async function ensureGhAuth(o: {
   );
   if (how === "token") {
     out();
-    out("Create a classic token with the `repo` scope, while signed in as the");
-    out("account this deployment acts as (a dedicated bot account keeps the");
-    out("token's reach small):");
+    out("Create a classic token while signed in as the account this deployment");
+    out("acts as (a dedicated bot account keeps the token's reach small). This");
+    out("link pre-selects the two scopes gh requires, repo and read:org:");
     out();
-    out("  github.com/settings/tokens/new?scopes=repo");
+    out("  github.com/settings/tokens/new?scopes=repo,read:org");
     out();
     out("Paste it below — input is hidden; press Enter when done. It goes");
     out("straight into gh — etium never sees or stores it.");
