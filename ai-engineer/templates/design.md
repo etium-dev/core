@@ -17,3 +17,4 @@ will rely solely on it — citing `file:line` wherever it meets existing
 code; and how the result will be verified. Spend your depth on the
 decisions and their reasons: state each once, with its why, and move
 on. No implementation code in this stage.
+Be complete but succint in your output.
