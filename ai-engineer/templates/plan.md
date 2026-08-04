@@ -19,6 +19,11 @@ true behavior not made up artifacts.
 </goals>
 
 <rules>
+  <rule>Near the top of the plan, write a summary of the plan as a
+  single line that starts with the string "SUMMARY:". The line can be
+  long and span multiple sentences, but should be a single line so
+  downstream steps can easily parse it. Surfaces quote it verbatim as
+  the plan's summary.</rule>
   <rule>Keep it succinct. A human should be able to read the plan and
   not be drowned in details.</rule>
   <rule>Keep a high bar for simplicity, elegance and excellent code.</rule>

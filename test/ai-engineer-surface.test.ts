@@ -54,7 +54,7 @@ if (method === "GET") {
 
 const SLOOP = `export default async function (run) {
   await run.step("work", { harness: "exec", artifacts: ["ai/NOTES.md"],
-    command: "mkdir -p ai && echo notes-content > ai/NOTES.md && git add -A && git -c user.name=t -c user.email=t@t commit -qm work" });
+    command: "mkdir -p ai && echo SUMMARY: notes-content, in one line > ai/NOTES.md && git add -A && git -c user.name=t -c user.email=t@t commit -qm work" });
   await run.effect("sha", () => "cafe1234beef");
   for (;;) {
     const d = await run.gate("route", { options: ["plan", "wrap-up", "consider"], show: ["ai/NOTES.md"], reason: "stub needs a human here" });
@@ -165,7 +165,7 @@ test("kickoff comment → worktree run with directive; read-only commenter ignor
   assert.match(nb, /\/et wrap-up/);
   assert.ok(!nb.includes("/et consider"), "consider is internal, not a listed command");
   assert.match(nb, /just say what you want/); // freestyle invitation
-  assert.match(nb, /notes-content/); // the artifact's key points, not a raw excerpt…
+  assert.match(nb, /notes-content, in one line/); // the SUMMARY: line, quoted verbatim…
   assert.ok(!nb.includes("```"), "…never a fenced snippet");
   assert.match(nb, /blob\/cafe1234beef\/ai\/NOTES\.md/); // gate link pinned to the round's commit, not the moving branch
   assert.ok(w.some((x) => /issues\/7\/labels$/.test(x.path) && x.body.labels?.includes("et:waiting")));

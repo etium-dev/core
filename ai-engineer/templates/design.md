@@ -39,6 +39,14 @@ Your design should fall into one of the following design styles:
 <important>Choose the lightest style that carries the task: overbuilding is
 a defect, not diligence.</important>
 
+<write_summary>
+Near the top of the document, write a summary of the design doc as a single
+line that starts with the string "SUMMARY:". The line can be long and
+span multiple sentences, but should be a single line so downstream
+steps can easily parse it. Surfaces quote it verbatim as the
+document's summary.
+</write_summary>
+
 Write `ai/DESIGN.md` covering: design style you chose and, in one line,
 why; goals and non-goals; above the mini style, the options you
 genuinely considered, each with the strongest argument against it (a

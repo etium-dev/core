@@ -116,19 +116,26 @@ function commandLines(g: GateOpenedData): string[] {
   return lines;
 }
 
-// Never excerpt raw lines (ADR-029): an artifact's key points are its own
-// structure — a VERDICT:/ACTION: first line and its headings — plus a link
-// to the file on the run's branch (only once it is actually committed).
-// Summaries stay model-free (Invariant 1); prose is the loop's job.
+// Never excerpt raw lines (ADR-029) and never call a model (Invariant 1):
+// summaries are extracted mechanically, so writing them is the persona's
+// job. Verdict-style documents (a VERDICT:/ACTION: first line) summarize
+// as that line plus their headings — the objection keys ARE the content.
+// Prose documents carry a single "SUMMARY:" line near the top (the
+// templates require it), quoted verbatim here. Plus a link pinned to
+// the round's commit (only once the file is actually committed).
 function keyPoints(view: RunView, src?: string, sha?: string): string[] {
   const p = src ? [view.workspace, view.dir].map((d) => path.join(d, src)).find((f) => fs.existsSync(f)) : undefined;
   if (!p || !src) return [];
   const text = fs.readFileSync(p, "utf8").split("\n");
   const first = text.find((l) => l.trim())?.trim();
   const out: string[] = [];
-  if (first && /^[A-Z]+:/.test(first)) out.push(`**${first}**`);
-  out.push(...text.filter((l) => /^#{1,3} /.test(l)).map((l) => `- ${l.replace(/^#+ /, "")}`));
-  if (!out.length && first) out.push(first);
+  const summary = text.map((l) => /^SUMMARY:\s*(.+)/.exec(l.trim())?.[1]).find(Boolean);
+  if (summary) {
+    out.push(summary.length > 600 ? `${summary.slice(0, 600)}…` : summary);
+  } else if (first && /^[A-Z]+:/.test(first)) {
+    out.push(`**${first}**`);
+    out.push(...text.filter((l) => /^#{1,3} /.test(l)).map((l) => `- ${l.replace(/^#+ /, "")}`));
+  }
   const ref = sha || view.worktree?.branch;
   if (ref && spawnSync("git", ["-C", view.workspace, "cat-file", "-e", `HEAD:${src}`]).status === 0)
     out.push(`[${src}](https://github.com/${REPO()}/blob/${ref}/${encodeURI(src)})`);
