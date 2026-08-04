@@ -211,6 +211,22 @@ const surface: Surface = {
       }
     }
 
+    // The assignee query only returns issues still assigned to the agent —
+    // an issue unassigned after its run started becomes invisible, and a
+    // close would strand the run parked forever. Fetch those directly.
+    const seen = new Set(issues.map((i) => i.number));
+    for (const v of runs) {
+      if (v.params.surface !== "github" || !v.params.issue || v.completed) continue;
+      const n = Number(v.params.issue);
+      if (seen.has(n)) continue;
+      try {
+        const issue = api(`repos/${REPO()}/issues/${n}`) as Issue;
+        if (issue.state === "closed") abandons.push({ run: v.id, reason: "issue closed" });
+      } catch {
+        /* unreadable now: leave it for the next tick */
+      }
+    }
+
     return { tasks, decisions, abandons, cursor: now };
   },
 

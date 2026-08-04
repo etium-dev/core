@@ -33,6 +33,7 @@ if (method === "GET") {
   else if (/collaborators\\/([^/]+)\\/permission/.test(p))
     out = { permission: read("permissions.json", {})[decodeURIComponent(p.match(/collaborators\\/([^/]+)\\/permission/)[1])] || "none" };
   else if (/^repos\\/.+\\/issues\\?/.test(p)) out = read("issues.json", []);
+  else if (/issues\\/(\\d+)$/.test(p)) out = read("issue-" + p.match(/issues\\/(\\d+)$/)[1] + ".json", {});
   else if (/issues\\/(\\d+)\\/timeline/.test(p)) out = read("timeline-" + p.match(/issues\\/(\\d+)/)[1] + ".json", []);
   else if (/issues\\/(\\d+)\\/comments/.test(p)) out = read("comments-" + p.match(/issues\\/(\\d+)/)[1] + ".json", []);
   else if (/^repos\\/.+\\/pulls\\?head=/.test(p)) {
@@ -135,6 +136,25 @@ test("assignment → worktree run; read-only assigner ignored; projection pushes
   const envs = fs.readFileSync(path.join(stubDir, "envs.txt"), "utf8").trim().split("\n");
   const expected = path.join(workdir, ".etium", "gh");
   assert.ok(envs.length > 0 && envs.every((e) => e === expected), `repo-scoped gh: ${envs[0]}`);
+});
+
+test("an issue closed after being unassigned still abandons its run (direct fetch)", async () => {
+  const { stubDir, base } = setup();
+  fixture(stubDir, "issues.json", [
+    { number: 7, state: "open", title: "Fix", body: "", assignees: [{ login: "agentbot" }] },
+  ]);
+  fixture(stubDir, "timeline-7.json", [{ event: "assigned", assignee: { login: "agentbot" }, actor: { login: "carlospche" } }]);
+  await tickOnce(base, "unused-entry", true, [surface]); // creates + parks at route
+
+  // Unassigned then closed: the assignee query no longer returns #7.
+  fixture(stubDir, "issues.json", []);
+  fixture(stubDir, "issue-7.json", { number: 7, state: "closed", title: "Fix", body: "", assignees: [] });
+  await tickOnce(base, "unused-entry", true, [surface]);
+
+  const runId = fs.readdirSync(path.join(base, "runs"))[0]!;
+  const last = readLedger(path.join(base, "runs", runId)).at(-1)!;
+  assert.equal(last.type, "run.completed");
+  assert.deepEqual(last.data, { status: "abandoned", summary: "issue closed" });
 });
 
 test("trusted /et command decides; untrusted ignored; /et stop abandons; issue close abandons", async () => {
