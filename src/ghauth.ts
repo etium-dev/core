@@ -19,15 +19,27 @@ type Sh = (cmd: string, args: string[]) => { status: number | null; stdout: stri
 
 const TOKEN_CMD = "gh auth login -h github.com --with-token --insecure-storage";
 
+/** gh's --with-token mode prints no prompt, echoes the paste, and waits for
+ * EOF — hostile as a human interface. Own the prompt instead: a hidden
+ * single-line read in sh (plain Enter ends it), piped straight into gh —
+ * the token never passes through etium's process. Exported for the test
+ * that proves the token reaches gh's stdin intact. */
+export const TOKEN_READ_SCRIPT =
+  'stty -echo 2>/dev/null; printf "Token (input hidden): " >&2; IFS= read -r t; ' +
+  'stty echo 2>/dev/null; printf "\\n" >&2; [ -n "$t" ] && printf %s "$t" | "$GHBIN" auth login -h github.com --with-token --insecure-storage';
+
 function runGhLogin(withToken: boolean): boolean {
   // The questionnaire's readline leaves the tty in raw mode, where Ctrl-D
-  // is a byte, not EOF — gh would read stdin forever and Ctrl-C couldn't
-  // interrupt. Hand gh a cooked terminal.
+  // is a byte, not EOF — and a raw tty breaks line reads. Cooked first.
   if (process.stdin.isTTY) spawnSync("stty", ["sane"], { stdio: ["inherit", "ignore", "ignore"] });
-  const args = withToken
-    ? ["auth", "login", "-h", "github.com", "--with-token", "--insecure-storage"]
-    : ["auth", "login", "-h", "github.com"];
-  const r = spawnSync(process.env.ETIUM_GH_CMD ?? "gh", args, { stdio: "inherit" });
+  if (!withToken) {
+    const r = spawnSync(process.env.ETIUM_GH_CMD ?? "gh", ["auth", "login", "-h", "github.com"], { stdio: "inherit" });
+    return r.status === 0;
+  }
+  const r = spawnSync("/bin/sh", ["-c", TOKEN_READ_SCRIPT], {
+    stdio: "inherit",
+    env: { ...process.env, GHBIN: process.env.ETIUM_GH_CMD ?? "gh" },
+  });
   return r.status === 0;
 }
 
@@ -97,7 +109,7 @@ export async function ensureGhAuth(o: {
     out(`  Repository access:  only ${o.repo}`);
     out("  Permissions:        Issues, Pull requests, Contents — read and write");
     out();
-    out("Paste it at gh's prompt below (press Enter, then Ctrl-D). It goes");
+    out("Paste it below — input is hidden; press Enter when done. It goes");
     out("straight into gh — etium never sees or stores it.");
     out();
   }
