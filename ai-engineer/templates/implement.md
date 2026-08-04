@@ -6,3 +6,5 @@ covering: what changed per plan step, with commits; the verification
 command and its decisive output; and every deviation from the plan or
 modification to a test after its red phase, each with its
 justification — "none" when clean, never omitted.
+
+<important>Keep a very high bar for clarity, simplicity in your code.</important>
