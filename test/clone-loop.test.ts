@@ -86,7 +86,8 @@ exit 0
   const cfg = JSON.parse(fs.readFileSync(path.join(repo, ".etium", "config.json"), "utf8"));
   assert.deepEqual(cfg.github, { repo: "acme/w", loop: "" });
   const helpers = (spawnSync("git", ["-C", repo, "config", "--get-all", "credential.https://github.com.helper"], { encoding: "utf8" }).stdout || "").trimEnd().split("\n");
-  assert.deepEqual(helpers, ["", "!gh auth git-credential"], "pushes route through the deployment's gh, repo-locally");
+  assert.equal(helpers[0], "", "empty first entry silences global helpers");
+  assert.match(helpers[1]!, /^!GH_CONFIG_DIR='.*\.etium\/gh' '.*' auth git-credential$/, "self-contained helper: repo scope and gh path baked in");
 });
 
 test("configure: two etium installs on PATH is a hard failure naming both", () => {

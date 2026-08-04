@@ -104,7 +104,9 @@ test("ensureGhAuth: already signed in → access verified, credential helper wir
   assert.match(logged, /auth status/);
   assert.match(logged, /\.permissions\.push/);
   for (const l of logged.trim().split("\n")) assert.ok(l.endsWith(`cfg=${ghConfigDir(repo)}`), `repo-scoped: ${l}`);
-  assert.deepEqual(helperEntries(repo), ["", "!gh auth git-credential"]); // empty first entry silences global helpers (osxkeychain)
+  // Empty first entry silences global helpers (osxkeychain); the helper line
+  // is self-contained — repo scope and gh path baked in, no env assumed.
+  assert.deepEqual(helperEntries(repo), ["", `!GH_CONFIG_DIR='${ghConfigDir(repo)}' '${stub}' auth git-credential`]);
 });
 
 test("ensureGhAuth: no sign-in, non-interactive → fails with the pre-provision command (agents relay it)", async () => {
@@ -146,7 +148,7 @@ test("ensureGhAuth: device-flow sign-in is repo-scoped and file-stored (--insecu
     .find((l) => l.includes("auth login"))!;
   assert.match(login, /--insecure-storage/, "the token must land in the repo's hosts.yml, never the shared keyring");
   assert.ok(login.includes(`cfg=${ghConfigDir(repo)}`));
-  assert.deepEqual(helperEntries(repo), ["", "!gh auth git-credential"]);
+  assert.deepEqual(helperEntries(repo), ["", `!GH_CONFIG_DIR='${ghConfigDir(repo)}' '${stub}' auth git-credential`]);
 });
 
 test("ensureGhAuth: gh missing → the webi gate, no spawn attempts", async () => {

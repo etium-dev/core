@@ -62,10 +62,15 @@ function runGhLogin(withToken: boolean, repoDir: string): boolean {
 /** Route this repository's git pushes through the deployment's gh sign-in:
  * local config only (never the machine's), with an empty first entry so
  * git stops consulting global helpers like osxkeychain — the same GUI
- * coupling one layer down (ADR-021). Worktrees inherit repo config. */
+ * coupling one layer down (ADR-021). The helper line is self-contained
+ * (repo scope + absolute gh path baked in): git invokes it from arbitrary
+ * environments — user shells, cron, ssh — where neither PATH nor
+ * GH_CONFIG_DIR can be assumed. Worktrees inherit repo config. */
 function setupRepoCredential(repoDir: string): void {
+  const gh = process.env.ETIUM_GH_CMD ?? (spawnSync("/bin/sh", ["-c", "command -v gh"], { encoding: "utf8" }).stdout || "gh").trim();
+  const helper = `!GH_CONFIG_DIR='${ghConfigDir(repoDir)}' '${gh}' auth git-credential`;
   spawnSync("git", ["-C", repoDir, "config", "--replace-all", "credential.https://github.com.helper", ""]);
-  spawnSync("git", ["-C", repoDir, "config", "--add", "credential.https://github.com.helper", "!gh auth git-credential"]);
+  spawnSync("git", ["-C", repoDir, "config", "--add", "credential.https://github.com.helper", helper]);
 }
 
 /** Get the deployment signed in and able to push, or explain exactly how.
