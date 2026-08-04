@@ -147,7 +147,43 @@ optional real-`launchctl` smoke on the macOS runner only.
 
 ---
 
-## 8. Process guards
+## 8. Token acquisition — real repos, real tokens, every configuration
+
+The sign-in path (ADR-022) makes promises about GitHub's behavior — token
+scopes, classic-vs-fine-grained reach, permission checks — that stubs
+cannot vouch for. GitHub's rules and UI drift. This suite runs against
+**real GitHub state**: a dedicated test org plus throwaway accounts, with
+pre-minted tokens held as CI secrets (creation via the browser is the one
+human step; everything after it is pinned).
+
+- [ ] **Repo matrix**: {deployment account owns the repo · collaborator
+  with Write on another user's repo · collaborator with Read only ·
+  org-owned repo, member with Write · org with SAML SSO (token
+  unauthorized vs authorized) · org restricting classic PATs} ×
+  {private · public}.
+- [ ] **Token matrix**, driven through the exact flow (`GH_CONFIG_DIR`
+  set, `gh auth login --with-token --insecure-storage`): the instructed
+  classic `repo,read:org,gist` token · a classic token missing one
+  required scope (gh must refuse, naming the scope) · a fine-grained
+  token scoped to an owned repo · a fine-grained token aimed at another
+  owner's repo (must fail configure's access check with the documented
+  cause) · a wrong-account token · a revoked token.
+- [ ] **Assertions per cell**: sign-in outcome matches the matrix; the
+  token lands in the repo-scoped `hosts.yml`, never the system keyring;
+  configure's push-access verdict and its named cause match the cell;
+  Write-holders' commands are honored and Read-holders' ignored against
+  the real permission API.
+- [ ] **The URL itself is a contract**: `settings/tokens/new?scopes=…`
+  must keep pre-selecting the scopes — UI drift here silently breaks the
+  one instruction users get. A scheduled headless-browser check (or a
+  standing manual checklist row) verifies the scope boxes arrive checked.
+- [ ] **gh minimum-scope drift**: a scheduled job re-runs sign-in with the
+  instructed token against the latest gh release — gh raising or changing
+  its required scopes surfaces here, not in a user's terminal.
+
+---
+
+## 9. Process guards
 
 - [ ] `RELEASING.md`: the checklist the release workflow enforces — changelog entry per release; the §2 semver gate; DESIGN §2's standing rule ("changes to core preserve the invariants or amend the list in the same change") asked explicitly in the PR template.
 - [ ] LOC budgets continue as-is (already enforced).
@@ -159,7 +195,8 @@ optional real-`launchctl` smoke on the macOS runner only.
 
 1. **Gate 0 hardening + Gate 1 artifact journey** — highest leverage; catches the bug classes actually shipped to date.
 2. **Wake-up lifecycle matrix** (§7) — cheap once the scheduler stubs exist, and it guards the newest code against the newest field-found bug class (stranded machine state).
-3. **Compat corpus + digest goldens + interface snapshots** (Gate 2, §4) — the existing-clients guarantee; seed the corpus retroactively from the 0.1.0 / 0.2.1 / 0.3.0 tarballs already on npm.
-4. **Trusted-publishing release workflow + canary/promote + sentinel** (Gates 3–4).
-5. **Invariant torture suites** (§3) — the largest test-code investment; converts the design's claims into enforced properties.
-6. **Docs-runner + gh contract fixtures** (§5–6).
+3. **Token acquisition matrix** (§8) — needs the test org and throwaway accounts set up once; every cell was a real field failure or one adjacent to it.
+4. **Compat corpus + digest goldens + interface snapshots** (Gate 2, §4) — the existing-clients guarantee; seed the corpus retroactively from the 0.1.0 / 0.2.1 / 0.3.0 tarballs already on npm.
+5. **Trusted-publishing release workflow + canary/promote + sentinel** (Gates 3–4).
+6. **Invariant torture suites** (§3) — the largest test-code investment; converts the design's claims into enforced properties.
+7. **Docs-runner + gh contract fixtures** (§5–6).
