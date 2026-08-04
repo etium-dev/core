@@ -9,7 +9,8 @@
 // narration (ADR-029): one comment per tick covering the run's notable
 // ledger events since the last posted marker — state changes, gate
 // openings with their commands and the shown artifact's key points +
-// branch link, decisions, completion. Nothing is ever edited; labels are
+// links pinned to that round's exact commit (ADR-032), decisions,
+// completion. Nothing is ever edited; labels are
 // write-only decoration (et:working | et:waiting | et:blocked). All GitHub
 // access goes through the `gh` CLI — auth stays gh's problem, per
 // MODEL_AUTH's delegation principle.
@@ -119,7 +120,7 @@ function commandLines(g: GateOpenedData): string[] {
 // structure — a VERDICT:/ACTION: first line and its headings — plus a link
 // to the file on the run's branch (only once it is actually committed).
 // Summaries stay model-free (Invariant 1); prose is the loop's job.
-function keyPoints(view: RunView, src?: string): string[] {
+function keyPoints(view: RunView, src?: string, sha?: string): string[] {
   const p = src ? [view.workspace, view.dir].map((d) => path.join(d, src)).find((f) => fs.existsSync(f)) : undefined;
   if (!p || !src) return [];
   const text = fs.readFileSync(p, "utf8").split("\n");
@@ -128,44 +129,60 @@ function keyPoints(view: RunView, src?: string): string[] {
   if (first && /^[A-Z]+:/.test(first)) out.push(`**${first}**`);
   out.push(...text.filter((l) => /^#{1,3} /.test(l)).map((l) => `- ${l.replace(/^#+ /, "")}`));
   if (!out.length && first) out.push(first);
-  const branch = view.worktree?.branch;
-  if (branch && spawnSync("git", ["-C", view.workspace, "cat-file", "-e", `HEAD:${src}`]).status === 0)
-    out.push(`[${src}](https://github.com/${REPO()}/blob/${branch}/${encodeURI(src)})`);
+  const ref = sha || view.worktree?.branch;
+  if (ref && spawnSync("git", ["-C", view.workspace, "cat-file", "-e", `HEAD:${src}`]).status === 0)
+    out.push(`[${src}](https://github.com/${REPO()}/blob/${ref}/${encodeURI(src)})`);
   return out;
 }
 
-const NOTABLE = new Set(["run.created", "step.started", "step.completed", "gate.opened", "gate.decided", "budget.exceeded", "run.completed"]);
+const NOTABLE = new Set(["run.created", "step.started", "step.completed", "gate.opened", "gate.decided", "budget.exceeded", "run.completed", "effect.recorded"]);
 
 /** One appended comment per tick, narrating the ledger's notable events
  * since the last posted marker — state changes, never a rewritten status
  * (ADR-029). Consecutive complete→start pairs read as one transition. */
 function transitionsBody(view: RunView, events: AnyEnvelope[], marker: string): string | undefined {
-  type Item = { done?: string; start?: string; lines: string[] };
+  type Item = { done?: string; doneMd?: string; start?: string; lines: string[] };
+  // Each artifact-bearing step pairs with the sha its commit recorded (the
+  // loop's "sha" effect, first one after the step) — links pin the exact
+  // version of that round's document, immune to later rounds (ADR-032).
+  const nextSha: (string | undefined)[] = new Array(events.length);
+  let carry: string | undefined;
+  for (let i = events.length - 1; i >= 0; i--) {
+    nextSha[i] = carry;
+    const e = events[i]!;
+    if (e.type === "effect.recorded" && e.data.name === "sha" && typeof e.data.value === "string" && e.data.value) carry = e.data.value;
+  }
+  const blob = (ref: string, ws: string) => `https://github.com/${REPO()}/blob/${ref}/${encodeURI(ws)}`;
   const items: Item[] = [];
-  for (const e of events) {
-    if (e.type === "run.created")
+  let seenSha = "";
+  events.forEach((e, i) => {
+    if (e.type === "effect.recorded") {
+      if (e.data.name === "sha" && typeof e.data.value === "string" && e.data.value) seenSha = e.data.value;
+    } else if (e.type === "run.created")
       items.push({ lines: [`▶ attempt \`${view.id}\`${view.worktree ? ` on \`${view.worktree.branch}\`` : ""}`] });
     else if (e.type === "step.started" && e.data.name !== "commit")
       items.push({ start: e.data.name, lines: [`▶ **${e.data.name}**`] });
     else if (e.type === "step.completed" && e.data.step.name !== "commit") {
       const ok = e.data.status === "ok" && e.data.passed !== false;
-      items.push({ done: ok ? e.data.step.name : undefined, lines: [`${ok ? "✓" : "✗"} **${e.data.step.name}** ${e.data.status}${e.data.passed === false ? " — did not pass" : ""}`] });
+      const ws = e.data.artifacts[0]?.split("/artifacts/")[1];
+      const md = ws && nextSha[i] ? `[**${e.data.step.name}**](${blob(nextSha[i]!, ws)})` : `**${e.data.step.name}**`;
+      items.push({ done: ok ? e.data.step.name : undefined, doneMd: md, lines: [`${ok ? "✓" : "✗"} ${md} ${e.data.status}${e.data.passed === false ? " — did not pass" : ""}`] });
     } else if (e.type === "gate.opened") {
       const g = e.data;
-      items.push({ lines: [g.reason ? `⏸ **${g.name}** — ${g.reason}` : `⏸ waiting on **${g.name}**`, ...commandLines(g), ...keyPoints(view, g.show[0])] });
+      items.push({ lines: [g.reason ? `⏸ **${g.name}** — ${g.reason}` : `⏸ waiting on **${g.name}**`, ...commandLines(g), ...keyPoints(view, g.show[0], seenSha)] });
     } else if (e.type === "gate.decided")
       items.push({ lines: [`◆ **${e.data.name}**: ${e.data.decision} by ${e.data.by}${e.data.note ? ` — ${e.data.note}` : ""}`] });
     else if (e.type === "budget.exceeded")
       items.push({ lines: [`⛔ budget ${e.data.budget} exceeded (${e.data.step.name})`] });
     else if (e.type === "run.completed")
       items.push({ lines: [`**${e.data.status}**${e.data.summary ? ` — ${e.data.summary}` : ""}`] });
-  }
+  });
   const lines: string[] = [];
   for (let i = 0; i < items.length; i++) {
     const a = items[i]!;
     const b = items[i + 1];
     if (a.done && b?.start) {
-      lines.push(`**${a.done}** complete → **${b.start}**`);
+      lines.push(`${a.doneMd ?? `**${a.done}**`} complete → **${b.start}**`);
       i++;
     } else lines.push(...a.lines);
   }

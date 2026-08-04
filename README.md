@@ -126,7 +126,8 @@ you configure, an exact `/et <option>` decides the open gate, and freestyle
 text is handed to the loop to interpret — and close/merge into run
 lifecycle, projecting back a draft PR, append-only narration comments —
 each state change, each gate with its valid commands and the shown
-artifact's key points plus a branch link, each decision — and `et:*`
+artifact's key points, each stage linked to that round's exact commit,
+each decision — and `et:*`
 filter labels. Comments are never edited; the thread is the history. The deployment acts
 as the repository's own gh sign-in (`.etium/gh`, created by `etium
 configure`). The wiring lives in `.etium/config.json` — `etium tick` and

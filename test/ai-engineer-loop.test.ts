@@ -85,6 +85,8 @@ test("full graph: triage → design (revise round) → plan → implement+check 
   const last = readLedger(runDir).at(-1)!;
   assert.equal(last.type, "run.completed");
   assert.deepEqual((last.data as { status: string }).status, "done");
+  const shas = readLedger(runDir).filter((e) => e.type === "effect.recorded" && (e.data as { name: string }).name === "sha");
+  assert.ok(shas.length >= 1, "every commit records its sha for version-pinned links (ADR-032)");
 });
 
 test("stuck path: reviewer never approves → <stage>-stuck gate → accept proceeds", async () => {

@@ -7,6 +7,7 @@
 // repository itself; nothing pre-digests it for them. Publication is a
 // surface's job; artifact commits are the loop's own steps (ADR-017).
 
+import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -48,12 +49,15 @@ export default async function aiEngineer(run: Run) {
     });
 
   // Artifact commits are the loop's job (ADR-017): guarded — no-op when
-  // clean or outside a git checkout; loud on real failure.
-  const commit = (label: string, all = false) =>
-    run.step("commit", {
+  // clean or outside a git checkout; loud on real failure. The resulting
+  // sha is recorded so surfaces can link each round's exact documents.
+  const commit = async (label: string, all = false) => {
+    await run.step("commit", {
       harness: "exec",
       command: `if git rev-parse --git-dir >/dev/null 2>&1; then git add -A ${all ? "." : "ai"} && { git diff --cached --quiet || git commit -q -m "ai: ${label}"; }; fi`,
     });
+    await run.effect("sha", () => (spawnSync("git", ["rev-parse", "HEAD"], { cwd: run.workspace, encoding: "utf8" }).stdout ?? "").trim());
+  };
 
   // A recorded read of one word out of an artifact — replay-exact.
   const artifactWord = (file: string, re: RegExp) => () => {
@@ -81,7 +85,7 @@ export default async function aiEngineer(run: Run) {
   const converge = async (stage: string): Promise<"ready" | "wrapped-up"> => {
     for (;;) {
       for (let r = 0; r < rounds; r++) {
-        const built = await step(stage, persona(stage), { artifacts: ["ai/*.md"] });
+        const built = await step(stage, persona(stage), { artifacts: [ARTIFACT[stage]!, "ai/*.md"] });
         await commit(stage, stage === "implement");
         if (built.status !== "ok") break;
         const check = stage === "implement"
@@ -95,8 +99,7 @@ export default async function aiEngineer(run: Run) {
         show = [ARTIFACT[stage]!, "ai/REVIEW.md"];
         if (review.passed && (check?.passed ?? true)) return "ready";
       }
-      // An escalation, not a routine stop: the reason is the headline, and
-      // the reviewer's blockers lead the shown files.
+      // Escalation: the reason is the headline; REVIEW.md leads the show.
       let stuckShow = ["ai/REVIEW.md", ...show.filter((f) => f !== "ai/REVIEW.md")];
       for (;;) {
         const e = await run.gate(`${stage}-stuck`, {

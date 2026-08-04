@@ -1157,3 +1157,30 @@ itself inventing (asks the persona least able to see its own
 overbuilding to police it). Design optional for "obvious" fixes (the
 xcnc run's fix looked obvious; the mini style prices the stage at a
 paragraph instead of skipping the judgment).
+
+---
+
+## ADR-032 — narration links pin the round's exact commit
+
+**Decision.** The loop's `commit` step records the resulting sha as a
+`"sha"` effect (guarded: empty outside a git checkout), putting the
+version identity of every round's documents in the ledger. The github
+narration pairs each artifact-bearing step with the first sha recorded
+after it and renders the step name as a link to that blob —
+`blob/<sha>/<file>` — so "plan" in the round-3 comment is round 3's
+PLAN.md forever, distinct from round 4's; gate key-point links pin the
+same way. The primary document is `artifacts[0]` by convention: loops
+declare it first (the stage's own file, then the `ai/*.md` glob).
+
+**Why.** Branch-ref links answer "what is the plan now," not "what plan
+was this comment about" — the narration is history, and history's links
+must not move. The sha is recorded by the loop rather than
+reconstructed from `git log` because ordinal matching drifts the moment
+a round produces no diff (the guarded commit no-ops), while a
+ledger-recorded effect is replay-exact and costs one line.
+
+**Rejected.** Branch-pinned links (mutable history). Reconstructing
+step→commit from commit messages at projection time (ordinal drift, and
+projection often runs rounds later). Linking every artifact a step
+collected (the glob collects the whole `ai/` folder; one primary link
+per step is the readable unit).

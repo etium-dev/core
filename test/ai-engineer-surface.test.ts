@@ -53,8 +53,9 @@ if (method === "GET") {
 `;
 
 const SLOOP = `export default async function (run) {
-  await run.step("work", { harness: "exec",
+  await run.step("work", { harness: "exec", artifacts: ["ai/NOTES.md"],
     command: "mkdir -p ai && echo notes-content > ai/NOTES.md && git add -A && git -c user.name=t -c user.email=t@t commit -qm work" });
+  await run.effect("sha", () => "cafe1234beef");
   for (;;) {
     const d = await run.gate("route", { options: ["plan", "wrap-up", "consider"], show: ["ai/NOTES.md"], reason: "stub needs a human here" });
     if (d.decision === "wrap-up") return;
@@ -157,7 +158,8 @@ test("kickoff comment → worktree run with directive; read-only commenter ignor
   assert.match(nb, /<!-- et:seq /); // the projection cursor rides in the marker
   assert.match(nb, /▶ attempt .* on `etium\/issue-7-attempt-0`/);
   assert.match(nb, /▶ \*\*work\*\*/);
-  assert.match(nb, /✓ \*\*work\*\* ok/);
+  assert.match(nb, /✓ \[\*\*work\*\*\]\(https:\/\/github\.com\/acme\/widgets\/blob\/cafe1234beef\/ai\/NOTES\.md\) ok/,
+    "step names link to that round's exact commit (ADR-032)");
   assert.match(nb, /⏸ \*\*route\*\* — stub needs a human here/); // the gate's reason is the headline
   assert.match(nb, /\/et plan/);
   assert.match(nb, /\/et wrap-up/);
@@ -165,7 +167,7 @@ test("kickoff comment → worktree run with directive; read-only commenter ignor
   assert.match(nb, /just say what you want/); // freestyle invitation
   assert.match(nb, /notes-content/); // the artifact's key points, not a raw excerpt…
   assert.ok(!nb.includes("```"), "…never a fenced snippet");
-  assert.match(nb, /blob\/etium\/issue-7-attempt-0\/ai\/NOTES\.md/); // link to the file on the branch
+  assert.match(nb, /blob\/cafe1234beef\/ai\/NOTES\.md/); // gate link pinned to the round's commit, not the moving branch
   assert.ok(w.some((x) => /issues\/7\/labels$/.test(x.path) && x.body.labels?.includes("et:waiting")));
 
   // Once posted comments are visible, a quiet tick appends nothing.
