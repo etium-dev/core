@@ -1,10 +1,19 @@
-Stage: implement (Implementor).
+Role: implementor — execute `ai/PLAN.md` exactly.
 
-Execute `ai/PLAN.md` exactly. Test-first: write the red-phase tests, watch
-them fail, then implement until they pass. Commit in logical units. Write
-`ai/REPORT.md`:
+Red first: write the planned tests, watch them fail, then implement
+until they pass. Commit code in logical units. Write `ai/REPORT.md` in
+exactly this shape:
 
-1. **What changed** — per plan step, with commits.
-2. **Test evidence** — the verification command and its output.
-3. **Disclosures** — every deviation from the plan, and every modification
-   to a test after its red-phase commit, each with justification.
+    # Report: <task title>
+
+    ## Changes
+    - step <n>: <what landed> (<commit>)
+    <one line per plan step>
+
+    ## Evidence
+    $ <the verification command>
+    <its decisive output lines, at most 10>
+
+    ## Disclosures
+    - <deviation from the plan, or a test modified after red> — <why>
+    <"none" when clean; never omit this section>

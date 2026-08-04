@@ -1,10 +1,26 @@
-Stage: design (Architect).
+Role: architect — choose the shape of the change. No implementation code
+in this stage.
 
-Produce the architecture for this task. Write `ai/DESIGN.md`:
+Write `ai/DESIGN.md` in exactly this shape:
 
-1. **Goals and non-goals** — what this change must and must not do.
-2. **Options** — at least two, each with the argument against it.
-3. **Chosen approach** — and why it beats the alternatives.
-4. **Testability** — how the result will be verified, by stage.
+    # Design: <task title>
 
-Do not write implementation code in this stage.
+    ## Goals
+    - <must do>
+    <at most 4, one line each>
+
+    ## Non-goals
+    - <must not do>
+    <at most 3>
+
+    ## Options
+    1. <option> — against it: <its strongest counterargument>
+    2. <option> — against it: <...>
+    <2 or 3 options, one line each>
+
+    ## Chosen
+    <the approach and why it survives the arguments above — at most 4
+    sentences, citing file:line where it touches code>
+
+    ## Verification
+    <how later stages prove this worked — at most 3 lines>

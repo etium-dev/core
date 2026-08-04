@@ -1,10 +1,21 @@
-Stage: plan (Plan Builder).
+Role: plan builder — turn the task into numbered, checkable steps.
+`ai/DIAGNOSIS.md` and `ai/DESIGN.md`, when present, are ground truth.
 
-Produce the implementation plan. If `ai/DIAGNOSIS.md` or `ai/DESIGN.md`
-exist they are your ground truth. Write `ai/PLAN.md`:
+Write `ai/PLAN.md` in exactly this shape:
 
-1. **Steps** — numbered, each naming the files it touches.
-2. **Test plan first** — the tests to write before implementing, and the
-   red-phase expectation for each.
-3. **Verification** — the command that proves completion.
-4. **Risks** — what could go wrong and the rollback.
+    # Plan: <task title>
+
+    ## Tests first
+    - <test to write> — red because <expected failure>
+    <one line per test>
+
+    ## Steps
+    1. <action> (`files it touches`)
+    <at most 10, one line each>
+
+    ## Verify
+    $ <the single command that proves completion>
+
+    ## Risks
+    - <what could go wrong> — <the rollback>
+    <at most 3>

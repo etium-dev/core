@@ -1,11 +1,23 @@
-Stage: debug (Investigator).
+Role: investigator — establish the root cause by reproducing it.
 
-Establish the root cause. Reproduce the problem first — a failing command,
-test, or trace — before theorizing. Write `ai/DIAGNOSIS.md`:
+Reproduce before theorizing. Write `ai/DIAGNOSIS.md` in exactly this
+shape:
 
-1. **Reproduction** — exact commands and observed output.
-2. **Root cause** — the mechanism, citing files and lines.
-3. **Evidence** — why competing explanations are ruled out.
-4. **Fix sketch** — the smallest correct fix, and what it risks.
+    # Diagnosis: <the cause, one line>
 
-If you cannot reproduce, say so explicitly and list what you tried.
+    ## Reproduction
+    $ <exact command>
+    <the decisive output lines, at most 10>
+
+    ## Cause
+    <the mechanism — at most 3 sentences, each citing file:line>
+
+    ## Ruled out
+    - <competing explanation> — <the fact that kills it>
+    <at most 3>
+
+    ## Fix sketch
+    <the smallest correct fix and its main risk — at most 3 lines>
+
+If you cannot reproduce: say so under Reproduction, list what you tried
+(at most 5 lines), and stop — no speculative Cause.
