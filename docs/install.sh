@@ -12,6 +12,8 @@
 #   2. Picks an npm prefix: your own if writable, else ~/.local — so sudo
 #      is never needed.
 #   3. Runs: npm install -g --ignore-scripts --prefer-online @etium/core
+#      — with a private npm cache, so root-owned ~/.npm debris from past
+#      sudo use can never fail the install with EACCES.
 #   4. Offers to add the bin directory to your shell PATH.
 # It installs nothing outside your home directory except via your system
 # package manager, and only ever with your confirmation.
@@ -798,12 +800,23 @@ run_etium_install() {
   run_npm_install_etium "$npm_loglevel"
 }
 
+# npm's shared cache (~/.npm) is a classic sudo casualty: root-owned
+# entries under it fail every later user-level install with EACCES. The
+# installer never depends on it — each run uses its own throwaway cache.
+etium_npm_cache_dir() {
+  if [ -z "${ETIUM_NPM_CACHE_DIR:-}" ]; then
+    ETIUM_NPM_CACHE_DIR="${TMPDIR:-/tmp}/etium-npm-cache.$$"
+    mkdir -p "$ETIUM_NPM_CACHE_DIR"
+  fi
+  printf '%s' "$ETIUM_NPM_CACHE_DIR"
+}
+
 run_npm_install_etium() {
   npm_loglevel="$1"
   if [ -n "${ETIUM_NPM_INSTALL_PREFIX:-}" ]; then
-    npm install -g --ignore-scripts --prefer-online --prefix "$ETIUM_NPM_INSTALL_PREFIX" --no-fund --no-audit "--loglevel=$npm_loglevel" --progress=false "$ETIUM_PACKAGE"
+    npm install -g --ignore-scripts --prefer-online --cache "$(etium_npm_cache_dir)" --prefix "$ETIUM_NPM_INSTALL_PREFIX" --no-fund --no-audit "--loglevel=$npm_loglevel" --progress=false "$ETIUM_PACKAGE"
   else
-    npm install -g --ignore-scripts --prefer-online --no-fund --no-audit "--loglevel=$npm_loglevel" --progress=false "$ETIUM_PACKAGE"
+    npm install -g --ignore-scripts --prefer-online --cache "$(etium_npm_cache_dir)" --no-fund --no-audit "--loglevel=$npm_loglevel" --progress=false "$ETIUM_PACKAGE"
   fi
 }
 
@@ -844,9 +857,9 @@ npm_package_is_installed_for_uninstall() {
 run_npm_uninstall_etium() {
   npm_loglevel="$1"
   if [ -n "${ETIUM_NPM_UNINSTALL_PREFIX:-}" ]; then
-    npm uninstall -g --prefix "$ETIUM_NPM_UNINSTALL_PREFIX" --no-fund --no-audit "--loglevel=$npm_loglevel" --progress=false "$ETIUM_PACKAGE"
+    npm uninstall -g --cache "$(etium_npm_cache_dir)" --prefix "$ETIUM_NPM_UNINSTALL_PREFIX" --no-fund --no-audit "--loglevel=$npm_loglevel" --progress=false "$ETIUM_PACKAGE"
   else
-    npm uninstall -g --no-fund --no-audit "--loglevel=$npm_loglevel" --progress=false "$ETIUM_PACKAGE"
+    npm uninstall -g --cache "$(etium_npm_cache_dir)" --no-fund --no-audit "--loglevel=$npm_loglevel" --progress=false "$ETIUM_PACKAGE"
   fi
 }
 
