@@ -150,7 +150,7 @@ export function removeWakeup(repoDir: string, id?: string): string[] {
 
 /** One tick through the just-installed command, so the verdict comes from
  * the context that will actually run it — works identically over ssh. */
-function verifyFirstTick(repoDir: string, cmd: string): string[] {
+function verifyFirstTick(repoDir: string, cmd: string): { ok: boolean; lines: string[] } {
   const log = path.join(repoDir, ".etium", "tick.log");
   let before = 0;
   try {
@@ -166,9 +166,20 @@ function verifyFirstTick(repoDir: string, cmd: string): string[] {
     /* no log written */
   }
   const err = appended.split("\n").find((l) => l.includes("surface-error"));
-  if (err) return ["", "First tick ran — and reports a problem:", `  ${err.trim()}`];
-  if (appended.trim()) return ["", "First tick succeeded — the engineer is live."];
-  return ["", `First tick wrote nothing — check ${log}`];
+  if (err)
+    return {
+      ok: false,
+      lines: [
+        "",
+        "First tick ran — and reports a problem:",
+        `  ${err.trim()}`,
+        "",
+        "Ticks retry every minute — fix the cause and it heals in place, or",
+        "re-run: etium configure",
+      ],
+    };
+  if (appended.trim()) return { ok: true, lines: ["", "First tick succeeded — the engineer is live."] };
+  return { ok: true, lines: ["", `First tick wrote nothing — check ${log}`] };
 }
 
 /** Install the always-on wake-up; returns the lines to print. Idempotent
@@ -177,7 +188,7 @@ function verifyFirstTick(repoDir: string, cmd: string): string[] {
  * Mechanism follows the credential (ADR-021): keychain-held gh auth needs
  * the GUI session (launchd agent); file-held auth runs headless (cron —
  * which on macOS runs with no one logged in at all). */
-export function installWakeup(repoDir: string, env: string, id: string): string[] {
+export function installWakeup(repoDir: string, env: string, id: string): { ok: boolean; lines: string[] } {
   repoDir = canon(repoDir);
   const cmd = tickCommand(repoDir, env, id);
   if (process.platform === "darwin" && !ghFileAuth()) {
@@ -197,26 +208,32 @@ export function installWakeup(repoDir: string, env: string, id: string): string[
     fs.writeFileSync(plist, launchAgentPlist(label, cmd));
     const r = spawnSync("launchctl", ["bootstrap", `gui/${process.getuid?.() ?? 501}`, plist], { encoding: "utf8" });
     return r.status === 0
-      ? [
-          `Installed the launchd agent (${label}): ticks once a minute while`,
-          "you're logged in, resumes at login (gh's sign-in is keychain-held,",
-          "which only a GUI session can read — token sign-in lifts this).",
-        ]
-      : [
-          `Could not load the agent — is a GUI session active? Wrote ${plist};`,
-          `load it with:`,
-          "",
-          `  launchctl bootstrap gui/${process.getuid?.() ?? 501} ${plist}`,
-        ];
+      ? {
+          ok: true,
+          lines: [
+            `Installed the launchd agent (${label}): ticks once a minute while`,
+            "you're logged in, resumes at login (gh's sign-in is keychain-held,",
+            "which only a GUI session can read — token sign-in lifts this).",
+          ],
+        }
+      : {
+          ok: false,
+          lines: [
+            `Could not load the agent — is a GUI session active? Wrote ${plist};`,
+            `load it with:`,
+            "",
+            `  launchctl bootstrap gui/${process.getuid?.() ?? 501} ${plist}`,
+          ],
+        };
   }
   retireCronLines(repoDir, id);
   const line = cronLine(cmd);
   const cur = spawnSync("crontab", ["-l"], { encoding: "utf8" });
   const kept = (cur.status === 0 ? cur.stdout : "").split("\n").filter(Boolean);
   const w = spawnSync("crontab", ["-"], { input: [...kept, line, ""].join("\n"), encoding: "utf8" });
-  return w.status === 0
-    ? ["Installed the crontab entry (once a minute; no GUI session needed).", ...verifyFirstTick(repoDir, cmd)]
-    : ["Could not edit crontab — install this line yourself:", "", `  ${line}`];
+  if (w.status !== 0) return { ok: false, lines: ["Could not edit crontab — install this line yourself:", "", `  ${line}`] };
+  const v = verifyFirstTick(repoDir, cmd);
+  return { ok: v.ok, lines: ["Installed the crontab entry (once a minute; no GUI session needed).", ...v.lines] };
 }
 
 /** `print` mode: show what always-on would do — installing nothing, and on

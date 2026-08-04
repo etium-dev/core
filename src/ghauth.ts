@@ -67,7 +67,22 @@ export async function ensureGhAuth(o: {
     out("Then run: etium configure");
     return { ok: false };
   }
-  if (o.authed) return { ok: true };
+  // The bar is what projections need: push. A wrong-account token, a
+  // fine-grained token pointed at another owner's private repo, or a
+  // non-collaborator all fail HERE with the cause named — never as 404s
+  // at first tick.
+  const checkAccess = (): boolean => {
+    const push = (o.sh("gh", ["api", `repos/${o.repo}`, "--jq", ".permissions.push"]).stdout || "").trim();
+    if (push === "true") return true;
+    out();
+    out(`The signed-in account can't push to ${o.repo}${push ? "" : " (not visible to this token)"}.`);
+    out("Common causes: the token belongs to the wrong account; a fine-grained");
+    out("token pointed at another owner's private repository (those can only");
+    out("reach repos their own account owns — use a classic `repo`-scope");
+    out("token); or the acting account isn't a collaborator with Write.");
+    return false;
+  };
+  if (o.authed) return { ok: checkAccess() };
   if (!o.interactive) {
     if (o.unverifiable) return { ok: true }; // agent-driven over ssh; step-level checks verify for real
     out();
@@ -101,13 +116,15 @@ export async function ensureGhAuth(o: {
   if (how === "keep") return { ok: true };
   if (how === "token") {
     out();
-    out(`Create a fine-grained personal access token — signed in as the account`);
-    out(`the engineer acts as (you, or the bot):`);
+    out("Create a token while signed in as the acting account (you, or the bot):");
     out();
-    out("  https://github.com/settings/personal-access-tokens/new");
-    out();
-    out(`  Repository access:  only ${o.repo}`);
-    out("  Permissions:        Issues, Pull requests, Contents — read and write");
+    out(`  • That account OWNS ${o.repo}: a fine-grained token scoped to it`);
+    out("    (github.com/settings/personal-access-tokens/new) — Issues,");
+    out("    Pull requests, Contents: read and write.");
+    out(`  • That account is a COLLABORATOR on ${o.repo} (the usual bot setup):`);
+    out("    fine-grained tokens cannot reach another owner's private repo —");
+    out("    use a classic `repo`-scope token:");
+    out("    github.com/settings/tokens/new?scopes=repo");
     out();
     out("Paste it below — input is hidden; press Enter when done. It goes");
     out("straight into gh — etium never sees or stores it.");
@@ -131,5 +148,6 @@ export async function ensureGhAuth(o: {
   spawnSync(process.env.ETIUM_GH_CMD ?? "gh", ["auth", "setup-git"], { stdio: "ignore" });
   out();
   out(`  ok     gh — signed in as ${login || "unknown"}; git pushes authenticate through gh`);
+  if (!checkAccess()) return { ok: false };
   return { ok: true, login };
 }

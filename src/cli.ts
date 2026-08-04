@@ -552,13 +552,11 @@ async function cmdConfigure(argv: string[]): Promise<number> {
   const etiums = etiumsOnPath();
   if (etiums.length > 1) {
     const [active, ...shadowed] = etiums;
-    out(`  needs  one etium install — this machine has ${etiums.length}; PATH serves the first:`);
-    out(`         ${active}   (this one runs)`);
+    out(`  needs  one etium install — this machine has ${etiums.length}; PATH serves the first:\n         ${active}   (this one runs)`);
     for (const s of shadowed) {
       const prefix = path.dirname(path.dirname(s));
       const sudo = prefix.startsWith(os.homedir() + path.sep) ? "" : "sudo ";
-      out(`         ${s}   (shadowed — updates here never take effect)`);
-      out(`         remove it: ${sudo}npm uninstall -g --prefix ${prefix} @etium/core`);
+      out(`         ${s}   (shadowed — updates here never take effect)\n         remove it: ${sudo}npm uninstall -g --prefix ${prefix} @etium/core`);
     }
     hardFail = true;
   }
@@ -680,15 +678,15 @@ async function cmdConfigure(argv: string[]): Promise<number> {
       opts.push({ label: style("2", "Nothing — exit"), value: "exit" });
       const action = await menu("Choose an action", [], opts, 0);
       if (action === "exit") {
-        out();
-        out("Chose to do nothing. Exiting.");
+        out("\nChose to do nothing. Exiting.");
         return 0;
       }
       if (action === "wake-on") {
         out();
         const full = writeConfig(etiumBase, cfg!); // backfills a missing id (ADR-020)
-        for (const l of installWakeup(repoDir!, ghEnv(full.github!), full.id)) out(l);
-        return 0;
+        const w = installWakeup(repoDir!, ghEnv(full.github!), full.id);
+        for (const l of w.lines) out(l);
+        return w.ok ? 0 : 1;
       }
       if (action === "wake-off") {
         out();
@@ -848,8 +846,10 @@ async function cmdConfigure(argv: string[]): Promise<number> {
     // runtime identity by omitting the var (the surface defaults to it).
     const env = [`ETIUM_GH_REPO=${github}`, `ETIUM_GH_TRUSTED=${trusted}`, agentLogin ? `ETIUM_GH_AGENT=${agentLogin}` : "", `ETIUM_GH_LOOP=${library === "none" ? "<path-to-your-loop>" : `${library}/loop.ts`}`].filter(Boolean).join(" ");
     if (wakeup === "cron") {
-      for (const l of installWakeup(repoDir!, env, saved.id)) out(l);
+      const w = installWakeup(repoDir!, env, saved.id);
+      for (const l of w.lines) out(l);
       out();
+      if (!w.ok) return 1; // no "Done" after a surfaced problem
     } else if (wakeup === "print") {
       for (const l of printWakeup(repoDir!, env, saved.id)) out(l);
       out();
@@ -862,7 +862,7 @@ async function cmdConfigure(argv: string[]): Promise<number> {
       out(`  ${env} etium watch --surface github`);
       out();
     }
-    if (actAs !== "me" && agentLogin) out(`  make sure this machine's gh is signed in as ${agentLogin}`);
+    if (actAs !== "me" && agentLogin && ghLogin !== agentLogin) out(`  make sure this machine's gh is signed in as ${agentLogin}`);
     out(`  assign ${agentLogin || "the engineer"} to a GitHub issue to start the first attempt`);
     return 0;
   } finally {
