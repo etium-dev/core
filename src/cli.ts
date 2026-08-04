@@ -888,7 +888,7 @@ async function cmdWatch(argv: string[]): Promise<number> {
   await watchLoop(base(v.dir), entry, surfaces, everyMs, (actions) => {
     for (const a of actions)
       if (a.action !== "skip-completed" && a.action !== "skip-parked")
-        process.stdout.write(`${a.run.padEnd(36)} ${a.action}${a.detail ? `  (${a.detail})` : ""}\n`);
+        process.stdout.write(`${new Date().toISOString()} ${a.run.padEnd(36)} ${a.action}${a.detail ? `  (${a.detail})` : ""}\n`);
   });
   return 0;
 }
@@ -905,7 +905,7 @@ async function cmdTick(argv: string[]): Promise<number> {
   const surfaces = await loadSurfaces(v.surface ?? []);
   const actions = await tickOnce(base(v.dir), entry, wantSync(v.sync), surfaces);
   for (const a of actions)
-    process.stdout.write(`${a.run.padEnd(36)} ${a.action}${a.detail ? `  (${a.detail})` : ""}\n`);
+    process.stdout.write(`${new Date().toISOString()} ${a.run.padEnd(36)} ${a.action}${a.detail ? `  (${a.detail})` : ""}\n`);
   if (!actions.length) process.stdout.write("no runs\n");
   return 0;
 }

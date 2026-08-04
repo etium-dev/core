@@ -4,6 +4,7 @@
 // whole liveness story for daemonless operation.
 
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
 import { LedgerWriter, loadState, readLedger, writeStateCache } from "./ledger.ts";
@@ -43,6 +44,7 @@ export interface TickAction {
     | "skip-completed"
     | "skip-running"
     | "skip-parked"
+    | "recover"
     | "resume"
     | "crash-loop"
     | "surface-task"
@@ -54,25 +56,63 @@ export interface TickAction {
   detail?: string;
 }
 
-function acquireTickLock(base: string): boolean {
+function readTickLock(p: string): { pid: number; host: string } | null {
+  try {
+    const raw = fs.readFileSync(p, "utf8");
+    try {
+      const j = JSON.parse(raw) as { pid?: unknown; host?: unknown };
+      if (j && typeof j === "object" && Number.isInteger(j.pid))
+        return { pid: j.pid as number, host: typeof j.host === "string" ? j.host : os.hostname() };
+    } catch {
+      /* not JSON */
+    }
+    const pid = Number(raw.trim()); // pre-0.12.3 format: bare pid
+    return Number.isInteger(pid) ? { pid, host: os.hostname() } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** A holder is live only while its pid answers on this host; age is the
+ * fallback for foreign or unreadable locks. A tick killed mid-flight
+ * (launchd bootout during `configure`, kill, OOM) is stolen on the next
+ * tick — an orphaned lock never outlives its holder by more than one
+ * interval. */
+function acquireTickLock(base: string): { ok: boolean; stole?: string } {
   const p = path.join(base, ".tick.lock");
+  let stole: string | undefined;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const fd = fs.openSync(p, "wx");
-      fs.writeSync(fd, String(process.pid));
+      fs.writeSync(fd, JSON.stringify({ pid: process.pid, host: os.hostname() }));
       fs.closeSync(fd);
-      return true;
+      return { ok: true, stole };
     } catch (e: unknown) {
       if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
+      const info = readTickLock(p);
+      if (info && info.host === os.hostname()) {
+        try {
+          process.kill(info.pid, 0);
+          return { ok: false }; // holder alive
+        } catch {
+          /* dead — steal below */
+        }
+      } else {
+        try {
+          if (Date.now() - fs.statSync(p).mtimeMs < TICK_LOCK_STALE_MS) return { ok: false };
+        } catch {
+          return { ok: false };
+        }
+      }
+      stole = `stole stale tick lock (holder pid ${info?.pid ?? "?"} not running)`;
       try {
-        if (Date.now() - fs.statSync(p).mtimeMs < TICK_LOCK_STALE_MS) return false;
         fs.unlinkSync(p);
       } catch {
-        return false;
+        return { ok: false }; // raced with another cleaner
       }
     }
   }
-  return false;
+  return { ok: false };
 }
 
 /** Resolve surfaces: builtin names first (`github`), else load a module by
@@ -237,8 +277,10 @@ export async function tickOnce(
   const runsDir = path.join(base, "runs");
   if (!fs.existsSync(runsDir) && surfaces.length === 0) return [];
   fs.mkdirSync(runsDir, { recursive: true });
-  if (!acquireTickLock(base)) return [{ run: "-", action: "skip-running", detail: "another tick holds the lock" }];
+  const lock = acquireTickLock(base);
+  if (!lock.ok) return [{ run: "-", action: "skip-running", detail: "another tick holds the lock" }];
   const actions: TickAction[] = [];
+  if (lock.stole) actions.push({ run: "-", action: "recover", detail: lock.stole });
   try {
     // 1. Surfaces first, so a decision polled this tick resumes its run this tick.
     for (const s of surfaces) await driveSurface(base, runsDir, s, actions);
@@ -298,8 +340,12 @@ export async function tickOnce(
       }
     }
   } finally {
+    // Release only what is ours — a stalled tick must not delete the lock
+    // a stealer has since written.
     try {
-      fs.unlinkSync(path.join(base, ".tick.lock"));
+      const p = path.join(base, ".tick.lock");
+      const info = readTickLock(p);
+      if (info && info.pid === process.pid && info.host === os.hostname()) fs.unlinkSync(p);
     } catch {
       /* already gone */
     }
