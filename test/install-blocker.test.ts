@@ -33,9 +33,14 @@ esac
   fs.mkdirSync(path.join(home, ".npm"));
   fs.chmodSync(path.join(home, ".npm"), 0o555);
   try {
+    // Hermetic PATH: no real etium may be visible — the installer prompts
+    // about an existing install on /dev/tty, which pierces npm's pipes and
+    // would interrupt whoever runs the suite (it reached a live `npm
+    // publish` once). Stub bin + node's dir + system tools only.
+    const hermeticPath = `${bin}:${path.dirname(process.execPath)}:/usr/bin:/bin`;
     spawnSync("/bin/sh", [path.resolve("docs/install.sh")], {
       encoding: "utf8",
-      env: { ...process.env, HOME: home, PATH: `${bin}:${process.env.PATH}`, npm_config_prefix: prefix },
+      env: { ...process.env, HOME: home, PATH: hermeticPath, npm_config_prefix: prefix },
       input: "",
       timeout: 60_000,
     });
