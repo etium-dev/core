@@ -15,6 +15,11 @@ const read = (f: string) => fs.readFileSync(path.join(T, f), "utf8");
 // Composition in code (WRITING_LOOPS.md): shared conventions + persona.
 const persona = (stage: string) =>
   read("conventions.md") + "\n\n" + read(`${stage}.md`).replaceAll("{{stage}}", stage);
+// Reviewers are distinct per stage: the shared frame (verdict, stable
+// keys, fresh eyes) composed with that stage's scrutiny file.
+const reviewer = (stage: string) =>
+  read("conventions.md") + "\n\n" + read("review.md").replaceAll("{{stage}}", stage) +
+  "\n\n" + read(`${stage}-review.md`);
 
 const ARTIFACT: Record<string, string> = {
   triage: "ai/INTAKE.md",
@@ -64,7 +69,7 @@ export default async function aiEngineer(run: Run) {
           stage === "implement"
             ? await run.step("check", { harness: "exec", command: run.params.check ?? "true" })
             : undefined;
-        const review = await step(`${stage}-review`, persona("review"), {
+        const review = await step(`${stage}-review`, reviewer(stage), {
           artifacts: ["ai/REVIEW.md"],
           grade: "grep -qi '^VERDICT: approve' ai/REVIEW.md",
         });

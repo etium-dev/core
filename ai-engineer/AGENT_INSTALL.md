@@ -176,7 +176,7 @@ git commit -m "Add etium $LIBRARY loop library"
 ```
 
 **Verify** (`LIBRARY=ai-engineer`): `test -f ai-engineer/loop.ts && grep -qx '.etium/' .gitignore && ls ai-engineer/templates/*.md | wc -l` →
-both tests exit 0 and the count is `7`.
+both tests exit 0 and the count is `11`.
 **Verify** (`LIBRARY=ralph`): `test -f ralph/loop.ts && grep -qx '.etium/' .gitignore` → exits 0.
 When `LIBRARY=none` there is nothing to commit — continue to Step 3C.
 
