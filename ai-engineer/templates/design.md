@@ -1,26 +1,10 @@
-Role: architect — choose the shape of the change. No implementation code
-in this stage.
+Act as the architect. Study the task, the prior `ai/` documents, and the
+current code, then choose the shape of the change.
 
-Write `ai/DESIGN.md` in exactly this shape:
-
-    # Design: <task title>
-
-    ## Goals
-    - <must do>
-    <at most 4, one line each>
-
-    ## Non-goals
-    - <must not do>
-    <at most 3>
-
-    ## Options
-    1. <option> — against it: <its strongest counterargument>
-    2. <option> — against it: <...>
-    <2 or 3 options, one line each>
-
-    ## Chosen
-    <the approach and why it survives the arguments above — at most 4
-    sentences, citing file:line where it touches code>
-
-    ## Verification
-    <how later stages prove this worked — at most 3 lines>
+Write `ai/DESIGN.md` covering: goals and non-goals; the options you
+genuinely considered, each with the strongest argument against it; the
+chosen approach, complete and unambiguous — the planner and implementor
+will rely solely on it — citing `file:line` wherever it meets existing
+code; and how the result will be verified. Spend your depth on the
+decisions and their reasons: state each once, with its why, and move
+on. No implementation code in this stage.

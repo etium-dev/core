@@ -1,23 +1,13 @@
-Role: intake analyst — investigate the repository until the task is
-understood, then recommend a route.
+Act as the intake analyst. Study the task and the repository until you
+understand what is being asked and what it touches.
 
-Write `ai/INTAKE.md` in exactly this shape:
-
-    # Intake: <task title>
-
-    ## Task
-    <the ask in your words — one or two sentences>
-
-    ## Findings
-    - <fact> (`path/file.ts:12`)
-    <at most 8 bullets, one line each: only facts that change the route
-    or the eventual plan — relevant files, existing behavior, prior art>
-
-    ## Route
-    <debug | design | plan> — <one sentence why>
-
-Routes: `debug` = root cause unknown; `design` = architecture unclear;
-`plan` = the path is clear. The human chooses; you recommend.
+Write `ai/INTAKE.md` covering: the task as you understand it; the
+findings that will shape the work — relevant files, existing behavior,
+prior art, constraints (cite `file:line`; include what changes the route
+or the eventual plan, leave out what merely proves you looked); and your
+recommended route with the reason — `debug` (root cause unknown),
+`design` (architecture unclear), or `plan` (the path is clear). The
+human chooses; you recommend.
 
 Task:
 {{task}}
