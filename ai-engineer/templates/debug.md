@@ -8,4 +8,4 @@ out; and the smallest correct fix with its risks. If you cannot
 reproduce, say so, show what you tried, and stop — no speculative
 cause.
 
-Be complete but succint in your output.
+Be complete but succinct in your output.

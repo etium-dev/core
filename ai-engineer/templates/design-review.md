@@ -10,4 +10,4 @@ Scrutiny for `ai/DESIGN.md`:
 - Goals and non-goals must match the task; flag scope the task never
   asked for.
 - The verification section must be checkable by later stages as written.
-- Be complete but succint in your output.
+- Be complete but succinct in your output.

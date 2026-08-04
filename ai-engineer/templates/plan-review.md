@@ -10,4 +10,4 @@ Scrutiny for `ai/PLAN.md`:
   name what slips through.
 - The verify command must prove the task itself, not a proxy.
 - Every named risk needs a workable rollback.
-- Be complete but succint in your output.
+- Be complete but succinct in your output.

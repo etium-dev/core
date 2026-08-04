@@ -5,7 +5,7 @@ Write `ai/PLAN.md` covering: the tests to write first and why each
 starts red; the numbered steps, each naming the files it touches — the
 implementor executes these verbatim, so make them unambiguous and
 complete; the command that proves completion; and the risks with their
-rollbacks. Be complete but succint in your output.
+rollbacks. Be complete but succinct in your output.
 
 When proposing tests: do not use mocks anywhere in the test except in the
 most trivial of cases. Instead use test helpers provided by components used

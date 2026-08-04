@@ -8,4 +8,4 @@ Scrutiny for `ai/DIAGNOSIS.md`:
   actually raise, each killed by a checked fact, not by assertion.
 - The fix sketch must be the smallest correct fix; flag anything in it
   that exceeds the diagnosed cause.
-- Be complete but succint in your output.
+- Be complete but succinct in your output.

@@ -10,4 +10,4 @@ Scrutiny for `ai/REPORT.md`, the diff, and the test evidence:
   phase without a disclosed, sound reason is an objection.
 - Read the diff for what the report doesn't mention — dead code, stray
   changes, scope beyond the plan.
-- Be complete but succint in your output.
+- Be complete but succinct in your output.
