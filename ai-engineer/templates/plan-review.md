@@ -2,7 +2,13 @@ Scrutiny for `ai/PLAN.md`:
 
 - The implementor executes these steps verbatim: any step that requires
   invention, guessing, or a decision not recorded in the plan is an
-  objection.
+  objection. Expanding a stated rule into its cases is not invention —
+  demanding the full expansion written out is an objection against the
+  review.
+- A step written as a data dump is an objection: enumerations belong as
+  a rule plus a few anchors, design-settled interfaces as citations.
+  Flag any detail whose removal would change nothing the implementor
+  builds.
 - Check the named files exist and are the right ones; check the steps
   honor `ai/DESIGN.md` / `ai/DIAGNOSIS.md` where they exist.
 - The plan may add detail, never components: any mechanism, module, or
