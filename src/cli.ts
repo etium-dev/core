@@ -15,8 +15,8 @@ import { loadState, openGates, readLedger, writeStateCache } from "./ledger.ts";
 import { isLockLive, readLock, writeDecision } from "./lock.ts";
 import { abandonRun, createRun, supervise, superviseDetached } from "./supervisor.ts";
 import { loadSurfaces, tickOnce, watchLoop } from "./tick.ts";
-import { etiumsOnPath } from "./checks.ts";
-import { ghEnv, readConfig, statusLines, writeConfig } from "./config.ts";
+import { etiumsOnPath, harnessOptions, harnessParamLines } from "./checks.ts";
+import { defaultParams, ghEnv, readConfig, statusLines, writeConfig } from "./config.ts";
 import { ensureGhAuth, repoLogin } from "./ghauth.ts";
 import { installWakeup, printWakeup, removeWakeup, wakeupInstalled } from "./wakeup.ts";
 import { DEFAULT_GATE_OPTIONS, ETIUM_VERSION, type AnyEnvelope } from "./types.ts";
@@ -40,7 +40,7 @@ usage:
   etium rebuild <run>        rebuild state.json from the ledger
   etium clone-loop [library] [--into dir] [--replace]   copy a loop library (ralph, ai-engineer) into your repo (no arg: list)
   etium configure [--library ralph|ai-engineer|none] [--github owner/name|off]
-             [--wakeup watch|cron|print] [--git-name n] [--git-email e] [--yes]
+             [--harness pi|codex|…] [--wakeup watch|cron|print] [--git-name n] [--git-email e] [--yes]
              check the machine, ask, apply — re-run any time (wake-up on/off, status)
   etium --version
 
@@ -150,7 +150,7 @@ async function cmdRun(argv: string[]): Promise<number> {
     process.stderr.write("etium run: provide a goal or --task file\n");
     return 2;
   }
-  const params: Record<string, string> = {};
+  const params: Record<string, string> = { ...defaultParams(b) }; // config defaults; flags win (ADR-025)
   for (const p of v.param ?? []) {
     const i = p.indexOf("=");
     if (i === -1) {
@@ -523,6 +523,7 @@ async function cmdConfigure(argv: string[]): Promise<number> {
     args: argv,
     options: {
       library: { type: "string" },
+      harness: { type: "string" },
       github: { type: "string" },
       wakeup: { type: "string" },
       "git-name": { type: "string" },
@@ -599,11 +600,11 @@ async function cmdConfigure(argv: string[]): Promise<number> {
   else if (deployLogin) out(`  ok     gh — this repository's deployment is signed in as ${deployLogin}`);
   else out("  note   gh installed — the deployment sign-in (stored under .etium/gh)\n         happens during GitHub wiring");
 
-  let anyHarness = false;
+  const installedHarnesses: string[] = [];
   for (const ad of allAdapters()) {
     if (ad.id === "exec" || ad.id === "replay") continue;
     if (sh(ad.id, ["--version"]).status !== 0) continue;
-    anyHarness = true;
+    installedHarnesses.push(ad.id);
     if (!ad.auth?.check) {
       out(`  ok     harness ${ad.id} — installed (it manages its own sign-in: ${ad.auth?.remedy ?? "see its docs"})`);
     } else if (checkHarnessAuth(ad.id).ok) {
@@ -612,7 +613,7 @@ async function cmdConfigure(argv: string[]): Promise<number> {
       out(`  needs  harness ${ad.id} sign-in — run: ${ad.auth?.remedy ?? "see its docs"}`);
     }
   }
-  if (!anyHarness) {
+  if (installedHarnesses.length === 0) {
     out("  needs  a coding-agent harness — harnesses are the agents etium");
     out("         supervises; install at least one, then run etium configure again:");
     out("         pi     https://pi.dev");
@@ -758,6 +759,14 @@ async function cmdConfigure(argv: string[]): Promise<number> {
         0,
       )) === "replace";
 
+    const { options: hOpts, defIdx: hDef } = harnessOptions(installedHarnesses, readConfig(etiumBase)?.params?.harness);
+    const harnessDefault = await menu("Default harness", [
+      "The harness is the coding agent etium runs for each step; this default",
+      "rides into every run. Personas can differ per step — harness.<step> and",
+      "model.<step> in .etium/config.json params. Explicit values always win.",
+    ], hOpts, hDef, v.harness);
+    const cfgParams = harnessDefault ? { ...readConfig(etiumBase)?.params, harness: harnessDefault } : undefined;
+
     const originUrl = (sh("git", ["remote", "get-url", "origin"]).stdout || "").trim();
     const originRepo = /github\.com[:/]([^/]+\/[^/.]+)/.exec(originUrl)?.[1] ?? "";
     let github =
@@ -812,8 +821,9 @@ async function cmdConfigure(argv: string[]): Promise<number> {
         if (r !== 0) return r;
       }
     }
+    for (const line of harnessParamLines(cfgParams ?? readConfig(etiumBase)?.params ?? {})) out(line);
     if (github === "off") {
-      writeConfig(etiumBase, { v: 1, library, github: null });
+      writeConfig(etiumBase, { v: 1, library, github: null, ...(cfgParams && { params: cfgParams }) });
       out(style("1", "Done. Next:"));
       out();
       if (library === "ralph") {
@@ -832,6 +842,7 @@ async function cmdConfigure(argv: string[]): Promise<number> {
       v: 1,
       library,
       github: { repo: github, loop: library === "none" ? "" : `${library}/loop.ts` },
+      ...(cfgParams && { params: cfgParams }),
     });
     const env = saved.github!.loop ? ghEnv(saved.github!) : `ETIUM_GH_REPO=${github} ETIUM_GH_LOOP=<path-to-your-loop>`;
     if (wakeup === "cron") {

@@ -93,6 +93,10 @@ function setup() {
   process.env.ETIUM_GH_REPO = "acme/widgets";
   process.env.ETIUM_GH_WORKDIR = workdir;
   process.env.ETIUM_GH_LOOP = loopPath;
+  // Deployment-default params (ADR-025): ride under every task's own params.
+  fs.mkdirSync(path.join(workdir, ".etium"), { recursive: true });
+  fs.writeFileSync(path.join(workdir, ".etium", "config.json"),
+    JSON.stringify({ v: 1, id: "cafe0000", library: "ai-engineer", github: { repo: "acme/widgets", loop: loopPath }, params: { rounds: "7", directive: "config-must-lose" } }));
   // Trust is permission-based (ADR-022): carlospche can push, rando can't.
   fs.writeFileSync(path.join(stubDir, "permissions.json"), JSON.stringify({ carlospche: "write", rando: "read" }));
 
@@ -130,6 +134,8 @@ test("kickoff comment → worktree run with directive; read-only commenter ignor
     .data as { params: Record<string, string>; workspace: string; worktree?: { branch: string } };
   assert.equal(created.params.issue, "7");
   assert.equal(created.params.directive, "fix the wobble"); // the human's words ride into triage (ADR-023)
+  assert.equal(created.params.rounds, "7"); // deployment params ride along (ADR-025)…
+  assert.notEqual(created.params.directive, "config-must-lose"); // …but never override the task's own
   assert.equal(created.worktree?.branch, "etium/issue-7-attempt-0");
   // The engineer's commits author as the acting account (ADR-017).
   const wsIdent = spawnSync("git", ["-C", created.workspace, "config", "user.name"], { encoding: "utf8" });

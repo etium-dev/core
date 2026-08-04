@@ -11,7 +11,7 @@ improvise a fix, do not continue.
 Protocol: **propose, don't quiz.** Detect what you can, present a numbered
 proposal in which every item already has a default, and let a single word
 accept all of it; corrections come by item number. Never more than two
-rounds; never more than four numbered items in one message; skip any item
+rounds; never more than five numbered items in one message; skip any item
 the operator's handoff message already answered.
 
 Read-only detections to run first (a failure just means "ask in the
@@ -35,7 +35,10 @@ git config user.email
 >    `ai-engineer/` folder), or `none` for etium only.
 > 3. GitHub wiring: **off** (you drive it from the terminal). Say `github`
 >    to have `/et` issue comments drive it.
-> 4. Throwaway verification work: a fresh temp directory. Name a directory
+> 4. Default harness: `<the installed coding agent you detected — e.g.
+>    pi>` — the agent etium runs for each step. Name another to change it
+>    (per-persona overrides go in .etium/config.json params later).
+> 5. Throwaway verification work: a fresh temp directory. Name a directory
 >    to change that.
 
 **Round 2 — only if item 3 became `github`:** (if the `gh` CLI is not
@@ -58,15 +61,15 @@ such an item unanswered, re-ask **just that item** before proceeding, and
 never infer its value from elsewhere. And never surface raw input names.
 
 One conditional item: when the `git config user.email` detection fails,
-add item 5 to round 1 asking what name and email the runs' commits should
+add item 6 to round 1 asking what name and email the runs' commits should
 be authored as (default the email to `<gh login>@users.noreply.github.com`
-when a login was detected; the four-item cap yields for this one case).
+when a login was detected; the five-item cap yields for this one case).
 Pass the answers to Step 2 as `--git-name`/`--git-email` — `etium configure`
 applies them itself. After acceptance, restate the configuration in one line — e.g.
 "Configuration: repo /a/b, etium only, no GitHub wiring, scratch in a temp
 dir. Starting." — and proceed.
 
-The accepted items bind these inputs, referenced by the steps below (round 1: 1→`REPO_DIR`, 2→`LIBRARY`, 3→github on/off, 4→`SCRATCH_DIR`; round 2: 1→`GITHUB_REPO`, 2→`WAKEUP`):
+The accepted items bind these inputs, referenced by the steps below (round 1: 1→`REPO_DIR`, 2→`LIBRARY`, 3→github on/off, 4→`HARNESS`, 5→`SCRATCH_DIR`; round 2: 1→`GITHUB_REPO`, 2→`WAKEUP`):
 
 | input | required | meaning |
 |---|---|---|
@@ -74,6 +77,7 @@ The accepted items bind these inputs, referenced by the steps below (round 1: 1�
 | `GITHUB_REPO` | no | `owner/name` to wire the GitHub surface; omit for terminal-only install |
 | `WAKEUP` | if `GITHUB_REPO` | `watch` (foreground, nothing installed), `cron` (init installs the always-on wake-up: launchd agent on macOS, crontab on Linux), or `print` (goes in the report) |
 | `SCRATCH_DIR` | no | writable directory for throwaway verification work; default: a fresh `mktemp -d` directory |
+| `HARNESS` | yes (round 1, default: the installed harness you detected) | default coding agent for every step, recorded in config params; per-persona overrides are a later customization |
 | `LIBRARY` | yes (round 1, default `ralph`) | `ralph` (clones the reference loop — writes a commit), `ai-engineer` (clones the full workflow — writes a commit; only by explicit choice, never assumed), or `none` (nothing added) |
 
 ## Rules
@@ -155,12 +159,12 @@ installs or prints the crontab entry per the wake-up answer:
 ```sh
 cd "$REPO_DIR"
 etium configure --library <ralph|ai-engineer|none> --github <owner/name|off> \
-  --wakeup <watch|cron|print> --git-name "<name>" --git-email "<email>"
+  --harness <pi|codex|…> --wakeup <watch|cron|print> --git-name "<name>" --git-email "<email>"
 ```
 
-(Omit `--wakeup` when GitHub wiring is off, and the git identity flags
+(`--harness` carries item 4. Omit `--wakeup` when GitHub wiring is off, and the git identity flags
 when the `git config user.email` detection succeeded — when it failed they
-are required, with values from the interview's item 5. GitHub wiring also
+are required, with values from the interview's item 6. GitHub wiring also
 needs the repository's own gh sign-in — see Step 4's note; without one,
 configure exits 1 printing the exact sign-in command to relay.)
 

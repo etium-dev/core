@@ -179,7 +179,11 @@ and the loop's params/gates/artifacts contract: [README.md](README.md).
   Editing a template mid-run fails loudly rather than silently replaying
   stale work; finish or abandon runs first.
 - **Tune the knobs.** `--param rounds=3`, `--param wall=30m`, `--param
-  check="make test"`, per-run `--harness`/`--param model=…`.
+  check="make test"`, per-run `--harness`/`--param model=…` — and
+  per-persona: `--param harness.implement=codex`, `--param
+  model.design=…`. Deployment-wide defaults for any param live in
+  `.etium/config.json` under `params`; `etium configure` asks for the
+  default harness and validates every harness your params name.
 - **Change the workflow itself.** The loop is ~140 lines of ordinary
   TypeScript — add a stage, change an option set, split a persona. The
   loop-authoring guide (`WRITING_LOOPS.md`) is the manual; the surface

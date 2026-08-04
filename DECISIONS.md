@@ -887,3 +887,38 @@ diff the user runs beats a merge the tool guesses). Deleting the backup
 after a successful clone (satisfaction is the user's call, not the
 tool's). A confirmation for creating the backup itself (regret insurance
 should not be declinable).
+
+---
+
+## ADR-025 — deployment-default params; harnesses resolve per step
+
+**Decision.** `.etium/config.json` gains `params`: default loop params for
+every run this deployment creates. The github surface and `etium run`
+merge them *under* the run's own values — explicit flags, surface-computed
+params, and task fields always win, and `writeConfig` preserves
+hand-edited params across re-runs. The ai-engineer resolves harness and
+model per persona: `harness.<step>` / `model.<step>` beat the loop-wide
+`harness` / `model` (the same naming pattern as `cmd.<step>`), and the
+loop's `?? "pi"` remains only as the last resort for bare, unconfigured
+runs. `configure` asks one new question — the default harness, offering
+what is actually installed — records the answer in `params.harness`, and
+prints an ok/needs line for **every** harness the params reference
+(`harness` and each `harness.<step>`), probed with the same pre-spawn
+gate runs hit, so "this persona's harness isn't on this machine" is
+caught at configure time with the remedy printed, not mid-run.
+
+**Why.** The default harness lived only inside loop code, invisible to
+configure — the machine knew pi was absent and still let a run reach the
+step gate before saying so, and pointing a deployment at codex meant
+editing the cloned loop (a customization that re-cloning then had to
+re-apply). Params are already the loop's configuration surface; config
+carrying defaults for them adds no new concept, generalizes to every knob
+(`rounds`, `check`, `wall`), and supports one deployment running
+different harnesses and models per persona — the actual intended use.
+
+**Rejected.** A single blessed `harness` config field (collapses the
+per-persona case). Loops declaring their needs in a manifest or exported
+constant (a second source of truth that drifts from the code, and
+configure would have to execute loop code to read it). The surface
+hardcoding params (deliberately reverted earlier; config params are the
+operator's recorded answer, not the surface's opinion).

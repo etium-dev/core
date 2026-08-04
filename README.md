@@ -128,7 +128,11 @@ lifecycle, projecting back a draft PR, one status comment listing the valid
 commands, and `et:*` filter labels. The deployment acts
 as the repository's own gh sign-in (`.etium/gh`, created by `etium
 configure`). Configuration is env vars (`ETIUM_GH_REPO`, `ETIUM_GH_LOOP`,
-`ETIUM_GH_WORKDIR`, `ETIUM_GH_BASE`) — none of them secrets.
+`ETIUM_GH_WORKDIR`, `ETIUM_GH_BASE`) — none of them secrets. Deployment
+defaults for loop params — the `harness`, per-persona `harness.<step>` /
+`model.<step>`, `rounds`, … — live in `.etium/config.json` under `params`,
+merged beneath every run's own values; `etium configure` asks for the
+default harness and probes every harness the params reference.
 Custom surfaces are modules loaded by path (see DESIGN §10.3).
 
 The **[ai-engineer](ai-engineer/)** loop library is the flagship workload: a

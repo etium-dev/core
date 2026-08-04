@@ -225,7 +225,12 @@ run DONE</span></code></pre>
     first.</li>
     <li><strong>Tune the knobs.</strong> <code>--param rounds=3</code>,
     <code>--param wall=30m</code>, <code>--param check="make test"</code>,
-    per-run <code>--harness</code> / <code>--param model=…</code>.</li>
+    per-run <code>--harness</code> / <code>--param model=…</code> — and
+    per-persona: <code>--param harness.implement=codex</code>,
+    <code>--param model.design=…</code>. Deployment-wide defaults for any
+    param live in <code>.etium/config.json</code> under <code>params</code>;
+    <code>etium configure</code> asks for the default harness and validates
+    every harness your params name.</li>
     <li><strong>Change the workflow itself.</strong> The loop is ~140 lines
     of ordinary TypeScript — add a stage, change an option set, split a
     persona. The

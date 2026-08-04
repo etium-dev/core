@@ -148,6 +148,25 @@ test("kickoff directive: triage's route is followed without asking the gate (ADR
   assert.ok(planAt >= 0 && planAt < gateAt, "auto-route ran the stage before the first gate");
 });
 
+test("per-step harness: harness.<step> overrides the loop-wide value (ADR-025)", async () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "etium-ai-"));
+  const { runDir } = createRun(base, {
+    task: "route me",
+    loop: LOOP,
+    params: {
+      harness: "not-a-real-harness", // would fail the pre-spawn gate if any step used it
+      "harness.triage": "exec",
+      "cmd.triage": "mkdir -p ai && printf 'recommend: plan\\n' > ai/INTAKE.md",
+    },
+  });
+  await tickOnce(base, "unused-entry", true);
+  const started = readLedger(runDir).find((e) => e.type === "step.started" && (e.data as { name: string }).name === "triage")!;
+  assert.equal((started.data as { harness: string }).harness, "exec", "per-step harness recorded in the ledger");
+  const done = readLedger(runDir).find((e) => e.type === "step.completed" && (e.data as { step: { name: string } }).step.name === "triage")!;
+  assert.equal((done.data as { status: string }).status, "ok", "triage ran under its own harness");
+  assert.equal(lastOpenGate(runDir).name, "route", "run parked healthy — the bogus loop-wide harness was never touched");
+});
+
 test("consider: the interpreter maps freestyle to an option; unclear re-asks showing the question", async () => {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), "etium-ai-"));
   const { runDir } = createRun(base, {

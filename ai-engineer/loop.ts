@@ -27,17 +27,18 @@ const ARTIFACT: Record<string, string> = {
 const ROUTES = ["triage", "debug", "design", "plan"];
 
 export default async function aiEngineer(run: Run) {
-  const harness = run.params.harness ?? "pi";
   const rounds = Number(run.params.rounds ?? "2");
   const done = new Set<string>();
   let show: string[] = [];
 
   // `command` is the dry-run hook: under `--harness exec`, `--param
   // cmd.<step>=…` scripts a step; real harness adapters ignore `command`.
+  // Personas can run on different harnesses/models: `harness.<step>` and
+  // `model.<step>` win over the loop-wide `harness`/`model` (ADR-025).
   const step = (name: string, prompt: string, extra: object = {}) =>
     run.step(name, {
-      harness,
-      model: run.params.model,
+      harness: run.params[`harness.${name}`] ?? run.params.harness ?? "pi",
+      model: run.params[`model.${name}`] ?? run.params.model,
       prompt: prompt.replaceAll("{{task}}", run.task),
       command: run.params[`cmd.${name}`],
       budget: { wall: run.params.wall ?? "2h" },

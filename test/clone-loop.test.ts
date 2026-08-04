@@ -106,6 +106,41 @@ exit 0
   assert.match(helpers[1]!, /^!GH_CONFIG_DIR='.*\.etium\/gh' '.*' auth git-credential$/, "self-contained helper: repo scope and gh path baked in");
 });
 
+test("configure: default harness lands in config params (each referenced harness validated); hand-edited params survive re-runs", () => {
+  const cli = path.resolve("src/cli.ts");
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "etium-harness-"));
+  const repo = path.join(root, "repo");
+  fs.mkdirSync(repo);
+  const g = (...a: string[]) => spawnSync("git", ["-C", repo, "-c", "user.name=t", "-c", "user.email=t@t", ...a]);
+  g("init", "-q"); g("commit", "-qm", "init", "--allow-empty");
+  g("config", "user.name", "t"); g("config", "user.email", "t@t");
+  const stubBin = path.join(root, "stubbin");
+  fs.mkdirSync(stubBin);
+  fs.writeFileSync(path.join(stubBin, "pi"), "#!/bin/sh\necho 0.0.0-stub\n", { mode: 0o755 });
+  // Hermetic PATH: harness presence/absence must not depend on this machine.
+  const env = { ...process.env, PATH: `${stubBin}:/usr/bin:/bin` };
+  // Hand-edited per-persona params predate this configure run.
+  fs.mkdirSync(path.join(repo, ".etium"), { recursive: true });
+  fs.writeFileSync(path.join(repo, ".etium", "config.json"),
+    JSON.stringify({ v: 1, id: "deadbeef", library: "none", github: null, params: { "harness.design": "pi", rounds: "3" } }));
+
+  const r = spawnSync(process.execPath, [cli, "configure", "--library", "none", "--github", "off", "--harness", "pi"], { cwd: repo, encoding: "utf8", env });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /ok\s+harness = pi — ready/);
+  assert.match(r.stdout, /ok\s+harness\.design = pi — ready/);
+  const cfg = JSON.parse(fs.readFileSync(path.join(repo, ".etium", "config.json"), "utf8"));
+  assert.deepEqual(cfg.params, { "harness.design": "pi", rounds: "3", harness: "pi" });
+  assert.equal(cfg.id, "deadbeef");
+
+  // An unready harness is an alert with the remedy, not an abort.
+  const r2 = spawnSync(process.execPath, [cli, "configure", "--library", "none", "--github", "off", "--harness", "codex"], { cwd: repo, encoding: "utf8", env });
+  assert.equal(r2.status, 0, r2.stdout + r2.stderr);
+  assert.match(r2.stdout, /needs\s+harness = codex: harness codex is not installed/);
+  const r3 = spawnSync(process.execPath, [cli, "configure", "--library", "none", "--github", "off", "--harness", "nope"], { cwd: repo, encoding: "utf8", env });
+  assert.equal(r3.status, 0, r3.stdout + r3.stderr);
+  assert.match(r3.stdout, /needs\s+harness = nope: unknown harness/);
+});
+
 test("configure: two etium installs on PATH is a hard failure naming both", () => {
   const cli = path.resolve("src/cli.ts");
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "etium-shadow-"));

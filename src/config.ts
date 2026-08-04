@@ -19,6 +19,10 @@ export interface EtiumConfig {
   /** Who acts and who commands are not config (ADR-022): the deployment
    * acts as its repo-scoped gh sign-in, and anyone with Write commands. */
   github: { repo: string; loop: string } | null;
+  /** Default loop params for every run this deployment creates (ADR-025):
+   * merged under task/flag params, so explicit values always win. This is
+   * where `harness`, `harness.<step>`, `model.<step>`, `rounds`, … live. */
+  params?: Record<string, string>;
 }
 
 /** The deployment's own gh home (ADR-022): sign-in stored by gh, in a file,
@@ -41,10 +45,19 @@ export function readConfig(base: string): EtiumConfig | null {
 /** Write the config, minting `id` on first write and preserving it forever
  * after — re-minting would orphan the wake-up artifacts the id names. */
 export function writeConfig(base: string, cfg: Omit<EtiumConfig, "id"> & { id?: string }): EtiumConfig {
-  const full: EtiumConfig = { ...cfg, id: cfg.id ?? readConfig(base)?.id ?? randomBytes(4).toString("hex") };
+  const prev = readConfig(base);
+  // `id` and hand-edited `params` survive re-runs that don't set them.
+  const full: EtiumConfig = { params: prev?.params, ...cfg, id: cfg.id ?? prev?.id ?? randomBytes(4).toString("hex") };
   fs.mkdirSync(base, { recursive: true });
   fs.writeFileSync(cfgPath(base), JSON.stringify(full, null, 2) + "\n");
   return full;
+}
+
+/** Deployment-default params (ADR-025) — {} when unconfigured. Callers
+ * spread this UNDER explicit params: config never overrides an explicit
+ * flag, task field, or surface-computed value. */
+export function defaultParams(base: string): Record<string, string> {
+  return readConfig(base)?.params ?? {};
 }
 
 export function ghEnv(g: NonNullable<EtiumConfig["github"]>): string {
@@ -56,6 +69,7 @@ export function statusLines(cfg: EtiumConfig | null, wakeOn: boolean, base: stri
   const runsDir = path.join(base, "runs");
   return [
     `  library   ${cfg?.library ?? "none recorded"}`,
+    `  params    ${cfg?.params && Object.keys(cfg.params).length ? Object.entries(cfg.params).map(([k, v]) => `${k}=${v}`).join(" ") : "none (loop defaults rule)"}`,
     `  github    ${cfg?.github ? `${cfg.github.repo} (loop: ${cfg.github.loop || "your own"}; commands: anyone with Write)` : "off"}`,
     `  identity  ${cfg?.github ? (login ? `signed in as ${login} (this repository's own gh sign-in)` : "not signed in — re-run setup") : "-"}`,
     `  wake-up   ${wakeOn ? "installed — ticks once a minute" : "not installed"}`,

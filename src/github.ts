@@ -23,7 +23,7 @@
 import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { ghConfigDir } from "./config.ts";
+import { defaultParams, ghConfigDir } from "./config.ts";
 import type { RunView, Surface, SurfaceDecision, SurfacePollResult, SurfaceTask } from "./types.ts";
 
 const env = (k: string, d?: string): string => {
@@ -205,7 +205,12 @@ const surface: Surface = {
           key: `issue-${n}#${attempt}`,
           task: `# ${issue.title}\n\n${issue.body ?? ""}\n`,
           loop: env("ETIUM_GH_LOOP"),
-          params: { issue: String(n), directive: [cmd.word, cmd.note].filter(Boolean).join(" ") },
+          // Deployment-default params ride under the task's own (ADR-025).
+          params: {
+            ...defaultParams(path.join(path.resolve(process.env.ETIUM_GH_WORKDIR ?? process.cwd()), ".etium")),
+            issue: String(n),
+            directive: [cmd.word, cmd.note].filter(Boolean).join(" "),
+          },
           worktree: {
             repo: process.env.ETIUM_GH_WORKDIR ?? process.cwd(),
             branch: `etium/issue-${n}-attempt-${attempt}`,

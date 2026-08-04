@@ -24,7 +24,14 @@ built-in `github` surface (DESIGN §10.3).
 | `check` | shell command proving the implementation | `true` |
 | `wall` | per-step wall budget | `2h` |
 | `directive` | the operator's kickoff words — triage treats them as the routing answer and the loop follows the intake's route without opening the first gate | — |
+| `harness.<step>` / `model.<step>` | per-persona override — e.g. `harness.implement=codex`, `model.design=…` | the loop-wide `harness`/`model` |
 | `cmd.<step>` | dry-run hook: with `--harness exec`, scripts that step | — |
+
+Deployment defaults for any of these live in `.etium/config.json` under
+`params` — `etium configure` asks for the default `harness` and validates
+every harness the params reference; per-persona keys you edit in. Config
+params merge under a run's own values, so explicit flags, surface params,
+and task fields always win.
 
 **Gates**:
 
