@@ -40,11 +40,16 @@ esac
     // installs (e.g. homebrew) put etium NEXT TO node. So the stub bin
     // carries its own node symlink, and PATH is stub + system tools only.
     fs.symlinkSync(process.execPath, path.join(bin, "node"));
+    // detached: the installer's prompts read /dev/tty directly (so curl|sh
+    // works), which pierces every pipe — only a new session truly has no
+    // controlling terminal. Without this, the consent menu reaches the
+    // terminal of whoever runs the suite (it blocked a live npm publish).
     const r = spawnSync("/bin/sh", [path.resolve("docs/install.sh")], {
       encoding: "utf8",
       env: { ...process.env, HOME: home, PATH: `${bin}:/usr/bin:/bin`, npm_config_prefix: prefix },
       input: "",
       timeout: 60_000,
+      detached: true,
     });
     assert.ok(!/reinstall/i.test((r.stdout ?? "") + (r.stderr ?? "")), "no existing install may be visible to this test");
     const calls = fs.readFileSync(argsLog, "utf8").trim().split("\n");
@@ -76,6 +81,7 @@ test("install.sh: refuses to install beside an existing etium in an unwritable n
       env: { ...process.env, HOME: home, npm_config_prefix: prefix },
       input: "",
       timeout: 60_000,
+      detached: true, // no controlling terminal — see the cache test above
     });
     const out = (r.stdout ?? "") + (r.stderr ?? "");
     assert.notEqual(r.status, 0, out);
