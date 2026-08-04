@@ -36,14 +36,17 @@ esac
     // Hermetic PATH: no real etium may be visible — the installer prompts
     // about an existing install on /dev/tty, which pierces npm's pipes and
     // would interrupt whoever runs the suite (it reached a live `npm
-    // publish` once). Stub bin + node's dir + system tools only.
-    const hermeticPath = `${bin}:${path.dirname(process.execPath)}:/usr/bin:/bin`;
-    spawnSync("/bin/sh", [path.resolve("docs/install.sh")], {
+    // publish` once). Node's own dir can't be trusted either: global npm
+    // installs (e.g. homebrew) put etium NEXT TO node. So the stub bin
+    // carries its own node symlink, and PATH is stub + system tools only.
+    fs.symlinkSync(process.execPath, path.join(bin, "node"));
+    const r = spawnSync("/bin/sh", [path.resolve("docs/install.sh")], {
       encoding: "utf8",
-      env: { ...process.env, HOME: home, PATH: hermeticPath, npm_config_prefix: prefix },
+      env: { ...process.env, HOME: home, PATH: `${bin}:/usr/bin:/bin`, npm_config_prefix: prefix },
       input: "",
       timeout: 60_000,
     });
+    assert.ok(!/reinstall/i.test((r.stdout ?? "") + (r.stderr ?? "")), "no existing install may be visible to this test");
     const calls = fs.readFileSync(argsLog, "utf8").trim().split("\n");
     const install = calls.find((c) => c.startsWith("install"))!;
     assert.ok(install, `no npm install recorded: ${calls.join(" | ")}`);
