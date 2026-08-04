@@ -138,15 +138,11 @@ export async function ensureGhAuth(o: {
   );
   if (how === "token") {
     out();
-    out("Create a token while signed in as the account this deployment acts as:");
+    out("Create a classic token with the `repo` scope, while signed in as the");
+    out("account this deployment acts as (a dedicated bot account keeps the");
+    out("token's reach small):");
     out();
-    out(`  • That account OWNS ${o.repo}: a fine-grained token scoped to it`);
-    out("    (github.com/settings/personal-access-tokens/new) — Issues,");
-    out("    Pull requests, Contents: read and write.");
-    out(`  • That account is a COLLABORATOR on ${o.repo} (the usual bot setup):`);
-    out("    fine-grained tokens cannot reach another owner's private repo —");
-    out("    use a classic `repo`-scope token:");
-    out("    github.com/settings/tokens/new?scopes=repo");
+    out("  github.com/settings/tokens/new?scopes=repo");
     out();
     out("Paste it below — input is hidden; press Enter when done. It goes");
     out("straight into gh — etium never sees or stores it.");
