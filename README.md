@@ -119,7 +119,7 @@ on a machine with the harnesses installed and commit the captures under
 
 A surface connects an external system to the same gates the CLI drives:
 tasks in, decisions in, projections out, on every `etium tick`. The built-in
-**`github`** surface (`etium tick --surface github`) turns `/et` comments
+**`github`** surface turns `/et` comments
 by anyone with Write on the repository into runs and gate decisions — a
 `/et <anything>` comment on an issue kickstarts a worktree run of any loop
 you configure, an exact `/et <option>` decides the open gate, and freestyle
@@ -129,13 +129,15 @@ each state change, each gate with its valid commands and the shown
 artifact's key points plus a branch link, each decision — and `et:*`
 filter labels. Comments are never edited; the thread is the history. The deployment acts
 as the repository's own gh sign-in (`.etium/gh`, created by `etium
-configure`). Configuration is env vars (`ETIUM_GH_REPO`, `ETIUM_GH_LOOP`,
-`ETIUM_GH_WORKDIR`, `ETIUM_GH_BASE`) — none of them secrets. Deployment
+configure`). The wiring lives in `.etium/config.json` — `etium tick` and
+`etium watch` mount whatever surfaces it declares (ADR-030); nothing to
+retype, no secrets anywhere. Deployment
 defaults for loop params — the `harness`, per-persona `harness.<step>` /
 `model.<step>`, `rounds`, … — live in `.etium/config.json` under `params`,
 merged beneath every run's own values; `etium configure` asks for the
 default harness and probes every harness the params reference.
-Custom surfaces are modules loaded by path (see DESIGN §10.3).
+Custom surface modules are deferred until a `surfaces` config field
+exists (DESIGN §10.3, ADR-030).
 
 The **[ai-engineer](ai-engineer/)** loop library is the flagship workload: a
 multi-persona debug/design/plan→implement workflow you clone into

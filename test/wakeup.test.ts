@@ -5,13 +5,14 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { agentLabel, cronLine, launchAgentPlist, tickCommand } from "../src/wakeup.ts";
+import { agentLabel, cronBelongsTo, cronLine, launchAgentPlist, tickCommand } from "../src/wakeup.ts";
 
 test("wakeup generators: identity-named label, marker in command, escaped plist, PATH baked in", () => {
-  const cmd = tickCommand("/tmp/repo", "ETIUM_GH_REPO=a/b ETIUM_GH_LOOP=x/loop.ts", "cafe0123");
+  const cmd = tickCommand("/tmp/repo", "cafe0123");
   assert.ok(cmd.startsWith("cd /tmp/repo && "));
   assert.ok(cmd.includes('PATH="'), "scheduler environments are bare; PATH must ride along");
-  assert.ok(cmd.includes("ETIUM_GH_REPO=a/b"));
+  assert.ok(!cmd.includes("ETIUM_GH_") && !cmd.includes("--surface"), "the line carries no wiring — tick reads config (ADR-030)");
+  assert.ok(cmd.includes(" etium tick "), "bare tick is the whole tick");
   assert.ok(cmd.includes(">> .etium/tick.log 2>&1 #"), "identity marker rides after the redirect");
   assert.ok(cmd.endsWith(" # etium:repo.cafe0123"), "marker = sanitized basename + minted id");
 
@@ -28,4 +29,12 @@ test("wakeup generators: identity-named label, marker in command, escaped plist,
   assert.ok(!plist.includes("&& "), "no raw ampersands may survive in the plist");
 
   assert.equal(cronLine(cmd), `* * * * * ${cmd}`);
+
+  // Frozen-ABI enumeration (ADR-020): lines installed by ANY past version
+  // must stay findable. Pre-0.14 lines carry the old signature + env; new
+  // lines are identified by the marker. Both match; strangers don't.
+  const oldLine = `* * * * * cd /tmp/repo && PATH="/x" ETIUM_GH_REPO=a/b ETIUM_GH_LOOP=x.ts etium tick --surface github >> .etium/tick.log 2>&1 # etium:repo.cafe0123`;
+  assert.ok(cronBelongsTo(oldLine, "/tmp/repo", "cafe0123"), "old-signature lines still enumerate");
+  assert.ok(cronBelongsTo(cronLine(cmd), "/tmp/repo", "cafe0123"), "new marker-identified lines enumerate");
+  assert.ok(!cronBelongsTo(`* * * * * /usr/bin/backup.sh # nightly`, "/tmp/repo", "cafe0123"), "foreign lines untouched");
 });

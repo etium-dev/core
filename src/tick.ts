@@ -6,15 +6,14 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { pathToFileURL } from "node:url";
 import { LedgerWriter, loadState, readLedger, writeStateCache } from "./ledger.ts";
 import { isLockLive, readLock, writeDecision } from "./lock.ts";
 import { decisionsDir } from "./lock.ts";
+import { readConfig } from "./config.ts";
 import githubSurface from "./github.ts";
 import { abandonRun, createRun, supervise, superviseDetached } from "./supervisor.ts";
 import type { RunView, Surface, SurfacePollResult } from "./types.ts";
 
-const BUILTIN_SURFACES: Record<string, Surface> = { github: githubSurface };
 
 const TICK_LOCK_STALE_MS = 5 * 60_000;
 
@@ -115,25 +114,20 @@ function acquireTickLock(base: string): { ok: boolean; stole?: string } {
   return { ok: false };
 }
 
-/** Resolve surfaces: builtin names first (`github`), else load a module by
- * path (dynamic import; `.ts` allowed like loops). */
-export async function loadSurfaces(refs: string[]): Promise<Surface[]> {
-  const out: Surface[] = [];
-  for (const ref of refs) {
-    if (!ref.includes("/") && !ref.includes(".")) {
-      const builtin = BUILTIN_SURFACES[ref];
-      if (!builtin)
-        throw new Error(`unknown builtin surface "${ref}" (available: ${Object.keys(BUILTIN_SURFACES).join(", ")})`);
-      out.push(builtin);
-      continue;
-    }
-    const mod = (await import(pathToFileURL(path.resolve(ref)).href)) as { default?: Surface };
-    const s = mod.default;
-    if (!s || typeof s.id !== "string" || typeof s.poll !== "function")
-      throw new Error(`surface module must default-export { id, poll, project? }: ${ref}`);
-    out.push(s);
-  }
-  return out;
+/** The deployment's surfaces, from config (ADR-030). The contract is
+ * plural — callers loop over whatever the config declares — even though
+ * today's config yields zero or one entry (the github wiring); a future
+ * `surfaces` config field appends here without touching any command. The
+ * env a surface reads internally is injected from config, explicit env
+ * always winning. */
+export function configuredSurfaces(b: string): Surface[] {
+  const g = readConfig(b)?.github;
+  if (!g?.repo) return [];
+  const repoDir = path.dirname(path.resolve(b));
+  process.env.ETIUM_GH_REPO ??= g.repo;
+  if (g.loop) process.env.ETIUM_GH_LOOP ??= path.resolve(repoDir, g.loop);
+  process.env.ETIUM_GH_WORKDIR ??= repoDir;
+  return [githubSurface];
 }
 
 /** Derived, read-only views of every run — what surfaces poll and project against. */

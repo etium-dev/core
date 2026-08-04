@@ -1066,3 +1066,51 @@ can carry several; a batched narration reads as one coherent
 transition). Per-run cursor files for projection state (the posted
 markers already are that state, and they survive anything the run dir
 doesn't).
+
+---
+
+## ADR-030 — config is the deployment; commands mount what it declares
+
+**Decision.** `etium tick` and `etium watch` take no `--surface` flag:
+they mount the surfaces `.etium/config.json` declares, through one
+plural-contract resolver (`configuredSurfaces` — today it yields the
+github wiring or nothing; a future `surfaces` config field appends
+entries without touching any command). The env the github surface reads
+internally is injected there from config, explicit env always winning.
+`etium run` without `--loop` defaults to the configured library's loop,
+falling back to `ralph/loop.ts` only when unconfigured. The wake-up line
+collapses to `cd <checkout> && etium tick` — no env, no flag — so
+configure re-runs change behavior by writing config alone, never by
+touching the scheduler; the frozen-ABI enumerator (ADR-020) additionally
+matches the old `etium tick --surface github` signature forever, and
+lines installed from now on are identified by the identity marker. The
+comment cursor becomes id-based: `<lastCommentId>@<lastSeenISO>` —
+comment ids are the authority (monotonic, clock-free; edits keep their
+id and never redeliver), the timestamp only feeds GitHub's `since`
+filter with a two-minute overlap so listing lag cannot lose a comment,
+and a `created_at` floor keeps edited history inert. Old ISO cursors
+migrate in place on their first tick. Path-loaded custom surfaces lose
+their only mount — a recorded deferral until a `surfaces` config field
+exists, not a hidden regression.
+
+**Why.** A live deployment ran `etium tick` after commenting `/et` and
+nothing happened: the bare command reconciled runs but polled nothing,
+because the surface mount lived in a flag plus two env vars that only
+the LaunchAgent's baked line carried. Two commands under one name is the
+failure; the audit found the same disease in `run`'s hardcoded ralph
+default ignoring the configured library. ADR-019 drew the boundary
+"config is configure's memory, never the runtime's input" — ADR-025
+already breached it for params; this completes the reversal: the
+deployment's recorded answers are the deployment, flags exist to be
+explicit per-invocation, and a flag that overrides config for one run is
+the contract while a default that ignores config is a bug. The
+timestamp cursor was a clock-dependence bug in waiting: a comment
+becoming API-visible after the cursor passed its created_at was lost
+forever.
+
+**Rejected.** Keeping `--surface` alongside the config mount (two paths
+again). Baking env into the wake-up line (rewiring then requires
+scheduler surgery; secrets-adjacent strings in crontabs). A
+`surfaces` config field today (nothing real to put in it). Cursoring on
+ids alone without the created_at floor (an edited pre-deployment
+comment could kick off work — history must stay inert).

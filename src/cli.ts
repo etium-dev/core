@@ -14,9 +14,9 @@ import { checkHarnessAuth } from "./runner.ts";
 import { loadState, openGates, readLedger, writeStateCache } from "./ledger.ts";
 import { isLockLive, readLock, writeDecision } from "./lock.ts";
 import { abandonRun, createRun, supervise, superviseDetached } from "./supervisor.ts";
-import { loadSurfaces, tickOnce, watchLoop } from "./tick.ts";
+import { configuredSurfaces, tickOnce, watchLoop } from "./tick.ts";
 import { etiumsOnPath, harnessOptions, harnessParamLines } from "./checks.ts";
-import { defaultParams, ghEnv, readConfig, statusLines, writeConfig } from "./config.ts";
+import { defaultParams, readConfig, statusLines, writeConfig } from "./config.ts";
 import { ensureGhAuth, repoLogin } from "./ghauth.ts";
 import { installWakeup, printWakeup, removeWakeup, wakeupInstalled } from "./wakeup.ts";
 import { DEFAULT_GATE_OPTIONS, ETIUM_VERSION, type AnyEnvelope } from "./types.ts";
@@ -35,8 +35,8 @@ usage:
   etium resume  <run>        attach a supervisor
   etium abandon <run> [--reason text]
   etium tail    <run> [--once]
-  etium tick [--surface name|path]…   reconcile all runs; poll/project surfaces (cron-safe, idempotent)
-  etium watch [--surface name|path]… [--every seconds]   tick on an interval, foreground (Ctrl-C to stop)
+  etium tick                 reconcile all runs; poll/project the configured surfaces (cron-safe, idempotent)
+  etium watch [--every seconds]   the same tick on an interval, foreground (Ctrl-C to stop)
   etium rebuild <run>        rebuild state.json from the ledger
   etium clone-loop [library] [--into dir] [--replace]   copy a loop library (ralph, ai-engineer) into your repo (no arg: list)
   etium configure [--library ralph|ai-engineer|none] [--github owner/name|off]
@@ -161,11 +161,13 @@ async function cmdRun(argv: string[]): Promise<number> {
   }
   if (v.harness) params.harness = v.harness;
 
+  const lib = readConfig(b)?.library;
+  const defaultLoop = lib && lib !== "none" ? `${lib}/loop.ts` : "ralph/loop.ts";
   let created: { runId: string; runDir: string };
   try {
     created = createRun(b, {
       task: taskText,
-      loop: v.loop ?? "ralph/loop.ts",
+      loop: v.loop ?? defaultLoop,
       params,
       workspace: v.workspace,
       worktree: v.worktree ? { repo: process.cwd(), base: v.base } : undefined,
@@ -176,7 +178,7 @@ async function cmdRun(argv: string[]): Promise<number> {
   } catch (e) {
     let msg = e instanceof Error ? e.message : String(e);
     if (!v.loop && msg.startsWith("loop not found"))
-      msg += `\n  (no --loop given; the default is ralph/loop.ts — put the reference loop there:\n   etium clone-loop ralph)`;
+      msg += `\n  (no --loop given; this deployment's default is ${defaultLoop} — put it there:\n   etium clone-loop ${lib && lib !== "none" ? lib : "ralph"})`;
     process.stderr.write(`etium run: ${msg}\n`);
     return 2;
   }
@@ -696,7 +698,7 @@ async function cmdConfigure(argv: string[]): Promise<number> {
         out();
         if (action === "wake-on") {
           const full = writeConfig(etiumBase, c!); // backfills a missing id (ADR-020)
-          for (const l of installWakeup(repoDir!, ghEnv(full.github!), full.id).lines) out(l);
+          for (const l of installWakeup(repoDir!, full.id).lines) out(l);
         } else if (action === "wake-off") {
           for (const l of removeWakeup(repoDir!, c?.id)) out(l);
         } else {
@@ -844,14 +846,13 @@ async function cmdConfigure(argv: string[]): Promise<number> {
       github: { repo: github, loop: library === "none" ? "" : `${library}/loop.ts` },
       ...(cfgParams && { params: cfgParams }),
     });
-    const env = saved.github!.loop ? ghEnv(saved.github!) : `ETIUM_GH_REPO=${github} ETIUM_GH_LOOP=<path-to-your-loop>`;
     if (wakeup === "cron") {
-      const w = installWakeup(repoDir!, env, saved.id);
+      const w = installWakeup(repoDir!, saved.id);
       for (const l of w.lines) out(l);
       out();
       if (!w.ok) return 1; // no "Done" after a surfaced problem
     } else if (wakeup === "print") {
-      for (const l of printWakeup(repoDir!, env, saved.id)) out(l);
+      for (const l of printWakeup(repoDir!, saved.id)) out(l);
       out();
     }
     out(style("1", "Done. Next:"));
@@ -859,10 +860,10 @@ async function cmdConfigure(argv: string[]): Promise<number> {
     if (wakeup === "watch") {
       out("  wake the engineer while you try it (Ctrl-C to stop):");
       out();
-      out(`  ${env} etium watch --surface github`);
+      out(`  etium watch`);
       out();
     }
-    out(`  assign ${deployLogin || "the deployment's account"} to a GitHub issue to start the first attempt`);
+    out(`  comment "/et <what you want>" on a GitHub issue to start the first attempt`);
     return 0;
   } finally {
     rl?.close();
@@ -874,11 +875,10 @@ async function cmdWatch(argv: string[]): Promise<number> {
     args: argv,
     options: {
       dir: { type: "string" },
-      surface: { type: "string", multiple: true },
       every: { type: "string" },
     },
   });
-  const surfaces = await loadSurfaces(v.surface ?? []);
+  const surfaces = configuredSurfaces(base(v.dir));
   // 15s default: half of cron's floor (watch is the try-it-out mode), well
   // inside gh's rate budget. Floor 5s; garbage input falls back, not NaN
   // (Math.max(5, NaN) is NaN — a zero-delay hot loop against GitHub).
@@ -899,10 +899,9 @@ async function cmdTick(argv: string[]): Promise<number> {
     options: {
       dir: { type: "string" },
       sync: { type: "boolean" },
-      surface: { type: "string", multiple: true },
     },
   });
-  const surfaces = await loadSurfaces(v.surface ?? []);
+  const surfaces = configuredSurfaces(base(v.dir));
   const actions = await tickOnce(base(v.dir), entry, wantSync(v.sync), surfaces);
   for (const a of actions)
     process.stdout.write(`${new Date().toISOString()} ${a.run.padEnd(36)} ${a.action}${a.detail ? `  (${a.detail})` : ""}\n`);

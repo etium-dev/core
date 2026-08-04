@@ -124,9 +124,11 @@ Trying it out? Skip always-on — run the tick in the foreground while you
 play (`Ctrl-C` to stop; nothing is installed):
 
 ```sh
-ETIUM_GH_REPO=you/your-repo ETIUM_GH_LOOP=ai-engineer/loop.ts \
-  etium watch --surface github
+etium watch
 ```
+
+(It mounts the surfaces your config declares — the wiring configure
+recorded is the deployment; there is nothing to retype.)
 
 Then, on GitHub:
 

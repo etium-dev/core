@@ -73,7 +73,7 @@ test("configure: sets the git identity itself (from flags when non-interactive; 
   assert.match(fs.readFileSync(gcfg, "utf8"), /bot@example\.com/); // applied, not printed for copy/paste
 });
 
-test("configure (flags mode): github wiring — repo-scoped sign-in verified, minimal env line, wiring persisted", () => {
+test("configure (flags mode): github wiring — repo-scoped sign-in verified, no env in output, wiring persisted", () => {
   const cli = path.resolve("src/cli.ts");
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "etium-ghw-"));
   const repo = path.join(root, "repo");
@@ -97,8 +97,8 @@ exit 0
   const r = spawnSync(process.execPath, [cli, "configure", "--library", "none", "--github", "acme/w", "--wakeup", "print"], { cwd: repo, encoding: "utf8", env });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.match(r.stdout, /deployment is signed in as botx/);
-  assert.match(r.stdout, /ETIUM_GH_REPO=acme\/w ETIUM_GH_LOOP=/);
-  assert.ok(!r.stdout.includes("ETIUM_GH_TRUSTED") && !r.stdout.includes("ETIUM_GH_AGENT"), "identity and trust are not env (ADR-022)");
+  assert.ok(!r.stdout.includes("ETIUM_GH_"), "wiring is config, not env the user must carry (ADR-030)");
+  assert.match(r.stdout, /comment "\/et <what you want>"/);
   const cfg = JSON.parse(fs.readFileSync(path.join(repo, ".etium", "config.json"), "utf8"));
   assert.deepEqual(cfg.github, { repo: "acme/w", loop: "" });
   const helpers = (spawnSync("git", ["-C", repo, "config", "--get-all", "credential.https://github.com.helper"], { encoding: "utf8" }).stdout || "").trimEnd().split("\n");

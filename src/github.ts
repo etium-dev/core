@@ -191,7 +191,16 @@ const surface: Surface = {
     // Events, not state (ADR-023): a fresh deployment's cursor starts at
     // now, so history never mass-triggers on the first tick.
     const now = new Date().toISOString();
-    const since = cursor ?? now;
+    // Cursor v2 (ADR-030): `<lastCommentId>@<lastSeenISO>` — ids are the
+    // authority (monotonic, clock-free; comment edits keep their id and so
+    // never redeliver), the timestamp only feeds GitHub's `since` filter,
+    // fetched with a 2-minute overlap so listing lag can't lose a comment.
+    // A bare ISO cursor is the pre-v2 format: adopt its time, ids from 0,
+    // no overlap on that one tick (avoids redelivering the old boundary).
+    const v2 = /^(\d+)@(.+)$/.exec(cursor ?? "");
+    let lastId = v2 ? Number(v2[1]) : 0;
+    let lastSeen = v2 ? v2[2]! : (cursor ?? now);
+    const since = v2 ? new Date(Date.parse(lastSeen) - 120_000).toISOString() : lastSeen;
     const tasks: SurfaceTask[] = [];
     const decisions: SurfaceDecision[] = [];
     const abandons: NonNullable<SurfacePollResult["abandons"]> = [];
@@ -227,8 +236,12 @@ const surface: Surface = {
     // One repo-wide call: every new issue/PR conversation comment since the
     // cursor, in event order.
     const comments = ((api(`repos/${REPO()}/issues/comments?since=${encodeURIComponent(since)}&per_page=100`) ?? []) as (Comment & { issue_url?: string })[])
-      .filter((c) => c.created_at > since)
-      .sort((a, b) => a.created_at.localeCompare(b.created_at));
+      .filter((c) => c.id > lastId && c.created_at > since) // id = authority; created_at floor keeps edited history inert
+      .sort((a, b) => a.id - b.id);
+    for (const c of comments) {
+      if (c.id > lastId) lastId = c.id;
+      if (c.created_at > lastSeen) lastSeen = c.created_at;
+    }
 
     const kicked = new Set<number>();
     for (const c of comments) {
@@ -281,7 +294,7 @@ const surface: Surface = {
         decisions.push({ run: active.id, gate: fre.name, decision: "consider", note: [cmd.word, cmd.note].filter(Boolean).join(" "), by: c.user.login });
     }
 
-    return { tasks, decisions, abandons, cursor: now };
+    return { tasks, decisions, abandons, cursor: `${lastId}@${lastSeen > now ? lastSeen : now}` };
   },
 
   project(view: RunView): void {

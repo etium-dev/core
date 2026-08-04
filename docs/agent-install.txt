@@ -270,12 +270,11 @@ access (it exits 1 with the sign-in command otherwise). Prove the wiring
 with one tick:
 
 ```sh
-cd "$REPO_DIR" && ETIUM_GH_REPO="$GITHUB_REPO" ETIUM_GH_LOOP="$LIBRARY/loop.ts" \
-  etium tick --surface github
+cd "$REPO_DIR" && etium tick
 ```
 
-(With `LIBRARY=none`, substitute the path of the operator's own loop for
-`$LIBRARY/loop.ts`.)
+(The tick mounts the surfaces `.etium/config.json` declares — configure
+already recorded the repository and loop; nothing is passed.)
 
 **PASS**: exit 0, and output is either `no runs` or a list of per-run
 action lines. Any `surface-error` line: stop and report it verbatim.

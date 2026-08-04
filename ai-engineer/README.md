@@ -74,24 +74,19 @@ etium decide <run> route consider --note "just make it stop flaking"  # freestyl
 Etium's built-in `github` surface drives any loop; this library is just what
 you point it at. The deployment acts as this repository's own gh sign-in
 (created by `etium configure`, stored under `.etium/gh`); anyone with
-**Write** on the repository commands it. Configuration is env vars — no
-secrets among them; model auth is the harness's
-([MODEL_AUTH.md](../MODEL_AUTH.md)):
-
-| var | meaning | default |
-|---|---|---|
-| `ETIUM_GH_REPO` | `owner/name` (**required**) | — |
-| `ETIUM_GH_LOOP` | loop to run per task (**required**) — point it here | — |
-| `ETIUM_GH_WORKDIR` | checkout to branch worktrees from | cwd |
-| `ETIUM_GH_BASE` | PR base branch | `main` |
+**Write** on the repository commands it. The wiring — repository, loop —
+lives in `.etium/config.json`, written by `etium configure`; `etium tick`
+and `etium watch` mount whatever it declares (ADR-030). No env vars to
+carry, no secrets anywhere; model auth is the harness's
+([MODEL_AUTH.md](../MODEL_AUTH.md)). `ETIUM_GH_BASE` (PR base branch,
+default `main`) is the one knob still set per-environment.
 
 The whole deployment is one scheduled tick — `etium configure --wakeup
 cron` installs it platform-correctly (a launchd agent on macOS, a crontab
 line on Linux):
 
 ```
-* * * * *  cd /path/to/checkout && ETIUM_GH_REPO=acme/widgets \
-           ETIUM_GH_LOOP=ai-engineer/loop.ts etium tick --surface github
+* * * * *  cd /path/to/checkout && etium tick
 ```
 
 A dedicated AI-engineer box is the same setup with a bot account's token

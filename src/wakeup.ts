@@ -10,6 +10,8 @@
 //   1. the LaunchAgent label prefix   "dev.etium."
 //   2. the label grammar              dev.etium.tick.<sanitized-basename>.<id>
 //   3. the cron signature substring   "etium tick --surface github"
+//      (the pre-0.14 command; enumeration still matches it forever —
+//       lines installed today are identified by the marker, entry 4)
 //   4. the identity marker            " # etium:<sanitized-basename>.<id>"
 // Identity is MINTED, not derived: <id> comes from .etium/config.json
 // (written once, preserved across re-runs), so a moved or renamed repo can
@@ -39,9 +41,11 @@ const canon = (p: string) => {
  * time — scheduler environments are bare, and "etium not found at 2am" is
  * not a failure mode worth having. The trailing comment is the identity
  * marker (inert under sh), so cron lines survive repo moves findably. */
-export function tickCommand(repoDir: string, env: string, id: string): string {
+export function tickCommand(repoDir: string, id: string): string {
   repoDir = canon(repoDir);
-  return `cd ${repoDir} && PATH="${process.env.PATH}" ${env} etium tick --surface github >> .etium/tick.log 2>&1 # etium:${sanitize(path.basename(repoDir))}.${id}`;
+  // The command carries no wiring: tick reads .etium/config.json (ADR-030),
+  // so configure re-runs change behavior without touching the scheduler.
+  return `cd ${repoDir} && PATH="${process.env.PATH}" etium tick >> .etium/tick.log 2>&1 # etium:${sanitize(path.basename(repoDir))}.${id}`;
 }
 
 export function agentLabel(repoDir: string, id: string): string {
@@ -93,8 +97,9 @@ function etiumAgents(): { plist: string; label: string; payload: string }[] {
 const belongsTo = (payload: string, repoDir: string, id?: string) =>
   payload.includes(xml(`cd ${repoDir} `)) || (id !== undefined && payload.includes(`.${id}<`));
 
-const cronBelongsTo = (line: string, repoDir: string, id?: string) =>
-  line.includes(SIGNATURE) && (line.includes(repoDir) || (id !== undefined && line.includes(`# etium:`) && line.endsWith(`.${id}`)));
+export const cronBelongsTo = (line: string, repoDir: string, id?: string) =>
+  (line.includes(SIGNATURE) || (line.includes(" etium tick ") && line.includes("# etium:"))) &&
+  (line.includes(repoDir) || (id !== undefined && line.includes(`# etium:`) && line.endsWith(`.${id}`)));
 
 function retireCronLines(repoDir: string, id?: string): boolean {
   const cur = spawnSync("crontab", ["-l"], { encoding: "utf8" });
@@ -178,9 +183,9 @@ function verifyFirstTick(repoDir: string, cmd: string): { ok: boolean; lines: st
  * (Apple's blessed scheduler — event triggers and prompt post-sleep ticks
  * later; runs while logged in, resumes at login), cron on Linux. Auth is
  * repo-scoped and file-held either way, so both verify inline. */
-export function installWakeup(repoDir: string, env: string, id: string): { ok: boolean; lines: string[] } {
+export function installWakeup(repoDir: string, id: string): { ok: boolean; lines: string[] } {
   repoDir = canon(repoDir);
-  const cmd = tickCommand(repoDir, env, id);
+  const cmd = tickCommand(repoDir, id);
   if (process.platform === "darwin") {
     for (const a of etiumAgents().filter((a) => belongsTo(a.payload, repoDir, id))) {
       spawnSync("launchctl", ["bootout", `gui/${process.getuid?.() ?? 501}/${a.label}`], { stdio: "ignore" });
@@ -232,8 +237,8 @@ export function installWakeup(repoDir: string, env: string, id: string): { ok: b
 /** `print` mode: show what always-on would do — installing nothing, and on
  * macOS writing nothing (a plist in ~/Library/LaunchAgents would auto-load
  * at next login, which is an install, not a printout). */
-export function printWakeup(repoDir: string, env: string, id: string): string[] {
-  const cmd = tickCommand(repoDir, env, id);
+export function printWakeup(repoDir: string, id: string): string[] {
+  const cmd = tickCommand(repoDir, id);
   if (process.platform === "darwin")
     return [
       "When you want always-on, run: etium configure --wakeup cron",

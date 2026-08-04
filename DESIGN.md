@@ -308,7 +308,11 @@ still fails legibly at spawn if auth is absent.
 
 ### 10.3 Surface adapter interface
 
-Pull-based, driven by `etium tick --surface <name-or-path>` (repeatable).
+Pull-based, driven by `etium tick`, which mounts the surfaces the
+deployment's config declares (a plural contract: commands loop over the
+declared list; today's config yields the github wiring or nothing).
+Path-loaded custom surface modules are deferred until a `surfaces` config
+field exists (ADR-030).
 Built-in surfaces resolve by name (`github`); anything with a `/` or `.`
 loads as a user-supplied module, like a loop (ADR-009):
 
@@ -350,7 +354,7 @@ Semantics, all fail-closed and at-least-once:
   options), usage, seq, completion. Anything more, the surface reads from the
   run directory — files are the API.
 
-**The built-in `github` surface** (`etium tick --surface github`) is
+**The built-in `github` surface** is
 loop-agnostic infrastructure. Inbound, it maps: a `/et …` comment on an
 open issue with no active attempt (by anyone with Write) → a task running
 the configured loop (`ETIUM_GH_LOOP`, required) on worktree branch
@@ -375,6 +379,9 @@ variables with no secret values — `ETIUM_GH_REPO`, `ETIUM_GH_LOOP`,
 own repo-scoped gh sign-in (`.etium/gh` under the workdir, ADR-022), and
 authorization delegates to the repository's permission model: anyone with
 Write may command; everyone else is refused surface-side (§8 attribution).
+Its wiring comes from config via the tick mount (ADR-030); the
+`ETIUM_GH_*` variables remain the surface's internal parameterization
+(tests set them directly; explicit env wins over config).
 
 ### 10.4 Grader hook
 
