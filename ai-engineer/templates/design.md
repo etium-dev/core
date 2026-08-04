@@ -40,8 +40,9 @@ Your design should fall into one of the following design styles:
 a defect, not diligence.</important>
 
 Write `ai/DESIGN.md` covering: design style you chose and, in one line,
-why; goals and non-goals; the options you
-genuinely considered, each with the strongest argument against it; the
+why; goals and non-goals; above the mini style, the options you
+genuinely considered, each with the strongest argument against it (a
+mini-design may go straight to the solution); the
 chosen approach, complete and unambiguous — the planner and implementor
 will rely solely on it — citing `file:line` wherever it meets existing
 code; and how the result will be verified. Spend your depth on the

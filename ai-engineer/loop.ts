@@ -26,7 +26,7 @@ const ARTIFACT: Record<string, string> = {
   plan: "ai/PLAN.md",
   implement: "ai/REPORT.md",
 };
-const ROUTES = ["debug", "design", "plan"];
+const ROUTES = ["debug", "design"]; // plan is earned by a converged design — never offered cold
 
 export default async function aiEngineer(run: Run) {
   const rounds = Number(run.params.rounds ?? "2");
@@ -131,8 +131,11 @@ export default async function aiEngineer(run: Run) {
   }
 
   for (;;) {
-    // Fail-closed routing: implement isn't offered until a plan converged.
+    // Fail-closed routing: every stage is earned — no plan without a
+    // design (a mini-design is cheap by construction), no implement
+    // without a plan, no wrap-up before implementation.
     const options = [...ROUTES];
+    if (done.has("design")) options.push("plan");
     if (done.has("plan")) options.push("implement");
     if (done.has("implement")) options.push("wrap-up");
     const route = await run.gate("route", { options: [...options, "consider"], show });

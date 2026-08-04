@@ -140,7 +140,8 @@ Custom surface modules are deferred until a `surfaces` config field
 exists (DESIGN §10.3, ADR-030).
 
 The **[ai-engineer](ai-engineer/)** loop library is the flagship workload: a
-multi-persona debug/design/plan→implement workflow you clone into
+multi-persona design→plan→implement workflow (debug when the cause
+is unknown; every stage earned, design always first) you clone into
 your repo (`etium clone-loop ai-engineer`) and adapt. [Tutorial](https://etium.dev/ai-engineer.html).
 
 ## License

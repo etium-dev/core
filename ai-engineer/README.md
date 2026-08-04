@@ -37,11 +37,13 @@ and task fields always win.
 
 | gate | opens | options |
 |---|---|---|
-| `route` | at kickoff (unless the directive already routed), and after every stage | `debug · design · plan · consider` — `implement` appears once a plan converged; `wrap-up` once implementation converged |
+| `route` | at kickoff (unless the directive already routed), and after every stage | `debug · design · consider` — `plan` appears once a design converged (a mini-design is cheap by construction); `implement` once a plan converged; `wrap-up` once implementation converged |
 | `<stage>-stuck` | reviewer still objects after `rounds` rounds | `keep-going · accept · wrap-up · consider` — carries a `reason` and shows REVIEW.md first; on GitHub it arrives as its own persistent comment |
 
-Routing is fail-closed by construction: `implement` is not a declinable
-request — it simply isn't offered until a plan exists. `consider` is the
+Routing is fail-closed by construction: every stage is earned. `plan`
+isn't offered until a design converged — the design styles make that
+cheap for small work — and `implement` isn't offered until a plan
+exists; neither is a declinable request. `consider` is the
 freestyle door: its note carries the operator's own words, and an
 interpreter persona maps them to one of the other options — or writes a
 clarifying question to `ai/REPLY.md` and re-opens the gate. It never
@@ -64,7 +66,7 @@ surface projects branch → draft PR → appended narration comments → labels.
 ```sh
 etium run "fix the flaky auth test" --loop ai-engineer/loop.ts --worktree \
   --param check="npm test"
-etium gates                     # → route: debug · design · plan · consider
+etium gates                     # → route: debug · design · consider
 etium decide <run> route plan --note "start with the retry"
 etium decide <run> route consider --note "just make it stop flaking"  # freestyle
 ```
@@ -100,8 +102,8 @@ labels as commands):
 - A `/et <anything>` comment on an open issue (by anyone with Write, when
   no attempt is active) starts one: a worktree run on
   `etium/issue-N-attempt-K`. The words after `/et` ride in as the
-  `directive` — `/et fix this` routes straight into debug or plan without
-  a confirmation gate. A later `/et` comment after an abandoned attempt
+  `directive` — `/et fix this` routes straight into debug or design
+  without a confirmation gate. A later `/et` comment after an abandoned attempt
   starts attempt K+1 on a fresh branch.
 - Commands are comments: `/et <option> [note]` (or `@<agent> <option>`) by
   anyone with Write — an exact option match decides whichever open gate

@@ -47,7 +47,9 @@ workflow — every gate, option, and artifact is the real thing:
 cd /path/to/your-repo
 etium run "Add input validation to the signup form" \
   --loop ai-engineer/loop.ts --worktree --harness exec --param rounds=1 \
-  --param cmd.plan='mkdir -p ai && echo "1. validate email" > ai/PLAN.md' \
+  --param cmd.design='mkdir -p ai && echo "mini: validate in the form handler" > ai/DESIGN.md' \
+  --param cmd.design-review='printf "VERDICT: approve\n" > ai/REVIEW.md' \
+  --param cmd.plan='echo "1. validate email" > ai/PLAN.md' \
   --param cmd.plan-review='printf "VERDICT: approve\n" > ai/REVIEW.md' \
   --param cmd.implement='echo done > ai/REPORT.md' \
   --param cmd.implement-review='printf "VERDICT: approve\n" > ai/REVIEW.md'
@@ -58,36 +60,39 @@ The run **parks** — zero processes — at its first gate:
 ```
 $ etium gates
 2026-…-add-input-validation-…  route.0
-  → etium decide 2026-… route <debug|design|plan>
+  → etium decide 2026-… route <debug|design>
 ```
 
-That's the routing gate: which stage should act next. Notice what it *doesn't* offer: `implement`.
-Options appear as stages earn them. Decide, with guidance:
+That's the routing gate: which stage should act next. Notice what it
+*doesn't* offer: `plan` or `implement`. Every stage is earned — a plan
+needs a converged design (a mini-design is cheap by construction), and
+implementation needs a plan. Decide, with guidance:
 
 ```sh
-etium decide <run> route plan --note "email format only, no phone"
+etium decide <run> route design --note "smallest thing that works"
 ```
 
-Your note is injected into the planner's prompt. The plan stage runs its
-builder/reviewer rounds, then the route gate reopens — now offering
-`implement`, showing `ai/PLAN.md` as evidence. Route through `implement`,
+Your note is injected into the designer's prompt. Design converges,
+`plan` unlocks; plan converges, `implement` unlocks. Route through them,
 then `wrap-up`, and read the whole story:
 
 ```
 $ etium tail <run> --once
-gate ? route.0  awaiting decision  options=debug|design|plan
-gate ◆ route.0  plan by you (cli) — email format only, no phone
-gate ? route.1  awaiting decision  options=…|plan|implement  show=ai/PLAN.md,ai/REVIEW.md
-gate ◆ route.1  implement by you (cli)
-gate ? route.2  awaiting decision  options=…|implement|wrap-up  show=ai/REPORT.md,ai/REVIEW.md
-gate ◆ route.2  wrap-up by you (cli)
+gate ? route.0  awaiting decision  options=debug|design
+gate ◆ route.0  design by you (cli) — smallest thing that works
+gate ? route.1  awaiting decision  options=…|design|plan  show=ai/DESIGN.md,ai/REVIEW.md
+gate ◆ route.1  plan by you (cli)
+gate ? route.2  awaiting decision  options=…|plan|implement  show=ai/PLAN.md,ai/REVIEW.md
+gate ◆ route.2  implement by you (cli)
+gate ? route.3  awaiting decision  options=…|implement|wrap-up  show=ai/REPORT.md,ai/REVIEW.md
+gate ◆ route.3  wrap-up by you (cli)
 run DONE
 ```
 
 Because of `--worktree`, all of it happened on branch `etium/<run-id>` in
 its own checkout under `.etium/worktrees/` — your working tree was never
-touched, and `ai/PLAN.md`, `ai/REPORT.md`, `ai/REVIEW.md` sit on that
-branch as the audit trail. Every prompt, stream, and decision
+touched, and `ai/DESIGN.md`, `ai/PLAN.md`, `ai/REPORT.md`,
+`ai/REVIEW.md` sit on that branch as the audit trail. Every prompt, stream, and decision
 is under `.etium/runs/<run>/`; `grep` works on all of it.
 
 ## 2. Real personas

@@ -5,6 +5,9 @@ Scrutiny for `ai/PLAN.md`:
   objection.
 - Check the named files exist and are the right ones; check the steps
   honor `ai/DESIGN.md` / `ai/DIAGNOSIS.md` where they exist.
+- The plan may add detail, never components: any mechanism, module, or
+  state machine that `ai/DESIGN.md` does not call for is an objection —
+  planning is not the stage where architecture appears.
 - Tests-first must be genuine: each planned test must plausibly start
   red for the stated reason, and together they must cover the task —
   name what slips through.

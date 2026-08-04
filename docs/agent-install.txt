@@ -198,7 +198,9 @@ model or GitHub access. Run exactly:
 ```sh
 git clone -q "$REPO_DIR" "$SCRATCH_DIR/etium-verify" && cd "$SCRATCH_DIR/etium-verify"
 etium run "verify install" --loop ai-engineer/loop.ts --worktree --harness exec --param rounds=1 \
-  --param cmd.plan='mkdir -p ai && echo plan > ai/PLAN.md' \
+  --param cmd.design='mkdir -p ai && echo mini > ai/DESIGN.md' \
+  --param cmd.design-review='printf "VERDICT: approve\n" > ai/REVIEW.md' \
+  --param cmd.plan='echo plan > ai/PLAN.md' \
   --param cmd.plan-review='printf "VERDICT: approve\n" > ai/REVIEW.md' \
   --param cmd.implement='echo done > ai/REPORT.md' \
   --param cmd.implement-review='printf "VERDICT: approve\n" > ai/REVIEW.md' \
@@ -211,17 +213,19 @@ etium run "verify install" --loop ai-engineer/loop.ts --worktree --harness exec 
 etium gates
 ```
 
-**PASS**: output contains `route <debug|design|plan>` (note:
-`implement` must NOT be listed yet — its absence is part of the test).
+**PASS**: output contains `route <debug|design>` (note: `plan` and
+`implement` must NOT be listed yet — stages are earned, and their
+absence is part of the test).
 
 ```sh
+etium decide verify route design --sync
 etium decide verify route plan --sync
 etium decide verify route implement --sync
 etium decide verify route wrap-up --sync
 ```
 
-**PASS**: the first two each end with `outcome: parked`; the third ends
-with `outcome: done`.
+**PASS**: the first three each end with `outcome: parked`; the fourth
+ends with `outcome: done`.
 
 Cleanup: `rm -rf "$SCRATCH_DIR/etium-verify"`. If every PASS held, the
 setup is functional. If `GITHUB_REPO` was not provided, go to Step 5.

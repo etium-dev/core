@@ -1114,3 +1114,46 @@ scheduler surgery; secrets-adjacent strings in crontabs). A
 `surfaces` config field today (nothing real to put in it). Cursoring on
 ids alone without the created_at floor (an edited pre-deployment
 comment could kick off work — history must stay inert).
+
+---
+
+## ADR-031 — design is never optional; a design has a declared style
+
+**Decision.** The route to `plan` is earned by a converged design, the
+same fail-closed construction that gates `implement` behind a plan and
+`wrap-up` behind implementation: the base route vocabulary is
+`debug · design`, and each later stage appears only when its
+prerequisite converged. To keep the mandatory stage cheap, `design.md`
+declares three design styles — mini (a bug fix or small feature: state
+the simple solution, no invented abstractions), component (interfaces
+and data flow precise enough that two planners write the same plan),
+full (new components, state machines, protocols: options at strength,
+invariants, failure modes, complete interfaces) — the designer opens by
+naming its style and why, choosing the lightest that carries the task;
+overbuilding is a defect at every style. The design reviewer reviews at
+the declared style's altitude: demanding more than the style requires
+is an objection against the review; a style too light for its task
+earns exactly one blocker (the style, with why). The plan reviewer
+holds the boundary from the other side: the plan may add detail, never
+components — machinery absent from the design is an objection.
+
+**Why.** A live run turned "modify the prompt so replies are never
+emoji-only" into a six-round plan cycle: the planner invented a
+streaming gate state machine inside the plan stage, and the plan
+reviewer — whose whole vocabulary is "is this buildable as written" —
+was forced to design-review the invention one underspecified corner at
+a time. Each objection was individually legitimate; the waste was
+structural: architecture appeared in the stage with no altitude to
+judge it. Making design mandatory moves invention to the stage whose
+reviewer can say "why does this machinery exist"; the styles ladder
+keeps the mandate from taxing small fixes; the altitude rule keeps the
+reviewer from nitpicking a mini into a full design, which would
+recreate the cascade one stage earlier.
+
+**Rejected.** A simplicity objection class in plan-review alone (treats
+the symptom; the invention still happens in a stage that cannot weigh
+options). Letting the planner self-escalate to design when it notices
+itself inventing (asks the persona least able to see its own
+overbuilding to police it). Design optional for "obvious" fixes (the
+xcnc run's fix looked obvious; the mini style prices the stage at a
+paragraph instead of skipping the judgment).
