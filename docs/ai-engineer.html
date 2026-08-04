@@ -83,7 +83,7 @@ etium clone-loop ai-engineer</code></pre>
   <p>(<code>etium configure</code> does Part 0's setup and Part 3's wiring
   questions interactively — checks with fix commands first, then the
   questions. The manual steps below show exactly what it does.)</p>
-  <p>The package is a plain folder — a 97-line loop, seven persona prompts,
+  <p>The package is a plain folder — a ~140-line loop, eleven persona prompts,
   one GitHub surface file, and a <a href="https://github.com/etium-dev/core/tree/main/ai-engineer">README</a>
   with the exact contract. Cloning it into your repo is the intended move:
   the templates are <em>yours to edit</em>, and the folder has no
@@ -104,16 +104,15 @@ etium clone-loop ai-engineer</code></pre>
 <pre><code>cd /path/to/your-repo
 etium run "Add input validation to the signup form" \
   --loop ai-engineer/loop.ts --worktree --harness exec --param rounds=1 \
-  --param cmd.triage='mkdir -p ai &amp;&amp; echo "recommend: plan" &gt; ai/INTAKE.md' \
-  --param cmd.plan='echo "1. validate email" &gt; ai/PLAN.md' \
+  --param cmd.plan='mkdir -p ai &amp;&amp; echo "1. validate email" &gt; ai/PLAN.md' \
   --param cmd.plan-review='printf "VERDICT: approve\n" &gt; ai/REVIEW.md' \
   --param cmd.implement='echo done &gt; ai/REPORT.md' \
   --param cmd.implement-review='printf "VERDICT: approve\n" &gt; ai/REVIEW.md'</code></pre>
-  <p>The triage persona runs, then the run <strong>parks</strong> — zero
-  processes — at its first gate:</p>
+  <p>The run <strong>parks</strong> — zero processes — at its first
+  gate:</p>
 <pre><code>$ etium gates
-<span class="out">2026-…-add-input-validation-…  route.0  show: ai/INTAKE.md
-  → etium decide 2026-… route &lt;triage|debug|design|plan&gt;</span></code></pre>
+<span class="out">2026-…-add-input-validation-…  route.0
+  → etium decide 2026-… route &lt;debug|design|plan&gt;</span></code></pre>
   <p>That's the routing gate. Notice what it <em>doesn't</em> offer:
   <code>implement</code>. Options appear as stages earn them. Decide, with
   guidance:</p>
@@ -124,7 +123,7 @@ etium run "Add input validation to the signup form" \
   Route through <code>implement</code>, then <code>wrap-up</code>, and read
   the whole story:</p>
 <pre><code>$ etium tail &lt;run&gt; --once
-<span class="out">gate ? route.0  awaiting decision  options=triage|debug|design|plan  show=ai/INTAKE.md
+<span class="out">gate ? route.0  awaiting decision  options=debug|design|plan
 gate <span class="mark">◆</span> route.0  plan by you (cli) — email format only, no phone
 gate ? route.1  awaiting decision  options=…|plan|<span class="mark">implement</span>  show=ai/PLAN.md,ai/REVIEW.md
 gate <span class="mark">◆</span> route.1  implement by you (cli)
@@ -134,7 +133,7 @@ run DONE</span></code></pre>
   <p>Because of <code>--worktree</code>, all of it happened on branch
   <code>etium/&lt;run-id&gt;</code> in its own checkout under
   <code>.etium/worktrees/</code> — your working tree was never touched, and
-  <code>ai/INTAKE.md</code>, <code>ai/PLAN.md</code>, <code>ai/REPORT.md</code>,
+  <code>ai/PLAN.md</code>, <code>ai/REPORT.md</code>,
   <code>ai/REVIEW.md</code> sit on that branch as the audit trail. Every
   prompt, stream, and decision is under <code>.etium/runs/&lt;run&gt;/</code>;
   <code>grep</code> works on all of it.</p>
@@ -145,8 +144,8 @@ run DONE</span></code></pre>
   codex</code>, or <code>--param model=…</code> as you like):</p>
 <pre><code>etium run "Add input validation to the signup form" \
   --loop ai-engineer/loop.ts --worktree --param check="npm test"</code></pre>
-  <p>Now triage actually reads your repo and writes a real recommendation
-  into <code>ai/INTAKE.md</code>, reviewers actually object
+  <p>Now each persona actually reads your repo — designers design,
+  planners plan — and reviewers actually object
   (<code>VERDICT: revise</code> with stable objection keys — the builder
   must address them next round), and <code>implement</code> must pass
   <strong>both</strong> its reviewer and your <code>check</code> command.
@@ -174,10 +173,10 @@ run DONE</span></code></pre>
     <li><strong>Comment <code>/et &lt;what you want&gt;</code></strong> on
     an issue — <code>/et fix this</code>, <code>/et propose a design</code>,
     or just <code>/et go</code>. Within a minute, the surface creates a run
-    on branch <code>etium/issue-N-attempt-0</code>, triage reads your words
-    as the routing directive and heads straight into the right stage, and a
-    status comment appears on the issue telling you exactly what it's
-    waiting for and which commands are valid.</li>
+    on branch <code>etium/issue-N-attempt-0</code>, the interpreter maps
+    your words to a stage and heads straight into it (or asks you to
+    clarify), and a status comment appears on the issue telling you exactly
+    what it's waiting for and which commands are valid.</li>
     <li><strong>Command with comments.</strong> <code>/et plan start with
     the retry logic</code> — an exact option word decides the open gate and
     your text becomes the note. Anything else — <code>/et actually, wrap

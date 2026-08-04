@@ -394,7 +394,7 @@ etium/                    # a single npm package: `etium` (see DECISIONS ADR-006
   src/                    # core ≤ ~3,000 LOC: ledger, fold, engine, runner, lock, mailbox, supervisor, tick
     adapters.ts           # exec, replay, codex, pi, claude, openhands — each ≤ ~300 LOC
     cli.ts
-  ralph/                  # the reference loop library (M0) — copy-and-own via `etium clone-loop`, like ai-engineer/; plan-implement, triage follow (M1+); each loop ≤ ~150 LOC
+  ralph/                  # the reference loop library (M0) — copy-and-own via `etium clone-loop`, like ai-engineer/; plan-implement follows (M1+); each loop ≤ ~150 LOC
   fixtures/               # captured raw streams per harness (golden transcripts)
   schema/                 # JSON Schema for envelope + events, versioned + golden example ledger
 ```
@@ -439,7 +439,7 @@ CLI (M0 set): `run`, `status`, `tail`, `gates`, `approve`, `reject`, `decide`, `
 
 | AI_ENGINEER_STATE_MACHINE concept | Etium equivalent |
 |---|---|
-| Personas (Intake Analyst, Architect, …) | Prompt template files owned by the loop |
+| Personas (Debugger, Architect, Planner, …) | Prompt template files owned by the loop |
 | Lifecycle states (PlanLoop, PlanReady, …) | Position in loop code + open gates — derived from the ledger, never stored |
 | Command labels (`ai-plan`, `ai-implement`) | Gate decisions via the GitHub surface; consumed-once and one-command semantics preserved |
 | `ai-running` + status comments | Idempotent projections of the ledger |

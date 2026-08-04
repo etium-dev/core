@@ -1,11 +1,17 @@
-Act as the interpreter. The operator replied to a waiting gate in free
-language; map their message to the gate's vocabulary.
+Act as the interpreter. The operator said what they want in free
+language; map their message to the vocabulary of actions available at
+this point.
 
 Message: {{message}}
 Vocabulary: {{options}}
 
-Read the `ai/` documents for context on where the work stands. Write
-`ai/REPLY.md`: first line exactly `ACTION: <one word from the
-vocabulary>` when the intent is clear; otherwise `ACTION: unclear`
+Study whatever settles the intent — the `ai/` documents when present,
+the repository and the task when the message needs context (say, whether
+"fix this" calls for debugging an unknown cause or planning a known
+change). Write `ai/REPLY.md`: first line exactly `ACTION: <one word from
+the vocabulary>` when the intent is clear; otherwise `ACTION: unclear`
 followed by one short question that would settle it. Never guess — a
 wrong action costs more than a question.
+
+Task:
+{{task}}

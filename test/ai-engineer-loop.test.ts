@@ -18,6 +18,7 @@ import { tickOnce } from "../src/tick.ts";
 
 const LOOP = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "ai-engineer", "loop.ts");
 const APPROVE = `printf 'VERDICT: approve\\n' > ai/REVIEW.md`;
+const ROUTE_STAGES = ["debug", "design", "plan", "implement"];
 
 function lastOpenGate(runDir: string): { name: string; occ: number; options: string[] } {
   const decided = new Set(
@@ -47,7 +48,6 @@ test("full graph: triage → design (revise round) → plan → implement+check 
       harness: "exec",
       rounds: "2",
       check: "test -f fixed.txt",
-      "cmd.triage": "mkdir -p ai && printf 'recommend: design\\n' > ai/INTAKE.md",
       "cmd.design": "mkdir -p ai && printf 'approach A\\n' > ai/DESIGN.md",
       "cmd.design-review": `if [ -f ai/.dr ]; then ${APPROVE}; else printf 'VERDICT: revise\\ndesign-scope: too broad\\n' > ai/REVIEW.md && touch ai/.dr; fi`,
       "cmd.plan": "printf '1. fix retry\\n' > ai/PLAN.md",
@@ -60,7 +60,7 @@ test("full graph: triage → design (revise round) → plan → implement+check 
   await tickOnce(base, "unused-entry", true);
   let gate = lastOpenGate(runDir);
   assert.equal(gate.name, "route");
-  assert.deepEqual(gate.options, ["triage", "debug", "design", "plan", "consider"]); // no implement yet: fail-closed routing
+  assert.deepEqual(gate.options, ["debug", "design", "plan", "consider"]); // no implement yet: fail-closed routing
 
   await decide(base, runDir, gate, "design"); // revise round then approve: design.0, design-review.0, design.1, design-review.1
   const designSteps = readLedger(runDir)
@@ -70,15 +70,15 @@ test("full graph: triage → design (revise round) → plan → implement+check 
   assert.equal(designSteps.length, 2, "reviser forced a second builder round");
 
   gate = lastOpenGate(runDir);
-  assert.deepEqual(gate.options, ["triage", "debug", "design", "plan", "consider"]); // design done ≠ plan done
+  assert.deepEqual(gate.options, ["debug", "design", "plan", "consider"]); // design done ≠ plan done
 
   await decide(base, runDir, gate, "plan");
   gate = lastOpenGate(runDir);
-  assert.deepEqual(gate.options, ["triage", "debug", "design", "plan", "implement", "consider"]); // plan unlocks implement
+  assert.deepEqual(gate.options, ["debug", "design", "plan", "implement", "consider"]); // plan unlocks implement
 
   await decide(base, runDir, gate, "implement");
   gate = lastOpenGate(runDir);
-  assert.deepEqual(gate.options, ["triage", "debug", "design", "plan", "implement", "wrap-up", "consider"]);
+  assert.deepEqual(gate.options, ["debug", "design", "plan", "implement", "wrap-up", "consider"]);
   assert.ok(fs.existsSync(path.join(runDir, "ws", "fixed.txt")), "check gated on real workspace evidence");
 
   await decide(base, runDir, gate, "wrap-up");
@@ -95,8 +95,7 @@ test("stuck path: reviewer never approves → <stage>-stuck gate → accept proc
     params: {
       harness: "exec",
       rounds: "1",
-      "cmd.triage": "mkdir -p ai && printf 'recommend: debug\\n' > ai/INTAKE.md",
-      "cmd.debug": "printf 'cause: unknown\\n' > ai/DIAGNOSIS.md",
+      "cmd.debug": "mkdir -p ai && printf 'cause: unknown\\n' > ai/DIAGNOSIS.md",
       "cmd.debug-review": `printf 'VERDICT: revise\\ndebug-evidence: none\\n' > ai/REVIEW.md`,
     },
   });
@@ -123,7 +122,7 @@ test("stuck path: reviewer never approves → <stage>-stuck gate → accept proc
   assert.ok(!gate.options.includes("wrap-up"));
 });
 
-test("kickoff directive: triage's route is followed without asking the gate (ADR-023)", async () => {
+test("kickoff directive: an exact route word goes straight to the stage — no interpreter, no gate", async () => {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), "etium-ai-"));
   const { runDir } = createRun(base, {
     task: "the retry helper drops the last attempt",
@@ -131,9 +130,8 @@ test("kickoff directive: triage's route is followed without asking the gate (ADR
     params: {
       harness: "exec",
       rounds: "1",
-      directive: "fix this",
-      "cmd.triage": `mkdir -p ai && printf '## Route\\nplan — the path is clear\\n' > ai/INTAKE.md`,
-      "cmd.plan": "printf '1. fix retry\\n' > ai/PLAN.md",
+      directive: "plan",
+      "cmd.plan": "mkdir -p ai && printf '1. fix retry\\n' > ai/PLAN.md",
       "cmd.plan-review": APPROVE,
     },
   });
@@ -143,9 +141,52 @@ test("kickoff directive: triage's route is followed without asking the gate (ADR
   assert.equal(gate.name, "route");
   assert.ok(gate.options.includes("implement"), "plan converged before any gate opened");
   const evts = readLedger(runDir);
+  assert.ok(!evts.some((e) => e.type === "step.started" && (e.data as { name: string }).name === "interpret"),
+    "an exact word is taken literally — no model consulted");
   const planAt = evts.findIndex((e) => e.type === "step.started" && (e.data as { name: string }).name === "plan");
   const gateAt = evts.findIndex((e) => e.type === "gate.opened");
-  assert.ok(planAt >= 0 && planAt < gateAt, "auto-route ran the stage before the first gate");
+  assert.ok(planAt >= 0 && planAt < gateAt, "the stage ran before the first gate");
+});
+
+test("kickoff directive: freestyle is interpreted, then the stage runs without a gate; unclear parks showing the question", async () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "etium-ai-"));
+  const { runDir } = createRun(base, {
+    task: "make it faster",
+    loop: LOOP,
+    params: {
+      harness: "exec",
+      rounds: "1",
+      directive: "come up with a plan for this",
+      "cmd.interpret": "mkdir -p ai && printf 'ACTION: plan\\n' > ai/REPLY.md",
+      "cmd.plan": "printf '1. speed\\n' > ai/PLAN.md",
+      "cmd.plan-review": APPROVE,
+    },
+  });
+  await tickOnce(base, "unused-entry", true);
+  const gate = lastOpenGate(runDir);
+  assert.equal(gate.name, "route");
+  assert.ok(gate.options.includes("implement"), "interpreted route converged before any gate");
+
+  // Unclear directive: nothing runs; the route gate opens showing the question.
+  const base2 = fs.mkdtempSync(path.join(os.tmpdir(), "etium-ai-"));
+  const { runDir: runDir2 } = createRun(base2, {
+    task: "make it faster",
+    loop: LOOP,
+    params: {
+      harness: "exec",
+      directive: "hmm you know the thing",
+      "cmd.interpret": "mkdir -p ai && printf 'ACTION: unclear\\nDebug, design, or plan?\\n' > ai/REPLY.md",
+    },
+  });
+  await tickOnce(base2, "unused-entry", true);
+  const opened = readLedger(runDir2)
+    .filter((e) => e.type === "gate.opened")
+    .map((e) => e.data as { name: string; show?: string[]; options: string[] });
+  assert.equal(opened.length, 1);
+  assert.equal(opened[0]!.name, "route");
+  assert.deepEqual(opened[0]!.show, ["ai/REPLY.md"]);
+  assert.ok(!readLedger(runDir2).some((e) => e.type === "step.started" && ROUTE_STAGES.includes((e.data as { name: string }).name)),
+    "no stage ran on an unclear directive — fail closed");
 });
 
 test("per-step harness: harness.<step> overrides the loop-wide value (ADR-025)", async () => {
@@ -155,15 +196,16 @@ test("per-step harness: harness.<step> overrides the loop-wide value (ADR-025)",
     loop: LOOP,
     params: {
       harness: "not-a-real-harness", // would fail the pre-spawn gate if any step used it
-      "harness.triage": "exec",
-      "cmd.triage": "mkdir -p ai && printf 'recommend: plan\\n' > ai/INTAKE.md",
+      "harness.interpret": "exec",
+      directive: "please sort this out somehow",
+      "cmd.interpret": "mkdir -p ai && printf 'ACTION: unclear\\nWhich stage?\\n' > ai/REPLY.md",
     },
   });
   await tickOnce(base, "unused-entry", true);
-  const started = readLedger(runDir).find((e) => e.type === "step.started" && (e.data as { name: string }).name === "triage")!;
+  const started = readLedger(runDir).find((e) => e.type === "step.started" && (e.data as { name: string }).name === "interpret")!;
   assert.equal((started.data as { harness: string }).harness, "exec", "per-step harness recorded in the ledger");
-  const done = readLedger(runDir).find((e) => e.type === "step.completed" && (e.data as { step: { name: string } }).step.name === "triage")!;
-  assert.equal((done.data as { status: string }).status, "ok", "triage ran under its own harness");
+  const done = readLedger(runDir).find((e) => e.type === "step.completed" && (e.data as { step: { name: string } }).step.name === "interpret")!;
+  assert.equal((done.data as { status: string }).status, "ok", "interpret ran under its own harness");
   assert.equal(lastOpenGate(runDir).name, "route", "run parked healthy — the bogus loop-wide harness was never touched");
 });
 
@@ -175,8 +217,7 @@ test("consider: the interpreter maps freestyle to an option; unclear re-asks sho
     params: {
       harness: "exec",
       rounds: "1",
-      "cmd.triage": "mkdir -p ai && printf 'recommend: plan\\n' > ai/INTAKE.md",
-      "cmd.interpret": `if [ -f ai/.i ]; then printf 'ACTION: plan\\n' > ai/REPLY.md; else printf 'ACTION: unclear\\nWhich stage did you mean?\\n' > ai/REPLY.md && touch ai/.i; fi`,
+      "cmd.interpret": `mkdir -p ai; if [ -f ai/.i ]; then printf 'ACTION: plan\\n' > ai/REPLY.md; else printf 'ACTION: unclear\\nWhich stage did you mean?\\n' > ai/REPLY.md && touch ai/.i; fi`,
       "cmd.plan": "printf '1. tidy\\n' > ai/PLAN.md",
       "cmd.plan-review": APPROVE,
     },

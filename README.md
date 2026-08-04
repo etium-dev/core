@@ -136,7 +136,7 @@ default harness and probes every harness the params reference.
 Custom surfaces are modules loaded by path (see DESIGN §10.3).
 
 The **[ai-engineer](ai-engineer/)** loop library is the flagship workload: a
-multi-persona triage→debug/design/plan→implement workflow you clone into
+multi-persona debug/design/plan→implement workflow you clone into
 your repo (`etium clone-loop ai-engineer`) and adapt. [Tutorial](https://etium.dev/ai-engineer.html).
 
 ## License

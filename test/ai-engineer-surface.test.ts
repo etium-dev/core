@@ -54,9 +54,9 @@ if (method === "GET") {
 
 const SLOOP = `export default async function (run) {
   await run.step("work", { harness: "exec",
-    command: "mkdir -p ai && echo intake > ai/INTAKE.md && git add -A && git -c user.name=t -c user.email=t@t commit -qm work" });
+    command: "mkdir -p ai && echo notes-content > ai/NOTES.md && git add -A && git -c user.name=t -c user.email=t@t commit -qm work" });
   for (;;) {
-    const d = await run.gate("route", { options: ["plan", "wrap-up", "consider"], show: ["ai/INTAKE.md"] });
+    const d = await run.gate("route", { options: ["plan", "wrap-up", "consider"], show: ["ai/NOTES.md"] });
     if (d.decision === "wrap-up") return;
     if (d.decision === "plan") await run.step("plan", { harness: "exec", command: "echo planned > planned.txt" });
     // consider: record and re-open — interpretation is the real loop's job
@@ -149,7 +149,7 @@ test("kickoff comment → worktree run with directive; read-only commenter ignor
   assert.match(status.body.body!, /\/et wrap-up/);
   assert.ok(!status.body.body!.includes("/et consider"), "consider is internal, not a listed command");
   assert.match(status.body.body!, /just say what you want/); // freestyle invitation
-  assert.match(status.body.body!, /intake/); // excerpt of the gate's first show file
+  assert.match(status.body.body!, /notes-content/); // excerpt of the gate's first show file
   assert.ok(w.some((x) => /issues\/7\/labels$/.test(x.path) && x.body.labels?.includes("et:waiting")));
   // Every gh call carried the deployment's own config dir (ADR-022).
   const envs = fs.readFileSync(path.join(stubDir, "envs.txt"), "utf8").trim().split("\n");

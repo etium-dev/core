@@ -180,7 +180,7 @@ git commit -m "Add etium $LIBRARY loop library"
 ```
 
 **Verify** (`LIBRARY=ai-engineer`): `test -f ai-engineer/loop.ts && grep -qx '.etium/' .gitignore && ls ai-engineer/templates/*.md | wc -l` →
-both tests exit 0 and the count is `12`.
+both tests exit 0 and the count is `11`.
 **Verify** (`LIBRARY=ralph`): `test -f ralph/loop.ts && grep -qx '.etium/' .gitignore` → exits 0.
 When `LIBRARY=none` there is nothing to commit — continue to Step 3C.
 
@@ -192,8 +192,7 @@ model or GitHub access. Run exactly:
 ```sh
 git clone -q "$REPO_DIR" "$SCRATCH_DIR/etium-verify" && cd "$SCRATCH_DIR/etium-verify"
 etium run "verify install" --loop ai-engineer/loop.ts --worktree --harness exec --param rounds=1 \
-  --param cmd.triage='mkdir -p ai && echo ok > ai/INTAKE.md' \
-  --param cmd.plan='echo plan > ai/PLAN.md' \
+  --param cmd.plan='mkdir -p ai && echo plan > ai/PLAN.md' \
   --param cmd.plan-review='printf "VERDICT: approve\n" > ai/REVIEW.md' \
   --param cmd.implement='echo done > ai/REPORT.md' \
   --param cmd.implement-review='printf "VERDICT: approve\n" > ai/REVIEW.md' \
@@ -206,7 +205,7 @@ etium run "verify install" --loop ai-engineer/loop.ts --worktree --harness exec 
 etium gates
 ```
 
-**PASS**: output contains `route <triage|debug|design|plan>` (note:
+**PASS**: output contains `route <debug|design|plan>` (note:
 `implement` must NOT be listed yet — its absence is part of the test).
 
 ```sh

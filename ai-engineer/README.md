@@ -23,7 +23,7 @@ built-in `github` surface (DESIGN §10.3).
 | `rounds` | builder/reviewer rounds per stage before escalating | `2` |
 | `check` | shell command proving the implementation | `true` |
 | `wall` | per-step wall budget | `2h` |
-| `directive` | the operator's kickoff words — triage treats them as the routing answer and the loop follows the intake's route without opening the first gate | — |
+| `directive` | the operator's kickoff words — the interpreter maps them to a stage and the loop goes straight there; unclear parks at the route gate with the question shown | — |
 | `harness.<step>` / `model.<step>` | per-persona override — e.g. `harness.implement=codex`, `model.design=…` | the loop-wide `harness`/`model` |
 | `cmd.<step>` | dry-run hook: with `--harness exec`, scripts that step | — |
 
@@ -37,7 +37,7 @@ and task fields always win.
 
 | gate | opens | options |
 |---|---|---|
-| `route` | after triage, and after every stage | `triage · debug · design · plan · consider` — `implement` appears once a plan converged; `wrap-up` once implementation converged |
+| `route` | at kickoff (unless the directive already routed), and after every stage | `debug · design · plan · consider` — `implement` appears once a plan converged; `wrap-up` once implementation converged |
 | `<stage>-stuck` | reviewer still objects after `rounds` rounds | `keep-going · accept · wrap-up · consider` |
 
 Routing is fail-closed by construction: `implement` is not a declinable
@@ -47,10 +47,11 @@ interpreter persona maps them to one of the other options — or writes a
 clarifying question to `ai/REPLY.md` and re-opens the gate. It never
 guesses.
 
-**Artifacts** (in `ai/` on the run's branch): `INTAKE.md`, `DIAGNOSIS.md`,
-`DESIGN.md`, `PLAN.md`, `REPORT.md`, `REVIEW.md` (reviewer verdict — first
-line `VERDICT: approve|revise`, stable objection keys), and `REPLY.md` (the
-interpreter's reading of a freestyle message, or its question back).
+**Artifacts** (in `ai/` on the run's branch): `DIAGNOSIS.md`, `DESIGN.md`,
+`PLAN.md`, `REPORT.md`, and `REVIEW.md` (reviewer verdict — first line
+`VERDICT: approve|revise`, stable objection keys). `ai/REPLY.md` is the
+interpreter's working state (its reading of a freestyle message, or its
+question back) — shown at the gate, never committed on its own.
 
 The loop publishes nothing — it commits to its branch and opens gates. The
 surface projects branch → draft PR → status comment → labels.
@@ -60,7 +61,7 @@ surface projects branch → draft PR → status comment → labels.
 ```sh
 etium run "fix the flaky auth test" --loop ai-engineer/loop.ts --worktree \
   --param check="npm test"
-etium gates                     # → route: triage · debug · design · plan · consider
+etium gates                     # → route: debug · design · plan · consider
 etium decide <run> route plan --note "start with the retry"
 etium decide <run> route consider --note "just make it stop flaking"  # freestyle
 ```

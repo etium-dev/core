@@ -1,8 +1,11 @@
 // The AI engineer as one etium loop: surface-agnostic and CLI-complete —
 // every transition is a gate decision (`etium decide` or a surface command
-// like `/et plan`); freestyle input is mapped to the vocabulary by an
-// interpreter persona (ADR-023); publication is a surface's job, never the
-// loop's. Artifact commits are the loop's own steps (ADR-017).
+// like `/et plan`). The whole front door is one conversion: the operator's
+// words → an option the state machine declares here, mapped by an
+// interpreter persona; no mapping → a clarifying question, never a guess
+// (ADR-023/026). Stages are self-sufficient — each persona studies the
+// repository itself; nothing pre-digests it for them. Publication is a
+// surface's job; artifact commits are the loop's own steps (ADR-017).
 
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -18,13 +21,12 @@ const reviewer = (stage: string) =>
   "\n\n" + read(`${stage}-review.md`);
 
 const ARTIFACT: Record<string, string> = {
-  triage: "ai/INTAKE.md",
   debug: "ai/DIAGNOSIS.md",
   design: "ai/DESIGN.md",
   plan: "ai/PLAN.md",
   implement: "ai/REPORT.md",
 };
-const ROUTES = ["triage", "debug", "design", "plan"];
+const ROUTES = ["debug", "design", "plan"];
 
 export default async function aiEngineer(run: Run) {
   const rounds = Number(run.params.rounds ?? "2");
@@ -59,15 +61,17 @@ export default async function aiEngineer(run: Run) {
     return m?.[1]?.toLowerCase() ?? "";
   };
 
-  // Freestyle → vocabulary (ADR-023): the interpreter persona maps the
-  // operator's words to one declared option, or asks to rephrase in
-  // ai/REPLY.md. "" = unclear; the caller re-opens its gate showing the
-  // question.
+  // Words → vocabulary. An exact option word is taken literally (no model);
+  // anything else goes to the interpreter persona, which may study the
+  // repository but writes only ai/REPLY.md: `ACTION: <option>`, or
+  // `ACTION: unclear` plus one question. "" = unclear; the caller re-opens
+  // its gate showing the question. REPLY.md is working state, not an
+  // artifact — it is never committed on its own.
   const interpret = async (options: string[], msg: string): Promise<string> => {
+    if (options.includes(msg.trim().toLowerCase())) return msg.trim().toLowerCase();
     const prompt = read("conventions.md") + "\n\n" +
       read("interpret.md").replaceAll("{{options}}", options.join(" | ")).replaceAll("{{message}}", msg);
     await step("interpret", prompt, { artifacts: ["ai/REPLY.md"] });
-    await commit("interpret");
     const w = await run.effect("interpreted", artifactWord("ai/REPLY.md", /^ACTION:\s*(\S+)/im));
     return options.includes(w as string) ? (w as string) : "";
   };
@@ -111,22 +115,12 @@ export default async function aiEngineer(run: Run) {
     return true;
   };
 
-  const triage = async () => {
-    const t = await step("triage", persona("triage").replaceAll("{{directive}}", run.params.directive ?? "none"), {
-      artifacts: ["ai/INTAKE.md"],
-    });
-    await commit("triage");
-    if (t.status === "ok") show = ["ai/INTAKE.md"];
-    return t;
-  };
-
-  const intake = await triage();
-  // A kickoff directive is the human's routing input, delivered early
-  // (ADR-023): follow the intake's route without re-asking; anything
-  // unparseable falls to the gate — fail closed.
-  if (run.params.directive && intake.status === "ok") {
-    const auto = await run.effect("auto-route", artifactWord("ai/INTAKE.md", /^##\s*Route\s*\n[\s*`_<]*(debug|design|plan)\b/im));
-    if (auto && !(await runStage(auto as string))) return;
+  // The kickoff directive is the operator's words, delivered early: map and
+  // go. Unclear falls to the route gate with the question shown — fail closed.
+  if (run.params.directive) {
+    const w = await interpret(ROUTES, run.params.directive);
+    if (w) { if (!(await runStage(w))) return; }
+    else show = ["ai/REPLY.md"];
   }
 
   for (;;) {
@@ -138,7 +132,6 @@ export default async function aiEngineer(run: Run) {
     const decision = route.decision === "consider" ? await interpret(options, route.note ?? "") : route.decision;
     if (!decision) { show = ["ai/REPLY.md"]; continue; }
     if (decision === "wrap-up") return; // e.g. the PR merged (surface decides this)
-    if (decision === "triage") { await triage(); continue; }
     if (!(await runStage(decision))) return;
   }
 }

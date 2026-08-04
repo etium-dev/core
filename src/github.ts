@@ -1,9 +1,11 @@
 // The built-in `github` surface (§10.3, ADR-012): loop-agnostic
 // infrastructure connecting GitHub to any etium loop. Commands are comments,
-// never labels. Assignment of the agent user → a task running ETIUM_GH_LOOP;
-// `/et <word> [note]` comments by trusted authors → gate decisions (the word
-// is matched against whichever open gate declares it); issue close / PR
-// close / PR merge → abandons or wrap-up; one bot status comment
+// never labels. A `/et …` comment on an open issue with no active attempt →
+// a task running ETIUM_GH_LOOP, the text riding in as the `directive` param
+// (ADR-023); `/et <word> [note]` comments by trusted authors → gate
+// decisions (an exact word is matched against whichever open gate declares
+// it; anything else is delivered as `consider` when declared); issue close /
+// PR close / PR merge → abandons or wrap-up; one bot status comment
 // (idempotently rewritten) lists the currently-valid commands; labels are
 // write-only decoration (et:working | et:waiting | et:blocked). All GitHub
 // access goes through the `gh` CLI — auth stays gh's problem, per
@@ -11,9 +13,9 @@
 //
 // Identity and trust are not configured (ADR-022): the surface acts as the
 // deployment's own repo-scoped gh sign-in (stored under the workdir's
-// .etium/gh — see ghConfigDir), its assignment starts attempts, and anyone
-// GitHub lets push (Write) may command — authorization delegates to the
-// repository's own permission model, checked live and fail-closed.
+// .etium/gh — see ghConfigDir), and anyone GitHub lets push (Write) may
+// command — authorization delegates to the repository's own permission
+// model, checked live and fail-closed.
 //
 // Config (env): ETIUM_GH_REPO (owner/name, required), ETIUM_GH_LOOP (loop
 // module path, required), ETIUM_GH_WORKDIR (the checkout to branch from;
@@ -113,8 +115,8 @@ function statusBody(view: RunView): string {
       lines.push(`waiting on **${g.name}** — reply with one of:`);
       lines.push(g.options.filter((o) => o !== "consider").map((o) => `\`${PREFIX} ${o}\``).join(" · "));
       if (g.options.includes("consider")) lines.push(`…or just say what you want: \`${PREFIX} <your words>\``);
-      // Context excerpt: the gate's first shown artifact — the intake's
-      // reasoning, the reviewer's objection, the interpreter's question.
+      // Context excerpt: the gate's first shown artifact — the stage's
+      // document, the reviewer's objection, the interpreter's question.
       const src = g.show[0];
       const p = src ? [view.workspace, view.dir].map((d) => path.join(d, src)).find((f) => fs.existsSync(f)) : undefined;
       if (p) {

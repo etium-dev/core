@@ -26,7 +26,7 @@ etium clone-loop ai-engineer
 interactively — checks with fix commands first, then the questions. The
 manual steps below show exactly what it does.)
 
-The library is a plain folder — a 97-line loop, seven persona prompts, and
+The library is a plain folder — a ~140-line loop, eleven persona prompts, and
 a README with the exact contract. Cloning it into your repo is the intended
 move: the templates are *yours to edit*, and the folder has no dependencies
 (type imports only — it runs anywhere). The GitHub integration is not in
@@ -47,23 +47,21 @@ workflow — every gate, option, and artifact is the real thing:
 cd /path/to/your-repo
 etium run "Add input validation to the signup form" \
   --loop ai-engineer/loop.ts --worktree --harness exec --param rounds=1 \
-  --param cmd.triage='mkdir -p ai && echo "recommend: plan" > ai/INTAKE.md' \
-  --param cmd.plan='echo "1. validate email" > ai/PLAN.md' \
+  --param cmd.plan='mkdir -p ai && echo "1. validate email" > ai/PLAN.md' \
   --param cmd.plan-review='printf "VERDICT: approve\n" > ai/REVIEW.md' \
   --param cmd.implement='echo done > ai/REPORT.md' \
   --param cmd.implement-review='printf "VERDICT: approve\n" > ai/REVIEW.md'
 ```
 
-The triage persona runs, then the run **parks** — zero processes — at its
-first gate:
+The run **parks** — zero processes — at its first gate:
 
 ```
 $ etium gates
-2026-…-add-input-validation-…  route.0  show: ai/INTAKE.md
-  → etium decide 2026-… route <triage|debug|design|plan>
+2026-…-add-input-validation-…  route.0
+  → etium decide 2026-… route <debug|design|plan>
 ```
 
-That's the routing gate. Notice what it *doesn't* offer: `implement`.
+That's the routing gate: which stage should act next. Notice what it *doesn't* offer: `implement`.
 Options appear as stages earn them. Decide, with guidance:
 
 ```sh
@@ -77,7 +75,7 @@ then `wrap-up`, and read the whole story:
 
 ```
 $ etium tail <run> --once
-gate ? route.0  awaiting decision  options=triage|debug|design|plan  show=ai/INTAKE.md
+gate ? route.0  awaiting decision  options=debug|design|plan
 gate ◆ route.0  plan by you (cli) — email format only, no phone
 gate ? route.1  awaiting decision  options=…|plan|implement  show=ai/PLAN.md,ai/REVIEW.md
 gate ◆ route.1  implement by you (cli)
@@ -88,8 +86,8 @@ run DONE
 
 Because of `--worktree`, all of it happened on branch `etium/<run-id>` in
 its own checkout under `.etium/worktrees/` — your working tree was never
-touched, and `ai/INTAKE.md`, `ai/PLAN.md`, `ai/REPORT.md`, `ai/REVIEW.md`
-sit on that branch as the audit trail. Every prompt, stream, and decision
+touched, and `ai/PLAN.md`, `ai/REPORT.md`, `ai/REVIEW.md` sit on that
+branch as the audit trail. Every prompt, stream, and decision
 is under `.etium/runs/<run>/`; `grep` works on all of it.
 
 ## 2. Real personas
@@ -102,8 +100,8 @@ etium run "Add input validation to the signup form" \
   --loop ai-engineer/loop.ts --worktree --param check="npm test"
 ```
 
-Now triage actually reads your repo and writes a real recommendation into
-`ai/INTAKE.md`, reviewers actually object (`VERDICT: revise` with stable
+Now each persona actually reads your repo — designers design, planners
+plan — reviewers actually object (`VERDICT: revise` with stable
 objection keys — the builder must address them next round), and
 `implement` must pass **both** its reviewer and your `check` command. When
 a reviewer still objects after `rounds` rounds (default 2), you get a
@@ -132,10 +130,10 @@ Then, on GitHub:
 
 1. **Comment `/et <what you want>`** on an issue — `/et fix this`,
    `/et propose a design`, or just `/et go`. Within a minute, the surface
-   creates a run on branch `etium/issue-N-attempt-0`, triage reads your
-   words as the routing directive and heads straight into the right stage,
-   and a status comment appears on the issue telling you exactly what it's
-   waiting for and which commands are valid.
+   creates a run on branch `etium/issue-N-attempt-0`, the interpreter
+   maps your words to a stage and heads straight into it (or asks you to
+   clarify), and a status comment appears on the issue telling you exactly
+   what it's waiting for and which commands are valid.
 2. **Command with comments.** `/et plan start with the retry logic` — an
    exact option word decides the open gate and your text becomes the note.
    Anything else — `/et actually, wrap this up` — goes to the loop's

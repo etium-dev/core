@@ -922,3 +922,40 @@ constant (a second source of truth that drifts from the code, and
 configure would have to execute loop code to read it). The surface
 hardcoding params (deliberately reverted earlier; config params are the
 operator's recorded answer, not the surface's opinion).
+
+---
+
+## ADR-026 — no intake stage: the interpreter is the whole front door
+
+**Decision.** The ai-engineer's triage stage and its `ai/INTAKE.md`
+artifact are gone. The state machine is debug / design / plan / implement,
+and its entire front door is one conversion: the operator's words → an
+option the machine declares at this point. An exact option word is taken
+literally (no model). Anything else goes to the interpreter persona, which
+may study the repository to settle intent but writes only `ai/REPLY.md` —
+`ACTION: <option>` or `ACTION: unclear` plus one question — and the
+unclear case re-opens the gate showing the question. The kickoff directive
+is just the first such message: `/et come up with a design` interprets to
+`design` and the stage starts with no gate; `/et hmm the thing` parks at
+the route gate with the clarifying question in the status comment.
+`REPLY.md` is working state, never committed on its own; `route` no longer
+offers `triage`.
+
+**Why.** Intake blurred the stage boundaries it was supposed to guard: on
+its first real outing it opened with "Design a two-layer contract" —
+doing the designer's work in the analyst's document — and burned ~780k
+tokens producing findings every stage persona re-derives anyway, since
+each one studies the repository itself. Its one unique output was a single
+routing word, which the interpreter produces for a fraction of the cost
+without leaving an unexpected document in the PR. Removing it also removes
+a whole failure class: the intake→auto-route handshake (a `## Route`
+heading the template never instructed) broke on the first real model
+output; `ACTION:` in REPLY.md is one pinned line, the same contract shape
+review's `VERDICT:` already proves out.
+
+**Rejected.** Keeping intake with a pinned `ROUTE:` line (fixes the
+handshake, keeps the boundary blur and the token bill). Renaming
+INTAKE.md → TRIAGE.md (labels the confusion, doesn't remove it). The
+surface fuzzy-matching freestyle onto options itself (it lacks the
+repository and the `ai/` context; mapping words to actions is model work,
+scoped to one tiny persona).
