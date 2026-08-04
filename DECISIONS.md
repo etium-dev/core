@@ -959,3 +959,69 @@ INTAKE.md → TRIAGE.md (labels the confusion, doesn't remove it). The
 surface fuzzy-matching freestyle onto options itself (it lacks the
 repository and the `ai/` context; mapping words to actions is model work,
 scoped to one tiny persona).
+
+---
+
+## ADR-027 — the reviewer's verdict turns on blockers; approval carries notes
+
+**Decision.** The ai-engineer's shared reviewer frame (`templates/review.md`)
+splits findings into blockers (acted on as written, a later stage builds
+the wrong thing, breaks something, or contradicts the task — these force
+`VERDICT: revise`) and notes (real but non-blocking — they ride under
+`VERDICT: approve`, never costing a round). Reviews carry a
+`Resolved since last review:` accounting line, and a blocker raised for
+the first time after round one must state what changed to expose it —
+otherwise it is a note. Approval is framed as the expected outcome when
+prior blockers are resolved and nothing new meets the bar. The old
+"previous review is history, not input" rule is replaced: the previous
+review is input for the accounting; the document is still judged fresh.
+The loop's approval check (`^VERDICT: approve`) is unchanged — this is
+template-only. Evidence for every rule: `ai-engineer/REVIEW_CONVERGENCE.md`.
+
+**Why.** A live run produced eight distinct objections in four rounds
+with a 100% fix rate and zero repeats — a reviewer that will never
+approve, because withholding approval was its only way to speak and
+nothing raised the bar on late findings. The field's measurements say
+this is structural (LLM critics hallucinate errors on correct work at
+79.6–97.1%; production reviewers found 79% of raw comments were nits),
+and the working mitigations are exactly these: severity tiers where only
+blockers gate (CodeRabbit, Qodo, Copilot, Google's "favor approving"),
+delta-scoped re-review with resolved tracking, and approval-as-default
+framing. Loops converge only when stopping is not the critic's call.
+
+**Rejected.** Numeric self-scored severity with a threshold (Greptile
+measured LLM self-judgment of its own comments as "nearly random").
+Exhortations to be less picky (self-assessment is the broken
+instrument). More rounds (improvement front-loads; forced continuation
+measurably degrades). A stagnation auto-stop (ChatDev's two-unchanged
+rule — with rounds=2 the stuck gate fires as fast and keeps the human
+in the decision).
+
+---
+
+## ADR-028 — gates carry a reason; reasoned gates escalate as their own comment
+
+**Decision.** `run.gate` accepts an optional `reason` string, recorded
+on `gate.opened` (additive; consumers ignore unknown fields). The
+ai-engineer's stuck gates pass one ("the design reviewer still objects
+after 2 rounds — blockers in REVIEW.md") and reorder `show` so
+REVIEW.md leads. The github surface headlines the reason in the status
+comment and posts one **immutable** escalation comment per reasoned gate
+occurrence (idempotent by `<!-- et:gate <run> <name>.<occ> -->` marker):
+the reason, the valid commands, and an excerpt of the first shown file.
+The mutable status comment remains the dashboard; escalation comments
+are never edited. Routine gates (no reason) stay dashboard-only.
+
+**Why.** The status comment is rewritten in place — deliberate anti-spam
+— but that made the one moment needing a human invisible twice over: the
+stuck story was overwritten when state moved on, and GitHub does not
+notify on comment edits, only on new comments. A field-tested stuck gate
+also excerpted the wrong file (the design's opening lines instead of the
+reviewer's objections) because show-order carried no notion of what
+mattered. Reason-presence is the loop's own definition of "worth a
+human's attention," so the surface needs no gate-name pattern matching.
+
+**Rejected.** Escalating every gate (route gates open constantly —
+spam). An append-only log section inside the single status comment
+(unbounded growth, still no notification). Surface-side heuristics for
+which gates matter (the loop knows; the surface should not guess).

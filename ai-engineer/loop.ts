@@ -95,13 +95,20 @@ export default async function aiEngineer(run: Run) {
         show = [ARTIFACT[stage]!, "ai/REVIEW.md"];
         if (review.passed && (check?.passed ?? true)) return "ready";
       }
+      // An escalation, not a routine stop: the reason is the headline, and
+      // the reviewer's blockers lead the shown files.
+      let stuckShow = ["ai/REVIEW.md", ...show.filter((f) => f !== "ai/REVIEW.md")];
       for (;;) {
-        const e = await run.gate(`${stage}-stuck`, { options: ["keep-going", "accept", "wrap-up", "consider"], show });
+        const e = await run.gate(`${stage}-stuck`, {
+          options: ["keep-going", "accept", "wrap-up", "consider"],
+          show: stuckShow,
+          reason: `the ${stage} reviewer still objects after ${rounds} round${rounds === 1 ? "" : "s"} — blockers in REVIEW.md`,
+        });
         const d = e.decision === "consider" ? await interpret(["keep-going", "accept", "wrap-up"], e.note ?? "") : e.decision;
         if (d === "accept") return "ready";
         if (d === "wrap-up") return "wrapped-up";
         if (d === "keep-going") break; // another block of rounds
-        show = ["ai/REPLY.md"]; // unclear: re-ask, question shown
+        stuckShow = ["ai/REPLY.md"]; // unclear: re-ask, question shown
       }
     }
   };

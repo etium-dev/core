@@ -2,7 +2,7 @@
 // language-neutral contract. Keep them in sync; the schema wins on conflict.
 
 export const SCHEMA_VERSION = 1;
-export const ETIUM_VERSION = "0.13.1"; // must match package.json (enforced by test)
+export const ETIUM_VERSION = "0.13.2"; // must match package.json (enforced by test)
 
 // ---------------------------------------------------------------------------
 // Ledger envelope and event payloads (§5 of DESIGN.md)
@@ -88,6 +88,9 @@ export interface GateOpenedData {
   occ: number;
   options: string[]; // the declared answer set; decisions validate against THIS (ledger authority)
   show: string[]; // run-dir-relative artifact paths (or workspace-relative)
+  /** Why this gate needs a human, in the loop's words — surfaces headline
+   * it and treat reasoned gates as escalations (own immutable comment). */
+  reason?: string;
 }
 export interface GateDecidedData {
   name: string;
@@ -277,7 +280,7 @@ export interface Run {
   readonly params: Record<string, string>;
   readonly workspace: string;
   step(name: string, opts: StepOptions): Promise<StepResult>;
-  gate(name: string, opts?: { show?: string[]; options?: string[] }): Promise<GateResult>;
+  gate(name: string, opts?: { show?: string[]; options?: string[]; reason?: string }): Promise<GateResult>;
   effect<T>(name: string, fn: () => T | Promise<T>): Promise<T>;
   abandon(reason?: string): Promise<never>;
   t(file: string): PromptSpec; // template relative to the loop file, then workspace

@@ -38,7 +38,7 @@ and task fields always win.
 | gate | opens | options |
 |---|---|---|
 | `route` | at kickoff (unless the directive already routed), and after every stage | `debug · design · plan · consider` — `implement` appears once a plan converged; `wrap-up` once implementation converged |
-| `<stage>-stuck` | reviewer still objects after `rounds` rounds | `keep-going · accept · wrap-up · consider` |
+| `<stage>-stuck` | reviewer still objects after `rounds` rounds | `keep-going · accept · wrap-up · consider` — carries a `reason` and shows REVIEW.md first; on GitHub it arrives as its own persistent comment |
 
 Routing is fail-closed by construction: `implement` is not a declinable
 request — it simply isn't offered until a plan exists. `consider` is the
@@ -49,7 +49,10 @@ guesses.
 
 **Artifacts** (in `ai/` on the run's branch): `DIAGNOSIS.md`, `DESIGN.md`,
 `PLAN.md`, `REPORT.md`, and `REVIEW.md` (reviewer verdict — first line
-`VERDICT: approve|revise`, stable objection keys). `ai/REPLY.md` is the
+`VERDICT: approve|revise`; only blockers force revise, under stable keys
+with a `Resolved since last review:` accounting line; non-blocking notes
+ride under an approve — the convergence contract's evidence is in
+[REVIEW_CONVERGENCE.md](REVIEW_CONVERGENCE.md)). `ai/REPLY.md` is the
 interpreter's working state (its reading of a freestyle message, or its
 question back) — shown at the gate, never committed on its own.
 

@@ -105,6 +105,12 @@ test("stuck path: reviewer never approves → <stage>-stuck gate → accept proc
   let gate = lastOpenGate(runDir);
   assert.equal(gate.name, "debug-stuck");
   assert.deepEqual(gate.options, ["keep-going", "accept", "wrap-up", "consider"]);
+  const opened0 = readLedger(runDir)
+    .filter((e) => e.type === "gate.opened")
+    .map((e) => e.data as { name: string; occ: number; show: string[]; reason?: string })
+    .find((g) => g.name === "debug-stuck" && g.occ === 0)!;
+  assert.match(opened0.reason!, /debug reviewer still objects/, "escalations carry their why (ADR-028)");
+  assert.equal(opened0.show[0], "ai/REVIEW.md", "the reviewer's blockers lead the shown files");
 
   await decide(base, runDir, gate, "keep-going"); // one more round, still revising → stuck.1
   gate = lastOpenGate(runDir);

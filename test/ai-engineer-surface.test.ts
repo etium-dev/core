@@ -36,7 +36,7 @@ if (method === "GET") {
     out = { permission: read("permissions.json", {})[decodeURIComponent(p.match(/collaborators\\/([^/]+)\\/permission/)[1])] || "none" };
   else if (/^repos\\/.+\\/issues\\/comments\\?/.test(p)) out = read("repo-comments.json", []);
   else if (/issues\\/(\\d+)$/.test(p)) out = read("issue-" + p.match(/issues\\/(\\d+)$/)[1] + ".json", {});
-  else if (/issues\\/(\\d+)\\/comments/.test(p)) out = []; // projection's upsert scan
+  else if (/issues\\/(\\d+)\\/comments/.test(p)) out = read("comments-" + p.match(/issues\\/(\\d+)/)[1] + ".json", []); // projection's upsert/escalation scan
 
   else if (/^repos\\/.+\\/pulls\\?head=/.test(p)) {
     const branch = decodeURIComponent(p.match(/head=[^:]+:([^&]+)/)[1]);
@@ -56,7 +56,7 @@ const SLOOP = `export default async function (run) {
   await run.step("work", { harness: "exec",
     command: "mkdir -p ai && echo notes-content > ai/NOTES.md && git add -A && git -c user.name=t -c user.email=t@t commit -qm work" });
   for (;;) {
-    const d = await run.gate("route", { options: ["plan", "wrap-up", "consider"], show: ["ai/NOTES.md"] });
+    const d = await run.gate("route", { options: ["plan", "wrap-up", "consider"], show: ["ai/NOTES.md"], reason: "stub needs a human here" });
     if (d.decision === "wrap-up") return;
     if (d.decision === "plan") await run.step("plan", { harness: "exec", command: "echo planned > planned.txt" });
     // consider: record and re-open — interpretation is the real loop's job
@@ -150,7 +150,19 @@ test("kickoff comment → worktree run with directive; read-only commenter ignor
   assert.ok(!status.body.body!.includes("/et consider"), "consider is internal, not a listed command");
   assert.match(status.body.body!, /just say what you want/); // freestyle invitation
   assert.match(status.body.body!, /notes-content/); // excerpt of the gate's first show file
+  assert.match(status.body.body!, /stub needs a human here/); // the gate's reason is the headline
   assert.ok(w.some((x) => /issues\/7\/labels$/.test(x.path) && x.body.labels?.includes("et:waiting")));
+
+  // A reasoned gate escalates: one immutable comment per gate occurrence…
+  const esc = w.filter((x) => x.method === "POST" && /issues\/7\/comments$/.test(x.path) && x.body.body?.startsWith("<!-- et:gate "));
+  assert.equal(esc.length, 1, "one escalation comment per reasoned gate occurrence");
+  assert.match(esc[0]!.body.body!, /needs a decision — stub needs a human here/);
+  // …and never a second one once it exists on the issue.
+  fixture(stubDir, "repo-comments.json", []); // quiet stream: no new decisions, same gate occurrence
+  fixture(stubDir, "comments-7.json", [{ id: 900, body: esc[0]!.body.body, created_at: soon(2), user: { login: "agentbot" } }]);
+  await tick();
+  const esc2 = writes().filter((x) => x.method === "POST" && /issues\/7\/comments$/.test(x.path) && x.body.body?.startsWith("<!-- et:gate "));
+  assert.equal(esc2.length, 1, "escalation comment never reposted");
   // Every gh call carried the deployment's own config dir (ADR-022).
   const envs = fs.readFileSync(path.join(stubDir, "envs.txt"), "utf8").trim().split("\n");
   const expected = path.join(workdir, ".etium", "gh");

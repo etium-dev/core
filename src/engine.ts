@@ -357,7 +357,7 @@ export async function executeLoop(ctx: EngineCtx): Promise<EngineOutcome> {
       }
     },
 
-    async gate(name: string, opts?: { show?: string[]; options?: string[] }): Promise<GateResult> {
+    async gate(name: string, opts?: { show?: string[]; options?: string[]; reason?: string }): Promise<GateResult> {
       const occ = nextOcc("g", name);
       const key = stepKey("g", name, occ);
       visited.add(key);
@@ -368,12 +368,9 @@ export async function executeLoop(ctx: EngineCtx): Promise<EngineOutcome> {
       if (rec?.decided)
         return { decision: rec.decided.decision, note: rec.decided.note, by: rec.decided.by };
       if (!rec?.opened) {
-        writer.append("gate.opened", { name, occ, options, show: opts?.show ?? [] });
-        state.gates.set(`${name}.${occ}`, {
-          name,
-          occ,
-          opened: { name, occ, options, show: opts?.show ?? [] },
-        });
+        const data = { name, occ, options, show: opts?.show ?? [], ...(opts?.reason && { reason: opts.reason }) };
+        writer.append("gate.opened", data);
+        state.gates.set(`${name}.${occ}`, { name, occ, opened: data });
       } else {
         const recorded = rec.opened.options ?? DEFAULT_GATE_OPTIONS;
         if (JSON.stringify(recorded) !== JSON.stringify(options))

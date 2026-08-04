@@ -151,7 +151,9 @@ run DONE</span></code></pre>
   <strong>both</strong> its reviewer and your <code>check</code> command.
   When a reviewer still objects after <code>rounds</code> rounds (default
   2), you get a <code>&lt;stage&gt;-stuck</code> gate:
-  <code>keep-going</code>, <code>accept</code>, or <code>wrap-up</code>.
+  <code>keep-going</code>, <code>accept</code>, or <code>wrap-up</code> —
+  on GitHub it arrives as its own comment carrying why, with the
+  reviewer's blockers quoted.
   Walk away at any gate; <code>kill&nbsp;-9</code> anything;
   <code>etium tick</code> from cron reconciles. That's the operating model:
   the AI works, parks, and waits for you.</p>

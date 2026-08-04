@@ -26,7 +26,7 @@ import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { defaultParams, ghConfigDir } from "./config.ts";
-import type { RunView, Surface, SurfaceDecision, SurfacePollResult, SurfaceTask } from "./types.ts";
+import type { GateOpenedData, RunView, Surface, SurfaceDecision, SurfacePollResult, SurfaceTask } from "./types.ts";
 
 const env = (k: string, d?: string): string => {
   const v = process.env[k] ?? d;
@@ -106,23 +106,37 @@ function prFor(view: RunView): { number: number; state: string; merged_at?: stri
   return prs[0];
 }
 
+// Context excerpt: the gate's first shown artifact — the stage's document,
+// the reviewer's blockers, the interpreter's question.
+function excerpt(view: RunView, src?: string): string[] {
+  const p = src ? [view.workspace, view.dir].map((d) => path.join(d, src)).find((f) => fs.existsSync(f)) : undefined;
+  if (!p) return [];
+  const ex = fs.readFileSync(p, "utf8").split("\n").slice(0, 8).join("\n").trim();
+  return ex ? ["", "```", ex, "```"] : [];
+}
+
+function commandLines(g: GateOpenedData): string[] {
+  const lines = [g.options.filter((o) => o !== "consider").map((o) => `\`${PREFIX} ${o}\``).join(" · ")];
+  if (g.options.includes("consider")) lines.push(`…or just say what you want: \`${PREFIX} <your words>\``);
+  return lines;
+}
+
+/** A reasoned gate is an escalation: it gets its own immutable comment —
+ * history the rewritten dashboard can't keep, and an edit never notifies. */
+function escalationBody(view: RunView, g: GateOpenedData, marker: string): string {
+  return [marker, `**AI engineer** needs a decision — ${g.reason}`, ...commandLines(g), ...excerpt(view, g.show[0])].join("\n");
+}
+
 function statusBody(view: RunView): string {
   const lines = [`<!-- et:status ${view.id} -->`, `**AI engineer** — run \`${view.id}\``];
   if (view.completed) {
     lines.push(`state: **${view.completed.status}**${view.completed.summary ? ` — ${view.completed.summary}` : ""}`);
   } else if (view.openGates.length) {
     for (const g of view.openGates) {
+      if (g.reason) lines.push(`**${g.reason}**`);
       lines.push(`waiting on **${g.name}** — reply with one of:`);
-      lines.push(g.options.filter((o) => o !== "consider").map((o) => `\`${PREFIX} ${o}\``).join(" · "));
-      if (g.options.includes("consider")) lines.push(`…or just say what you want: \`${PREFIX} <your words>\``);
-      // Context excerpt: the gate's first shown artifact — the stage's
-      // document, the reviewer's objection, the interpreter's question.
-      const src = g.show[0];
-      const p = src ? [view.workspace, view.dir].map((d) => path.join(d, src)).find((f) => fs.existsSync(f)) : undefined;
-      if (p) {
-        const ex = fs.readFileSync(p, "utf8").split("\n").slice(0, 8).join("\n").trim();
-        if (ex) lines.push("", "```", ex, "```");
-      }
+      lines.push(...commandLines(g));
+      lines.push(...excerpt(view, g.show[0]));
     }
     lines.push(`(add a note after the command; \`${PREFIX} stop\` abandons the attempt)`);
   } else {
@@ -265,15 +279,21 @@ const surface: Surface = {
       }
     }
 
-    // One bot-owned status comment, rewritten in place (never read back).
+    // One bot-owned status comment, rewritten in place (never read back)…
     const marker = `<!-- et:status ${view.id} -->`;
     const body = statusBody(view);
-    const existing = ((api(`repos/${REPO()}/issues/${issueN}/comments?per_page=100`) ?? []) as Comment[])
-      .find((c) => c.body.startsWith(marker));
+    const comments = (api(`repos/${REPO()}/issues/${issueN}/comments?per_page=100`) ?? []) as Comment[];
+    const existing = comments.find((c) => c.body.startsWith(marker));
     if (existing) {
       if (existing.body !== body) patch(`repos/${REPO()}/issues/comments/${existing.id}`, { body });
     } else {
       post(`repos/${REPO()}/issues/${issueN}/comments`, { body });
+    }
+    // …plus one immutable comment per reasoned gate occurrence (ADR-028).
+    for (const g of view.openGates.filter((x) => x.reason)) {
+      const gm = `<!-- et:gate ${view.id} ${g.name}.${g.occ} -->`;
+      if (!comments.some((c) => c.body.startsWith(gm)))
+        post(`repos/${REPO()}/issues/${issueN}/comments`, { body: escalationBody(view, g, gm) });
     }
 
     // Decoration labels: write-only, mutually exclusive, best-effort.

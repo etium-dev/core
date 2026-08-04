@@ -112,7 +112,7 @@ Newline-delimited JSON (JSONL), append-only, single writer. Crash recovery rule:
 | `step.started` | supervisor | name, occ, harness, model?, prompt sha256, env profile, auth env names?, budget, config digest |
 | `step.activity` | supervisor | step ref, kind: `message` \| `tool` \| `usage`, summary (short string), usage delta?, raw: RawRef |
 | `step.completed` | supervisor | step ref, status: `ok` \| `error` \| `killed` \| `budget`, exit code?, usage totals, raw file + sha256, artifacts[], passed? |
-| `gate.opened` | supervisor | name, occ, options (declared answer set; `["approve","reject"]` when undeclared), show: artifact refs |
+| `gate.opened` | supervisor | name, occ, options (declared answer set; `["approve","reject"]` when undeclared), show: artifact refs, reason? (why a human is needed — surfaces headline it and escalate reasoned gates) |
 | `gate.decided` | lock holder | name, occ, decision: one element of the recorded options, note?, by, via: `cli` \| `preapproval` \| `github` \| `mcp` |
 | `effect.recorded` | supervisor | name, occ, value (small JSON) |
 | `budget.warning` | supervisor | step ref?, kind: `stall` \| `approaching`, detail |

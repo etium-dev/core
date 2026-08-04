@@ -105,7 +105,9 @@ plan — reviewers actually object (`VERDICT: revise` with stable
 objection keys — the builder must address them next round), and
 `implement` must pass **both** its reviewer and your `check` command. When
 a reviewer still objects after `rounds` rounds (default 2), you get a
-`<stage>-stuck` gate: `keep-going`, `accept`, or `wrap-up`. Walk away at
+`<stage>-stuck` gate: `keep-going`, `accept`, or `wrap-up` — on GitHub it
+arrives as its own comment carrying why, with the reviewer's blockers
+quoted. Walk away at
 any gate; `kill -9` anything; `etium tick` from cron reconciles. That's the
 operating model: the AI works, parks, and waits for you.
 
