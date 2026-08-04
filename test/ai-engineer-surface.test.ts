@@ -1,8 +1,10 @@
-// The GitHub surface against a stub `gh`: assignment → task (with worktree
-// branch), trusted `/et` comments → decisions, untrusted ignored, `/et stop`
-// and issue-close → abandons, and projection (branch pushed to origin, draft
-// PR created once artifacts exist, status comment upserted with the valid
-// commands, decoration label added). No network, no real GitHub.
+// The GitHub surface against a stub `gh`: a `/et …` comment from someone
+// with Write kickstarts a run (worktree branch, directive param); exact
+// `/et <option>` comments decide gates; freestyle text is delivered as a
+// `consider` decision; read-only commenters are ignored; `/et stop` and
+// issue-close abandon; projection (branch pushed to origin, draft PR once
+// artifacts exist, status comment upserted, decoration label added).
+// No network, no real GitHub. (ADR-022 identity, ADR-023 events.)
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -32,10 +34,10 @@ if (method === "GET") {
   if (p === "user") out = { login: "agentbot" };
   else if (/collaborators\\/([^/]+)\\/permission/.test(p))
     out = { permission: read("permissions.json", {})[decodeURIComponent(p.match(/collaborators\\/([^/]+)\\/permission/)[1])] || "none" };
-  else if (/^repos\\/.+\\/issues\\?/.test(p)) out = read("issues.json", []);
+  else if (/^repos\\/.+\\/issues\\/comments\\?/.test(p)) out = read("repo-comments.json", []);
   else if (/issues\\/(\\d+)$/.test(p)) out = read("issue-" + p.match(/issues\\/(\\d+)$/)[1] + ".json", {});
-  else if (/issues\\/(\\d+)\\/timeline/.test(p)) out = read("timeline-" + p.match(/issues\\/(\\d+)/)[1] + ".json", []);
-  else if (/issues\\/(\\d+)\\/comments/.test(p)) out = read("comments-" + p.match(/issues\\/(\\d+)/)[1] + ".json", []);
+  else if (/issues\\/(\\d+)\\/comments/.test(p)) out = []; // projection's upsert scan
+
   else if (/^repos\\/.+\\/pulls\\?head=/.test(p)) {
     const branch = decodeURIComponent(p.match(/head=[^:]+:([^&]+)/)[1]);
     out = read("prs.json", []).filter((x) => x.head && x.head.ref === branch);
@@ -54,9 +56,10 @@ const SLOOP = `export default async function (run) {
   await run.step("work", { harness: "exec",
     command: "mkdir -p ai && echo intake > ai/INTAKE.md && git add -A && git -c user.name=t -c user.email=t@t commit -qm work" });
   for (;;) {
-    const d = await run.gate("route", { options: ["plan", "wrap-up"] });
+    const d = await run.gate("route", { options: ["plan", "wrap-up", "consider"], show: ["ai/INTAKE.md"] });
     if (d.decision === "wrap-up") return;
-    await run.step("plan", { harness: "exec", command: "echo planned > planned.txt" });
+    if (d.decision === "plan") await run.step("plan", { harness: "exec", command: "echo planned > planned.txt" });
+    // consider: record and re-open — interpretation is the real loop's job
   }
 }
 `;
@@ -97,29 +100,36 @@ function setup() {
     fs.existsSync(path.join(stubDir, "writes.jsonl"))
       ? fs.readFileSync(path.join(stubDir, "writes.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l) as { method: string; path: string; body: { body?: string; labels?: string[] } })
       : [];
-  return { root, stubDir, workdir, bare, base, g, writes };
+  const tick = () => tickOnce(base, "unused-entry", true, [surface]);
+  const soon = (s: number) => new Date(Date.now() + s * 1000).toISOString();
+  const say = (n: number, id: number, body: string, login: string, at: string) =>
+    ({ id, body, created_at: at, user: { login }, issue_url: `https://api.github.com/repos/acme/widgets/issues/${n}` });
+  return { root, stubDir, workdir, bare, base, g, writes, tick, soon, say };
 }
 
 const fixture = (dir: string, name: string, data: unknown) =>
   fs.writeFileSync(path.join(dir, name), JSON.stringify(data));
 
-test("assignment → worktree run; read-only assigner ignored; projection pushes branch, opens draft PR, upserts status, labels", async () => {
-  const { stubDir, base, bare, g, writes, workdir } = setup();
-  fixture(stubDir, "issues.json", [
-    { number: 7, state: "open", title: "Fix the widget", body: "it wobbles", assignees: [{ login: "agentbot" }] },
-    { number: 9, state: "open", title: "Sneaky", body: "", assignees: [{ login: "agentbot" }] },
-  ]);
-  fixture(stubDir, "timeline-7.json", [{ event: "assigned", assignee: { login: "agentbot" }, actor: { login: "carlospche" } }]);
-  fixture(stubDir, "timeline-9.json", [{ event: "assigned", assignee: { login: "agentbot" }, actor: { login: "rando" } }]);
+test("kickoff comment → worktree run with directive; read-only commenter ignored; projection pushes branch, opens draft PR, upserts status, labels", async () => {
+  const { stubDir, base, bare, g, writes, workdir, tick, soon, say } = setup();
+  fixture(stubDir, "issue-7.json", { number: 7, state: "open", title: "Fix the widget", body: "it wobbles" });
+  fixture(stubDir, "issue-9.json", { number: 9, state: "open", title: "Sneaky", body: "" });
+  await tick(); // first tick: the cursor starts at "now" — nothing to see yet
+  assert.ok(!fs.existsSync(path.join(base, "runs")) || fs.readdirSync(path.join(base, "runs")).length === 0);
 
-  await tickOnce(base, "unused-entry", true, [surface]);
+  fixture(stubDir, "repo-comments.json", [
+    say(7, 1, "/et fix the wobble", "carlospche", soon(1)),
+    say(9, 2, "/et do things", "rando", soon(1)),
+  ]);
+  await tick();
 
   const runsDir = path.join(base, "runs");
-  assert.equal(fs.readdirSync(runsDir).length, 1, "read-permission assigner must not start attempts");
+  assert.equal(fs.readdirSync(runsDir).length, 1, "read-permission commenter must not start attempts");
   const runId = fs.readdirSync(runsDir)[0]!;
   const created = readLedger(path.join(runsDir, runId)).find((e) => e.type === "run.created")!
     .data as { params: Record<string, string>; workspace: string; worktree?: { branch: string } };
   assert.equal(created.params.issue, "7");
+  assert.equal(created.params.directive, "fix the wobble"); // the human's words ride into triage (ADR-023)
   assert.equal(created.worktree?.branch, "etium/issue-7-attempt-0");
   // The engineer's commits author as the acting account (ADR-017).
   const wsIdent = spawnSync("git", ["-C", created.workspace, "config", "user.name"], { encoding: "utf8" });
@@ -131,6 +141,9 @@ test("assignment → worktree run; read-only assigner ignored; projection pushes
   const status = w.find((x) => /issues\/7\/comments$/.test(x.path))!;
   assert.match(status.body.body!, /\/et plan/);
   assert.match(status.body.body!, /\/et wrap-up/);
+  assert.ok(!status.body.body!.includes("/et consider"), "consider is internal, not a listed command");
+  assert.match(status.body.body!, /just say what you want/); // freestyle invitation
+  assert.match(status.body.body!, /intake/); // excerpt of the gate's first show file
   assert.ok(w.some((x) => /issues\/7\/labels$/.test(x.path) && x.body.labels?.includes("et:waiting")));
   // Every gh call carried the deployment's own config dir (ADR-022).
   const envs = fs.readFileSync(path.join(stubDir, "envs.txt"), "utf8").trim().split("\n");
@@ -138,18 +151,16 @@ test("assignment → worktree run; read-only assigner ignored; projection pushes
   assert.ok(envs.length > 0 && envs.every((e) => e === expected), `repo-scoped gh: ${envs[0]}`);
 });
 
-test("an issue closed after being unassigned still abandons its run (direct fetch)", async () => {
-  const { stubDir, base } = setup();
-  fixture(stubDir, "issues.json", [
-    { number: 7, state: "open", title: "Fix", body: "", assignees: [{ login: "agentbot" }] },
-  ]);
-  fixture(stubDir, "timeline-7.json", [{ event: "assigned", assignee: { login: "agentbot" }, actor: { login: "carlospche" } }]);
-  await tickOnce(base, "unused-entry", true, [surface]); // creates + parks at route
+test("issue close abandons the active run (lifecycle sweep fetches the issue directly)", async () => {
+  const { stubDir, base, tick, soon, say } = setup();
+  fixture(stubDir, "issue-7.json", { number: 7, state: "open", title: "Fix", body: "" });
+  await tick();
+  fixture(stubDir, "repo-comments.json", [say(7, 1, "/et go", "carlospche", soon(1))]);
+  await tick(); // creates + parks at route
 
-  // Unassigned then closed: the assignee query no longer returns #7.
-  fixture(stubDir, "issues.json", []);
-  fixture(stubDir, "issue-7.json", { number: 7, state: "closed", title: "Fix", body: "", assignees: [] });
-  await tickOnce(base, "unused-entry", true, [surface]);
+  fixture(stubDir, "repo-comments.json", []);
+  fixture(stubDir, "issue-7.json", { number: 7, state: "closed", title: "Fix", body: "" });
+  await tick();
 
   const runId = fs.readdirSync(path.join(base, "runs"))[0]!;
   const last = readLedger(path.join(base, "runs", runId)).at(-1)!;
@@ -157,22 +168,20 @@ test("an issue closed after being unassigned still abandons its run (direct fetc
   assert.deepEqual(last.data, { status: "abandoned", summary: "issue closed" });
 });
 
-test("trusted /et command decides; untrusted ignored; /et stop abandons; issue close abandons", async () => {
-  const { stubDir, base, writes } = setup();
-  fixture(stubDir, "issues.json", [
-    { number: 7, state: "open", title: "Fix", body: "", assignees: [{ login: "agentbot" }] },
-  ]);
-  fixture(stubDir, "timeline-7.json", [{ event: "assigned", assignee: { login: "agentbot" }, actor: { login: "carlospche" } }]);
-  await tickOnce(base, "unused-entry", true, [surface]); // creates + parks at route
+test("exact /et word decides; freestyle → consider with the full text; read-only ignored; /et stop abandons; a new /et is attempt #1", async () => {
+  const { stubDir, base, writes, tick, soon, say } = setup();
+  fixture(stubDir, "issue-7.json", { number: 7, state: "open", title: "Fix", body: "" });
+  await tick();
+  fixture(stubDir, "repo-comments.json", [say(7, 1, "/et start on this", "carlospche", soon(1))]);
+  await tick(); // creates + parks at route
 
   const runId = fs.readdirSync(path.join(base, "runs"))[0]!;
   const runDir = path.join(base, "runs", runId);
-  const soon = (s: number) => new Date(Date.now() + s * 1000).toISOString();
-  fixture(stubDir, "comments-7.json", [
-    { id: 1, body: "/et plan looks right", created_at: soon(1), user: { login: "rando" } },
-    { id: 2, body: "/et plan start with the retry", created_at: soon(2), user: { login: "carlospche" } },
+  fixture(stubDir, "repo-comments.json", [
+    say(7, 2, "/et plan looks right", "rando", soon(2)),
+    say(7, 3, "/et plan start with the retry", "carlospche", soon(3)),
   ]);
-  await tickOnce(base, "unused-entry", true, [surface]);
+  await tick();
 
   const decided = readLedger(runDir).filter((e) => e.type === "gate.decided");
   assert.equal(decided.length, 1, "untrusted command ignored");
@@ -181,26 +190,35 @@ test("trusted /et command decides; untrusted ignored; /et stop abandons; issue c
     { decision: "plan", by: "carlospche", via: "github", note: "start with the retry" });
   assert.ok(fs.existsSync(path.join(base, "worktrees", runId, "planned.txt")), "loop proceeded on the decision");
 
-  fixture(stubDir, "comments-7.json", [
-    { id: 3, body: "/et stop enough for today", created_at: soon(3), user: { login: "carlospche" } },
+  // No exact option match → the whole message is delivered as `consider`.
+  fixture(stubDir, "repo-comments.json", [
+    say(7, 4, "/et actually just wrap this whole thing up", "carlospche", soon(4)),
   ]);
-  await tickOnce(base, "unused-entry", true, [surface]);
+  await tick();
+  const consider = readLedger(runDir).filter((e) => e.type === "gate.decided").at(-1)!
+    .data as { decision: string; note?: string };
+  assert.equal(consider.decision, "consider");
+  assert.match(consider.note!, /wrap this whole thing up/);
+
+  fixture(stubDir, "repo-comments.json", [
+    say(7, 5, "/et stop enough for today", "carlospche", soon(5)),
+  ]);
+  await tick();
   const completed = readLedger(runDir).at(-1)!;
   assert.equal(completed.type, "run.completed");
   assert.deepEqual(completed.data, { status: "abandoned", summary: "enough for today" });
 
-  // A later reassignment is a new attempt with a new branch — and a closed
-  // issue with an active run abandons it.
-  fixture(stubDir, "comments-7.json", []);
-  await tickOnce(base, "unused-entry", true, [surface]);
-  const runs = fs.readdirSync(path.join(base, "runs"));
-  assert.equal(runs.length, 2, "reassignment created attempt #1");
-  const second = runs.find((r) => r !== runId)!;
-  fixture(stubDir, "issues.json", [
-    { number: 7, state: "closed", title: "Fix", body: "", assignees: [{ login: "agentbot" }] },
+  // With no active run, a fresh `/et` comment is a new attempt with a new branch.
+  fixture(stubDir, "repo-comments.json", [
+    say(7, 6, "/et try again", "carlospche", soon(6)),
   ]);
-  await tickOnce(base, "unused-entry", true, [surface]);
-  const last = readLedger(path.join(base, "runs", second)).at(-1)!;
-  assert.deepEqual(last.data, { status: "abandoned", summary: "issue closed" });
+  await tick();
+  const runs = fs.readdirSync(path.join(base, "runs"));
+  assert.equal(runs.length, 2, "new kickoff created attempt #1");
+  const second = runs.find((r) => r !== runId)!;
+  const created2 = readLedger(path.join(base, "runs", second)).find((e) => e.type === "run.created")!
+    .data as { params: Record<string, string>; worktree?: { branch: string } };
+  assert.equal(created2.worktree?.branch, "etium/issue-7-attempt-1");
+  assert.equal(created2.params.directive, "try again");
   assert.ok(writes().length > 0);
 });

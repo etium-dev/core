@@ -33,8 +33,8 @@ function lastOpenGate(runDir: string): { name: string; occ: number; options: str
   return open[0]!;
 }
 
-async function decide(base: string, runDir: string, gate: { name: string; occ: number }, decision: string) {
-  writeDecision(runDir, { name: gate.name, occ: gate.occ, decision, by: "operator", via: "cli", ts: new Date().toISOString() });
+async function decide(base: string, runDir: string, gate: { name: string; occ: number }, decision: string, note?: string) {
+  writeDecision(runDir, { name: gate.name, occ: gate.occ, decision, note, by: "operator", via: "cli", ts: new Date().toISOString() });
   await tickOnce(base, "unused-entry", true);
 }
 
@@ -60,7 +60,7 @@ test("full graph: triage → design (revise round) → plan → implement+check 
   await tickOnce(base, "unused-entry", true);
   let gate = lastOpenGate(runDir);
   assert.equal(gate.name, "route");
-  assert.deepEqual(gate.options, ["triage", "debug", "design", "plan"]); // no implement yet: fail-closed routing
+  assert.deepEqual(gate.options, ["triage", "debug", "design", "plan", "consider"]); // no implement yet: fail-closed routing
 
   await decide(base, runDir, gate, "design"); // revise round then approve: design.0, design-review.0, design.1, design-review.1
   const designSteps = readLedger(runDir)
@@ -70,15 +70,15 @@ test("full graph: triage → design (revise round) → plan → implement+check 
   assert.equal(designSteps.length, 2, "reviser forced a second builder round");
 
   gate = lastOpenGate(runDir);
-  assert.deepEqual(gate.options, ["triage", "debug", "design", "plan"]); // design done ≠ plan done
+  assert.deepEqual(gate.options, ["triage", "debug", "design", "plan", "consider"]); // design done ≠ plan done
 
   await decide(base, runDir, gate, "plan");
   gate = lastOpenGate(runDir);
-  assert.deepEqual(gate.options, ["triage", "debug", "design", "plan", "implement"]); // plan unlocks implement
+  assert.deepEqual(gate.options, ["triage", "debug", "design", "plan", "implement", "consider"]); // plan unlocks implement
 
   await decide(base, runDir, gate, "implement");
   gate = lastOpenGate(runDir);
-  assert.deepEqual(gate.options, ["triage", "debug", "design", "plan", "implement", "wrap-up"]);
+  assert.deepEqual(gate.options, ["triage", "debug", "design", "plan", "implement", "wrap-up", "consider"]);
   assert.ok(fs.existsSync(path.join(runDir, "ws", "fixed.txt")), "check gated on real workspace evidence");
 
   await decide(base, runDir, gate, "wrap-up");
@@ -105,7 +105,7 @@ test("stuck path: reviewer never approves → <stage>-stuck gate → accept proc
 
   let gate = lastOpenGate(runDir);
   assert.equal(gate.name, "debug-stuck");
-  assert.deepEqual(gate.options, ["keep-going", "accept", "wrap-up"]);
+  assert.deepEqual(gate.options, ["keep-going", "accept", "wrap-up", "consider"]);
 
   await decide(base, runDir, gate, "keep-going"); // one more round, still revising → stuck.1
   gate = lastOpenGate(runDir);
@@ -121,4 +121,70 @@ test("stuck path: reviewer never approves → <stage>-stuck gate → accept proc
   gate = lastOpenGate(runDir);
   assert.equal(gate.name, "route");
   assert.ok(!gate.options.includes("wrap-up"));
+});
+
+test("kickoff directive: triage's route is followed without asking the gate (ADR-023)", async () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "etium-ai-"));
+  const { runDir } = createRun(base, {
+    task: "the retry helper drops the last attempt",
+    loop: LOOP,
+    params: {
+      harness: "exec",
+      rounds: "1",
+      directive: "fix this",
+      "cmd.triage": `mkdir -p ai && printf '## Route\\nplan — the path is clear\\n' > ai/INTAKE.md`,
+      "cmd.plan": "printf '1. fix retry\\n' > ai/PLAN.md",
+      "cmd.plan-review": APPROVE,
+    },
+  });
+  await tickOnce(base, "unused-entry", true);
+
+  const gate = lastOpenGate(runDir);
+  assert.equal(gate.name, "route");
+  assert.ok(gate.options.includes("implement"), "plan converged before any gate opened");
+  const evts = readLedger(runDir);
+  const planAt = evts.findIndex((e) => e.type === "step.started" && (e.data as { name: string }).name === "plan");
+  const gateAt = evts.findIndex((e) => e.type === "gate.opened");
+  assert.ok(planAt >= 0 && planAt < gateAt, "auto-route ran the stage before the first gate");
+});
+
+test("consider: the interpreter maps freestyle to an option; unclear re-asks showing the question", async () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "etium-ai-"));
+  const { runDir } = createRun(base, {
+    task: "tidy the parser",
+    loop: LOOP,
+    params: {
+      harness: "exec",
+      rounds: "1",
+      "cmd.triage": "mkdir -p ai && printf 'recommend: plan\\n' > ai/INTAKE.md",
+      "cmd.interpret": `if [ -f ai/.i ]; then printf 'ACTION: plan\\n' > ai/REPLY.md; else printf 'ACTION: unclear\\nWhich stage did you mean?\\n' > ai/REPLY.md && touch ai/.i; fi`,
+      "cmd.plan": "printf '1. tidy\\n' > ai/PLAN.md",
+      "cmd.plan-review": APPROVE,
+    },
+  });
+  await tickOnce(base, "unused-entry", true);
+  let gate = lastOpenGate(runDir);
+  assert.equal(gate.name, "route");
+
+  await decide(base, runDir, gate, "consider", "please do the planning thing");
+  // First interpretation came back unclear → the same gate re-opens with the question shown.
+  gate = lastOpenGate(runDir);
+  assert.equal(gate.name, "route");
+  assert.equal(gate.occ, 1);
+  const reopened = readLedger(runDir)
+    .filter((e) => e.type === "gate.opened")
+    .map((e) => e.data as { name: string; occ: number; show?: string[] })
+    .find((g) => g.name === "route" && g.occ === 1)!;
+  assert.deepEqual(reopened.show, ["ai/REPLY.md"]);
+
+  await decide(base, runDir, gate, "consider", "make the plan");
+  // Second interpretation resolved to plan → the stage converged, implement unlocked.
+  gate = lastOpenGate(runDir);
+  assert.equal(gate.name, "route");
+  assert.equal(gate.occ, 2);
+  assert.ok(gate.options.includes("implement"));
+  const interprets = readLedger(runDir)
+    .filter((e) => e.type === "step.started")
+    .filter((e) => (e.data as { name: string }).name === "interpret");
+  assert.equal(interprets.length, 2);
 });

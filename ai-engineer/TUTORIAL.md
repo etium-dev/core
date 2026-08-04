@@ -9,8 +9,8 @@ throwaway work may go** (yours to pick when testing).
 
 This walks you from zero to a working AI engineer: first a five-minute
 token-free dry run in your terminal, then real model runs, then wired to
-GitHub — where assigning an issue produces a draft PR whose every stage you
-command with comments and approve through gates. Nothing here requires a
+GitHub — where a `/et` comment on an issue produces a draft PR whose every
+stage you command with comments and approve through gates. Nothing here requires a
 server, a daemon, or an API key handed to anything: etium supervises,
 harnesses bring their own auth, `gh` brings yours.
 
@@ -130,19 +130,23 @@ ETIUM_GH_REPO=you/your-repo ETIUM_GH_LOOP=ai-engineer/loop.ts \
 
 Then, on GitHub:
 
-1. **Assign yourself** (or the configured agent user) to an issue. Within a
-   minute, the surface creates a run on branch `etium/issue-N-attempt-0`,
-   triage runs, and a status comment appears on the issue telling you
-   exactly what it's waiting for and which commands are valid.
-2. **Command with comments.** `/et plan start with the retry logic` — the
-   word is matched against the open gate's declared options, your text
-   becomes the note, and anyone without Write is ignored.
+1. **Comment `/et <what you want>`** on an issue — `/et fix this`,
+   `/et propose a design`, or just `/et go`. Within a minute, the surface
+   creates a run on branch `etium/issue-N-attempt-0`, triage reads your
+   words as the routing directive and heads straight into the right stage,
+   and a status comment appears on the issue telling you exactly what it's
+   waiting for and which commands are valid.
+2. **Command with comments.** `/et plan start with the retry logic` — an
+   exact option word decides the open gate and your text becomes the note.
+   Anything else — `/et actually, wrap this up` — goes to the loop's
+   interpreter, which maps it to the vocabulary or asks you to rephrase.
+   Anyone without Write is ignored.
 3. **Review the draft PR.** As soon as a stage produces artifacts, the
    surface pushes the branch and opens one draft PR. The `ai/` documents
    and the commits are the reviewable work.
 4. **Finish on GitHub's own terms.** Merging the PR ends the run. Closing
    the PR or the issue abandons the attempt. `/et stop` abandons it with
-   your note as the reason. Re-assigning later starts attempt #1 on a
+   your note as the reason. A later `/et` comment starts attempt #1 on a
    fresh branch — abandoned work never blocks a retry.
 
 The `et:working` / `et:waiting` / `et:blocked` labels are decoration for
@@ -162,7 +166,7 @@ On a spare machine:
    token page with the right scopes pre-selected), and log the harness in
    (`pi` → `/login`).
 
-Now **assigning the bot** to an issue starts an attempt, and you interact
+Now a **`/et` comment** on an issue starts an attempt, and you interact
 entirely through issue comments and PR reviews from anywhere. If the
 machine goes offline, nothing lies — runs park, status freezes, and the
 next tick after it returns reconciles everything. Full env-var reference
@@ -176,7 +180,7 @@ and the loop's params/gates/artifacts contract: [README.md](README.md).
   stale work; finish or abandon runs first.
 - **Tune the knobs.** `--param rounds=3`, `--param wall=30m`, `--param
   check="make test"`, per-run `--harness`/`--param model=…`.
-- **Change the workflow itself.** The loop is 97 lines of ordinary
+- **Change the workflow itself.** The loop is ~140 lines of ordinary
   TypeScript — add a stage, change an option set, split a persona. The
   loop-authoring guide (`WRITING_LOOPS.md`) is the manual; the surface
   needs no changes, because it matches commands against whatever options
@@ -184,14 +188,14 @@ and the loop's params/gates/artifacts contract: [README.md](README.md).
 
 ## Troubleshooting
 
-- **Nothing happens after assigning an issue** — the wake-up isn't
+- **Nothing happens after your `/et` comment** — the wake-up isn't
   running, the deployment isn't signed in (re-run `etium configure`), or
-  the assigner doesn't have Write (ignored by design). Run the tick
+  the commenter doesn't have Write (ignored by design). Run the tick
   command by hand and read its output.
-- **Your `/et` comment did nothing** — you don't have Write on the
-  repository, or the word isn't among the open gate's options; the status
-  comment always lists the valid set. Decisions fail closed, silently on
-  the invalid side.
+- **Your `/et` command was "misheard"** — freestyle text goes to the
+  interpreter, which acts only when your intent maps cleanly to an option
+  and otherwise asks you to rephrase; the status comment always lists the
+  exact valid words when you'd rather be literal.
 - **The run errored about harness auth** — the harness on the executing
   machine isn't logged in; the error names the exact remedy (e.g. `pi`
   then `/login`). Fix and `etium resume <run>` — completed steps replay

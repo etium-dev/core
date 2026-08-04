@@ -84,14 +84,6 @@ function canCommand(login: string, cache: Map<string, boolean>): boolean {
   return v;
 }
 
-/** Last assignment of the agent must come from someone with Write (invariant 6). */
-function assignedByAuthorized(issueN: number, can: Map<string, boolean>): boolean {
-  const tl = (api(`repos/${REPO()}/issues/${issueN}/timeline?per_page=100`) ?? []) as {
-    event?: string; assignee?: { login: string }; actor?: { login: string };
-  }[];
-  const last = [...tl].reverse().find((e) => e.event === "assigned" && e.assignee?.login === agent());
-  return !!last && canCommand(last.actor?.login ?? "", can);
-}
 
 function parseCommand(body: string): { word: string; note?: string } | null {
   const m = /^\s*\/et\s+([a-z][\w-]*)\s*([\s\S]*)$/i.exec(body) ??
@@ -119,7 +111,16 @@ function statusBody(view: RunView): string {
   } else if (view.openGates.length) {
     for (const g of view.openGates) {
       lines.push(`waiting on **${g.name}** — reply with one of:`);
-      lines.push(g.options.map((o) => `\`${PREFIX} ${o}\``).join(" · "));
+      lines.push(g.options.filter((o) => o !== "consider").map((o) => `\`${PREFIX} ${o}\``).join(" · "));
+      if (g.options.includes("consider")) lines.push(`…or just say what you want: \`${PREFIX} <your words>\``);
+      // Context excerpt: the gate's first shown artifact — the intake's
+      // reasoning, the reviewer's objection, the interpreter's question.
+      const src = g.show[0];
+      const p = src ? [view.workspace, view.dir].map((d) => path.join(d, src)).find((f) => fs.existsSync(f)) : undefined;
+      if (p) {
+        const ex = fs.readFileSync(p, "utf8").split("\n").slice(0, 8).join("\n").trim();
+        if (ex) lines.push("", "```", ex, "```");
+      }
     }
     lines.push(`(add a note after the command; \`${PREFIX} stop\` abandons the attempt)`);
   } else {
@@ -142,89 +143,92 @@ const surface: Surface = {
     if (who.status !== 0)
       throw new Error(`no deployment sign-in (${ghDir()}) — run: etium configure`);
     const can = new Map<string, boolean>();
-    const since = cursor ?? new Date(0).toISOString();
+    // Events, not state (ADR-023): a fresh deployment's cursor starts at
+    // now, so history never mass-triggers on the first tick.
     const now = new Date().toISOString();
+    const since = cursor ?? now;
     const tasks: SurfaceTask[] = [];
     const decisions: SurfaceDecision[] = [];
     const abandons: NonNullable<SurfacePollResult["abandons"]> = [];
 
-    const issues = ((api(`repos/${REPO()}/issues?assignee=${agent()}&state=all&per_page=100`) ?? []) as Issue[])
-      .filter((i) => !i.pull_request);
+    // Lifecycle for every active run, event-independent: close and merge
+    // must land no matter what happened to comments or assignment. Also
+    // index active runs by issue and PR number for command routing.
+    const byNum = new Map<number, RunView>();
+    for (const v of runs) {
+      if (v.params.surface !== "github" || !v.params.issue || v.completed) continue;
+      const n = Number(v.params.issue);
+      byNum.set(n, v);
+      try {
+        const issue = api(`repos/${REPO()}/issues/${n}`) as Issue;
+        if (issue.state === "closed") {
+          abandons.push({ run: v.id, reason: "issue closed" });
+          continue;
+        }
+      } catch {
+        continue; /* unreadable now: leave it for the next tick */
+      }
+      const pr = prFor(v);
+      if (pr) byNum.set(pr.number, v);
+      if (pr?.merged_at) {
+        const route = v.openGates.find((g) => g.options.includes("wrap-up"));
+        if (route) decisions.push({ run: v.id, gate: route.name, decision: "wrap-up", by: "merge" });
+        else abandons.push({ run: v.id, reason: "PR merged (human override)" });
+      } else if (pr && pr.state === "closed") {
+        abandons.push({ run: v.id, reason: "PR closed unmerged" });
+      }
+    }
 
-    for (const issue of issues) {
-      const active = activeFor(runs, issue.number);
+    // One repo-wide call: every new issue/PR conversation comment since the
+    // cursor, in event order.
+    const comments = ((api(`repos/${REPO()}/issues/comments?since=${encodeURIComponent(since)}&per_page=100`) ?? []) as (Comment & { issue_url?: string })[])
+      .filter((c) => c.created_at > since)
+      .sort((a, b) => a.created_at.localeCompare(b.created_at));
 
-      // Ownership → task (open, assigned, no active run, trusted assigner).
-      if (issue.state === "open" && !active) {
-        if (!assignedByAuthorized(issue.number, can)) continue;
-        const attempt = runs.filter((r) => r.params.issue === String(issue.number)).length;
+    const kicked = new Set<number>();
+    for (const c of comments) {
+      const n = Number(/\/issues\/(\d+)$/.exec(c.issue_url ?? "")?.[1] ?? NaN);
+      if (!n) continue;
+      const cmd = parseCommand(c.body);
+      if (!cmd || !canCommand(c.user.login, can)) continue;
+      const active = byNum.get(n);
+      if (!active) {
+        // Kickoff (ADR-023): `/et <anything>` by a Write-holder starts an
+        // attempt; the text rides in as the directive. A bare `stop` with
+        // nothing running stays inert.
+        if (cmd.word === "stop" || kicked.has(n)) continue;
+        const issue = api(`repos/${REPO()}/issues/${n}`) as Issue;
+        if (issue.state !== "open" || issue.pull_request) continue;
+        kicked.add(n);
+        const attempt = runs.filter((r) => r.params.issue === String(n)).length;
         tasks.push({
-          key: `issue-${issue.number}#${attempt}`,
+          key: `issue-${n}#${attempt}`,
           task: `# ${issue.title}\n\n${issue.body ?? ""}\n`,
           loop: env("ETIUM_GH_LOOP"),
-          params: { issue: String(issue.number) },
+          params: { issue: String(n), directive: [cmd.word, cmd.note].filter(Boolean).join(" ") },
           worktree: {
             repo: process.env.ETIUM_GH_WORKDIR ?? process.cwd(),
-            branch: `etium/issue-${issue.number}-attempt-${attempt}`,
+            branch: `etium/issue-${n}-attempt-${attempt}`,
             // The engineer's commits are authored as the acting account.
             identity: { name: agent(), email: `${agent()}@users.noreply.github.com` },
           },
         });
         continue;
       }
-      if (!active) continue;
-
-      // Lifecycle facts.
-      if (issue.state === "closed") {
-        abandons.push({ run: active.id, reason: "issue closed" });
+      if (cmd.word === "stop") {
+        abandons.push({ run: active.id, reason: cmd.note ?? `stopped by ${c.user.login}` });
         continue;
       }
-      const pr = prFor(active);
-      if (pr?.merged_at) {
-        const route = active.openGates.find((g) => g.options.includes("wrap-up"));
-        if (route) decisions.push({ run: active.id, gate: route.name, decision: "wrap-up", by: "merge" });
-        else abandons.push({ run: active.id, reason: "PR merged (human override)" });
+      const exact = active.openGates.filter((g) => g.options.includes(cmd.word));
+      if (exact.length === 1) {
+        decisions.push({ run: active.id, gate: exact[0]!.name, decision: cmd.word, note: cmd.note, by: c.user.login });
         continue;
       }
-      if (pr && pr.state === "closed") {
-        abandons.push({ run: active.id, reason: "PR closed unmerged" });
-        continue;
-      }
-
-      // Commands: comments on the issue and, once it exists, the PR.
-      const threads = [issue.number, ...(pr ? [pr.number] : [])];
-      const comments = threads
-        .flatMap((n) => (api(`repos/${REPO()}/issues/${n}/comments?per_page=100`) ?? []) as Comment[])
-        .filter((c) => c.created_at > since)
-        .sort((a, b) => a.created_at.localeCompare(b.created_at));
-      for (const c of comments) {
-        if (!canCommand(c.user.login, can)) continue;
-        const cmd = parseCommand(c.body);
-        if (!cmd) continue;
-        if (cmd.word === "stop") {
-          abandons.push({ run: active.id, reason: cmd.note ?? `stopped by ${c.user.login}` });
-          continue;
-        }
-        const gates = active.openGates.filter((g) => g.options.includes(cmd.word));
-        if (gates.length !== 1) continue; // unknown/ambiguous: status comment teaches the valid set
-        decisions.push({ run: active.id, gate: gates[0]!.name, decision: cmd.word, note: cmd.note, by: c.user.login });
-      }
-    }
-
-    // The assignee query only returns issues still assigned to the agent —
-    // an issue unassigned after its run started becomes invisible, and a
-    // close would strand the run parked forever. Fetch those directly.
-    const seen = new Set(issues.map((i) => i.number));
-    for (const v of runs) {
-      if (v.params.surface !== "github" || !v.params.issue || v.completed) continue;
-      const n = Number(v.params.issue);
-      if (seen.has(n)) continue;
-      try {
-        const issue = api(`repos/${REPO()}/issues/${n}`) as Issue;
-        if (issue.state === "closed") abandons.push({ run: v.id, reason: "issue closed" });
-      } catch {
-        /* unreadable now: leave it for the next tick */
-      }
+      // Freestyle: a gate that declares `consider` receives the whole
+      // message as its note; the loop's interpreter maps it (ADR-023).
+      const fre = active.openGates.find((g) => g.options.includes("consider"));
+      if (fre)
+        decisions.push({ run: active.id, gate: fre.name, decision: "consider", note: [cmd.word, cmd.note].filter(Boolean).join(" "), by: c.user.login });
     }
 
     return { tasks, decisions, abandons, cursor: now };

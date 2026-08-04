@@ -351,12 +351,16 @@ Semantics, all fail-closed and at-least-once:
   run directory — files are the API.
 
 **The built-in `github` surface** (`etium tick --surface github`) is
-loop-agnostic infrastructure. Inbound, it maps: assignment of the configured
-agent user (by an allowlisted human) → a task running the configured loop
-(`ETIUM_GH_LOOP`, required) on worktree branch `etium/issue-N-attempt-K`;
-**command comments** (`/et <option> [note]`, or `@<agent> <option>`) by
-allowlisted authors → gate decisions, matched against whichever open gate
-declares the option and validated against the ledger's set — never labels,
+loop-agnostic infrastructure. Inbound, it maps: a `/et …` comment on an
+open issue with no active attempt (by anyone with Write) → a task running
+the configured loop (`ETIUM_GH_LOOP`, required) on worktree branch
+`etium/issue-N-attempt-K`, with the comment's text passed as the
+`directive` param; **command comments** (`/et <option> [note]`, or
+`@<agent> <option>`) by authors with Write → gate decisions, matched
+against whichever open gate declares the option and validated against the
+ledger's set — a comment matching no option is delivered as the `consider`
+decision (full text as the note) when the gate declares it, for the loop
+to interpret — never labels,
 which are a mutable bitfield with no payload, no atomic consume, and no
 attribution; `/et stop`, issue close, and PR close-unmerged → abandons; PR
 merge → the `wrap-up` option when a gate declares it (the convention for "a

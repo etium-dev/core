@@ -9,5 +9,8 @@ recommended route with the reason — `debug` (root cause unknown),
 `design` (architecture unclear), or `plan` (the path is clear). The
 human chooses; you recommend.
 
+Operator directive ("none" when absent; otherwise the human's stated
+intent — it is the routing answer to honor): {{directive}}
+
 Task:
 {{task}}

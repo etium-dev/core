@@ -70,8 +70,8 @@
   go</strong> (yours to pick when testing).</p>
   <p class="lede">From zero to a working AI engineer: first a five-minute
   token-free dry run in your terminal, then real model runs, then wired to
-  GitHub — where assigning an issue produces a draft PR whose every stage
-  you command with comments and approve through gates.</p>
+  GitHub — where a <code>/et</code> comment on an issue produces a draft PR
+  whose every stage you command with comments and approve through gates.</p>
   <p>Nothing here requires a server, a daemon, or an API key handed to
   anything: etium supervises, harnesses bring their own auth, <code>gh</code>
   brings yours.</p>
@@ -171,23 +171,27 @@ run DONE</span></code></pre>
   <code>Ctrl-C</code> to stop, nothing installed.)</p>
   <p>Then, on GitHub:</p>
   <ol>
-    <li><strong>Assign yourself</strong> (or the configured agent user) to
-    an issue. Within a minute, the surface creates a run on branch
-    <code>etium/issue-N-attempt-0</code>, triage runs, and a status comment
-    appears on the issue telling you exactly what it's waiting for and
-    which commands are valid.</li>
+    <li><strong>Comment <code>/et &lt;what you want&gt;</code></strong> on
+    an issue — <code>/et fix this</code>, <code>/et propose a design</code>,
+    or just <code>/et go</code>. Within a minute, the surface creates a run
+    on branch <code>etium/issue-N-attempt-0</code>, triage reads your words
+    as the routing directive and heads straight into the right stage, and a
+    status comment appears on the issue telling you exactly what it's
+    waiting for and which commands are valid.</li>
     <li><strong>Command with comments.</strong> <code>/et plan start with
-    the retry logic</code> — the word is matched against the open gate's
-    declared options, your text becomes the note, and anyone without
-    Write is ignored.</li>
+    the retry logic</code> — an exact option word decides the open gate and
+    your text becomes the note. Anything else — <code>/et actually, wrap
+    this up</code> — goes to the loop's interpreter, which maps it to the
+    vocabulary or asks you to rephrase. Anyone without Write is
+    ignored.</li>
     <li><strong>Review the draft PR.</strong> As soon as a stage produces
     artifacts, the surface pushes the branch and opens one draft PR. The
     <code>ai/</code> documents and the commits are the reviewable work.</li>
     <li><strong>Finish on GitHub's own terms.</strong> Merging the PR ends
     the run. Closing the PR or the issue abandons the attempt.
-    <code>/et stop</code> abandons it with your note as the reason.
-    Re-assigning later starts attempt #1 on a fresh branch — abandoned
-    work never blocks a retry.</li>
+    <code>/et stop</code> abandons it with your note as the reason. A
+    later <code>/et</code> comment starts attempt #1 on a fresh branch —
+    abandoned work never blocks a retry.</li>
   </ol>
   <p>The <code>et:working</code> / <code>et:waiting</code> /
   <code>et:blocked</code> labels are decoration for your issue list
@@ -207,8 +211,8 @@ run DONE</span></code></pre>
     links the token page with the right scopes pre-selected), and log the
     harness in (<code>pi</code> → <code>/login</code>).</li>
   </ol>
-  <p>Now <strong>assigning the bot</strong> to an issue starts an attempt,
-  and you interact entirely through issue comments and PR reviews from
+  <p>Now a <strong><code>/et</code> comment</strong> on an issue starts an
+  attempt, and you interact entirely through issue comments and PR reviews from
   anywhere. If the machine goes offline, nothing lies — runs park, status
   freezes, and the next tick after it returns reconciles everything.</p>
 
@@ -222,7 +226,7 @@ run DONE</span></code></pre>
     <li><strong>Tune the knobs.</strong> <code>--param rounds=3</code>,
     <code>--param wall=30m</code>, <code>--param check="make test"</code>,
     per-run <code>--harness</code> / <code>--param model=…</code>.</li>
-    <li><strong>Change the workflow itself.</strong> The loop is 97 lines
+    <li><strong>Change the workflow itself.</strong> The loop is ~140 lines
     of ordinary TypeScript — add a stage, change an option set, split a
     persona. The
     loop-authoring guide in <a href="https://github.com/etium-dev/core">the repo</a>
@@ -232,15 +236,16 @@ run DONE</span></code></pre>
 
   <h2>Troubleshooting</h2>
   <ul>
-    <li><strong>Nothing happens after assigning an issue</strong> — the
-    wake-up isn't running, the deployment isn't signed in (re-run
-    <code>etium configure</code>), or the assigner doesn't have Write
+    <li><strong>Nothing happens after your <code>/et</code> comment</strong>
+    — the wake-up isn't running, the deployment isn't signed in (re-run
+    <code>etium configure</code>), or the commenter doesn't have Write
     (ignored by design). Run the tick command by hand and read its
     output.</li>
-    <li><strong>Your <code>/et</code> comment did nothing</strong> — you
-    don't have Write on the repository, or the word isn't among the open
-    gate's options; the status comment always lists the valid set.
-    Decisions fail closed, silently on the invalid side.</li>
+    <li><strong>Your <code>/et</code> command was "misheard"</strong> —
+    freestyle text goes to the interpreter, which acts only when your
+    intent maps cleanly to an option and otherwise asks you to rephrase;
+    the status comment always lists the exact valid words when you'd
+    rather be literal.</li>
     <li><strong>The run errored about harness auth</strong> — the harness
     on the executing machine isn't logged in; the error names the exact
     remedy (e.g. <code>pi</code> then <code>/login</code>). Fix and

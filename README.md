@@ -119,11 +119,13 @@ on a machine with the harnesses installed and commit the captures under
 
 A surface connects an external system to the same gates the CLI drives:
 tasks in, decisions in, projections out, on every `etium tick`. The built-in
-**`github`** surface (`etium tick --surface github`) turns issue assignment
-into a worktree run of any loop you configure, `/et <option>` comments by
-anyone with Write on the repository into gate decisions, and close/merge
-into run lifecycle — and projects back a draft PR, one status comment
-listing the valid commands, and `et:*` filter labels. The deployment acts
+**`github`** surface (`etium tick --surface github`) turns `/et` comments
+by anyone with Write on the repository into runs and gate decisions — a
+`/et <anything>` comment on an issue kickstarts a worktree run of any loop
+you configure, an exact `/et <option>` decides the open gate, and freestyle
+text is handed to the loop to interpret — and close/merge into run
+lifecycle, projecting back a draft PR, one status comment listing the valid
+commands, and `et:*` filter labels. The deployment acts
 as the repository's own gh sign-in (`.etium/gh`, created by `etium
 configure`). Configuration is env vars (`ETIUM_GH_REPO`, `ETIUM_GH_LOOP`,
 `ETIUM_GH_WORKDIR`, `ETIUM_GH_BASE`) — none of them secrets.

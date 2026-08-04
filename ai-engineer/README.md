@@ -23,21 +23,27 @@ built-in `github` surface (DESIGN §10.3).
 | `rounds` | builder/reviewer rounds per stage before escalating | `2` |
 | `check` | shell command proving the implementation | `true` |
 | `wall` | per-step wall budget | `2h` |
+| `directive` | the operator's kickoff words — triage treats them as the routing answer and the loop follows the intake's route without opening the first gate | — |
 | `cmd.<step>` | dry-run hook: with `--harness exec`, scripts that step | — |
 
 **Gates**:
 
 | gate | opens | options |
 |---|---|---|
-| `route` | after triage, and after every stage | `triage · debug · design · plan` — `implement` appears once a plan converged; `wrap-up` once implementation converged |
-| `<stage>-stuck` | reviewer still objects after `rounds` rounds | `keep-going · accept · wrap-up` |
+| `route` | after triage, and after every stage | `triage · debug · design · plan · consider` — `implement` appears once a plan converged; `wrap-up` once implementation converged |
+| `<stage>-stuck` | reviewer still objects after `rounds` rounds | `keep-going · accept · wrap-up · consider` |
 
 Routing is fail-closed by construction: `implement` is not a declinable
-request — it simply isn't offered until a plan exists.
+request — it simply isn't offered until a plan exists. `consider` is the
+freestyle door: its note carries the operator's own words, and an
+interpreter persona maps them to one of the other options — or writes a
+clarifying question to `ai/REPLY.md` and re-opens the gate. It never
+guesses.
 
 **Artifacts** (in `ai/` on the run's branch): `INTAKE.md`, `DIAGNOSIS.md`,
-`DESIGN.md`, `PLAN.md`, `REPORT.md`, and `REVIEW.md` (reviewer verdict —
-first line `VERDICT: approve|revise`, stable objection keys).
+`DESIGN.md`, `PLAN.md`, `REPORT.md`, `REVIEW.md` (reviewer verdict — first
+line `VERDICT: approve|revise`, stable objection keys), and `REPLY.md` (the
+interpreter's reading of a freestyle message, or its question back).
 
 The loop publishes nothing — it commits to its branch and opens gates. The
 surface projects branch → draft PR → status comment → labels.
@@ -47,8 +53,9 @@ surface projects branch → draft PR → status comment → labels.
 ```sh
 etium run "fix the flaky auth test" --loop ai-engineer/loop.ts --worktree \
   --param check="npm test"
-etium gates                     # → route: triage · debug · design · plan
+etium gates                     # → route: triage · debug · design · plan · consider
 etium decide <run> route plan --note "start with the retry"
+etium decide <run> route consider --note "just make it stop flaking"  # freestyle
 ```
 
 ## Running it against GitHub
@@ -84,15 +91,20 @@ merges.
 **Protocol** (append-only events in, idempotent projections out — never
 labels as commands):
 
-- Assigning the deployment's account to an issue (by anyone with Write)
-  starts an attempt: a worktree run on `etium/issue-N-attempt-K`.
-  Re-assignment after an abandoned attempt starts attempt K+1 on a fresh
-  branch.
+- A `/et <anything>` comment on an open issue (by anyone with Write, when
+  no attempt is active) starts one: a worktree run on
+  `etium/issue-N-attempt-K`. The words after `/et` ride in as the
+  `directive` — `/et fix this` routes straight into debug or plan without
+  a confirmation gate. A later `/et` comment after an abandoned attempt
+  starts attempt K+1 on a fresh branch.
 - Commands are comments: `/et <option> [note]` (or `@<agent> <option>`) by
-  anyone with Write — the option is matched against whichever open gate
-  declares it, validated fail-closed by core. `/et stop` abandons.
+  anyone with Write — an exact option match decides whichever open gate
+  declares it, validated fail-closed by core. Anything else is delivered
+  as `consider` with your full text: the interpreter maps it to the
+  vocabulary or asks you to rephrase. `/et stop` abandons.
 - The bot's status comment on the issue always lists the currently-valid
-  commands. Labels `et:working|waiting|blocked` are decoration for issue
-  lists; nothing ever reads them back.
+  commands, plus "just say what you want" when freestyle is open. Labels
+  `et:working|waiting|blocked` are decoration for issue lists; nothing
+  ever reads them back.
 - Closing the issue abandons the attempt; closing the PR unmerged abandons
   it; merging the PR completes it (or ends it as a human override earlier).

@@ -816,3 +816,47 @@ crontabs/plists; etium as credential handler). A trusted-list *and*
 permission checks (two authorization systems). Cron-only wake-up
 (forecloses launchd's event-driven future and demotes the laptop half of
 the audience — the earlier tunnel vision, reversed on analysis).
+
+---
+
+## ADR-023 — comments are the only kickoff; freestyle is interpreted, never guessed
+
+**Decision.** Assignment does nothing. A `/et <anything>` comment on an
+open issue by anyone with Write — when no attempt is active — starts one,
+and the comment's text rides into the run as the `directive` param. The
+poll is one repo-wide comment stream (`issues/comments?since=<cursor>`,
+cursor starting at "now" on first tick so history is inert), preceded by a
+direct-fetch lifecycle sweep of every active run's issue and PR. On a
+waiting run, an exact `/et <option>` decides the gate; any other text is
+delivered as the `consider` decision with the full message as its note —
+a gate option loops declare when they accept freestyle. The ai-engineer
+declares it everywhere: an interpreter persona reads the message against
+the gate's vocabulary and answers in `ai/REPLY.md` with `ACTION: <option>`
+or `ACTION: unclear` plus one clarifying question, in which case the gate
+re-opens showing the question. A kickoff directive short-circuits the
+first route gate: triage is told the directive is the routing answer, and
+the loop follows the intake's `## Route` line straight into the stage.
+The status comment lists exact commands and adds "or just say what you
+want: `/et <your words>`".
+
+**Why.** Assignment-as-trigger breaks the moment the operator drives
+etium from their own account — self-assignment is a normal act that must
+not summon an agent, and assignees are load-bearing social metadata.
+A comment is already the command channel, so kickoff becomes the same
+grammar as everything else: one verb, `/et`, from first word to merge.
+Freestyle-with-interpretation keeps the ledger's vocabulary closed (core
+still validates every decision against declared options, fail-closed)
+while letting the human speak naturally; "didn't understand, rephrase" is
+the honest failure mode, and it costs one comment instead of one wrong
+stage. The `since` stream is one API call per tick regardless of issue
+count, and the cursor-starts-now rule makes old comments incapable of
+waking anything.
+
+**Rejected.** Assignment as a second trigger alongside comments (two
+grammars, and the self-assignment trap stays). Letting the surface fuzzy-
+match freestyle onto options itself (the surface would be guessing with
+no context; the loop has the `ai/` documents and a model to read them).
+An `interpret` gate option listed in the status comment (it is plumbing,
+not a command a human should type). Free-text decisions written straight
+into the ledger (the vocabulary is the contract; interpretation must end
+in a declared word or a question).

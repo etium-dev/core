@@ -40,7 +40,7 @@ git config user.email
 >    Say `ai-engineer` for the full multi-persona workflow (commits an
 >    `ai-engineer/` folder), or `none` for etium only.
 > 3. GitHub wiring: **off** (you drive it from the terminal). Say `github`
->    to have issue assignment and `/et` comments drive it.
+>    to have `/et` issue comments drive it.
 > 4. Throwaway verification work: a fresh temp directory. Name a directory
 >    to change that.
 
@@ -182,7 +182,7 @@ git commit -m "Add etium $LIBRARY loop library"
 ```
 
 **Verify** (`LIBRARY=ai-engineer`): `test -f ai-engineer/loop.ts && grep -qx '.etium/' .gitignore && ls ai-engineer/templates/*.md | wc -l` →
-both tests exit 0 and the count is `11`.
+both tests exit 0 and the count is `12`.
 **Verify** (`LIBRARY=ralph`): `test -f ralph/loop.ts && grep -qx '.etium/' .gitignore` → exits 0.
 When `LIBRARY=none` there is nothing to commit — continue to Step 3C.
 
@@ -296,7 +296,7 @@ End with a report to your operator containing exactly:
    authenticate a harness before real-persona runs (pi's `/login` TUI works
    over SSH; codex headless: `codex login --api-key` or the
    `OPENAI_API_KEY` env var); install the printed always-on wake-up;
-   assign the deployment's account to a GitHub issue to start the first
+   comment `/et <what you want>` on a GitHub issue to start the first
    attempt.
 4. Nothing else — no summaries of what the package "will" do, no edits you
    "recommend". Install reports state what was verified.
