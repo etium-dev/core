@@ -159,17 +159,16 @@ run DONE</span></code></pre>
 
   <h2>3 · Wire it to GitHub</h2>
   <p>Now the same loop, commanded from issues instead of the terminal. On
-  the machine that will run the work (your laptop is fine), make sure
-  <code>gh auth status</code> is good for the target repo, then add one
-  cron line — this <em>is</em> the deployment:</p>
-<pre><code>* * * * *  cd /path/to/your-repo &amp;&amp; \
-  ETIUM_GH_REPO=you/your-repo ETIUM_GH_TRUSTED=your-login \
-  ETIUM_GH_LOOP=ai-engineer/loop.ts \
-  etium tick --surface github &gt;&gt; .etium/tick.log 2&gt;&amp;1</code></pre>
-  <p>(Just trying it out? Skip cron and run the same thing in the
-  foreground while you play — <code>etium watch --surface github</code>
-  with the same variables; <code>Ctrl-C</code> to stop, nothing
-  installed.)</p>
+  the machine that will run the work (your laptop is fine):
+  <code>etium configure</code>, choose <strong>Wire up GitHub</strong>. It
+  creates this repository's own gh sign-in (stored under
+  <code>.etium/gh</code> — the machine's personal gh account is never
+  touched) and installs or prints the always-on wake-up. Anyone GitHub
+  lets push to the repository (Write) can command the engineer.</p>
+  <p>(Just trying it out? Skip always-on and run the tick in the
+  foreground while you play — <code>ETIUM_GH_REPO=you/your-repo
+  ETIUM_GH_LOOP=ai-engineer/loop.ts etium watch --surface github</code>;
+  <code>Ctrl-C</code> to stop, nothing installed.)</p>
   <p>Then, on GitHub:</p>
   <ol>
     <li><strong>Assign yourself</strong> (or the configured agent user) to
@@ -179,8 +178,8 @@ run DONE</span></code></pre>
     which commands are valid.</li>
     <li><strong>Command with comments.</strong> <code>/et plan start with
     the retry logic</code> — the word is matched against the open gate's
-    declared options, your text becomes the note, and anyone not in
-    <code>ETIUM_GH_TRUSTED</code> is ignored.</li>
+    declared options, your text becomes the note, and anyone without
+    Write is ignored.</li>
     <li><strong>Review the draft PR.</strong> As soon as a stage produces
     artifacts, the surface pushes the branch and opens one draft PR. The
     <code>ai/</code> documents and the commits are the reviewable work.</li>
@@ -196,18 +195,18 @@ run DONE</span></code></pre>
   them back, so they can't lie for long — the next tick corrects them.</p>
 
   <h2>4 · The always-on engineer</h2>
-  <p>Same package, same cron line, different credentials — that's the
-  entire difference. On a spare machine:</p>
+  <p>Same package, same setup — the only difference is whose token you
+  paste. On a spare machine:</p>
   <ol>
     <li>Create a <strong>bot GitHub account</strong>; give it
     <strong>Write</strong> on the repo (never admin), protect your default
     branch, require reviews. The bot only ever opens draft PRs; merging
     stays yours.</li>
-    <li><code>gh auth login</code> as the bot; log the harness in
-    (<code>pi</code> → <code>/login</code>) on that machine.</li>
-    <li>Install etium, clone your repo, add the cron line with
-    <code>ETIUM_GH_AGENT=&lt;bot-login&gt;</code> and
-    <code>ETIUM_GH_TRUSTED=&lt;your-login&gt;</code>.</li>
+    <li>Install etium, clone your repo, run <code>etium configure</code>:
+    sign the deployment in with a token for the bot (classic
+    <code>repo</code> scope — a collaborator's fine-grained token can't
+    reach another owner's private repo), and log the harness in
+    (<code>pi</code> → <code>/login</code>).</li>
   </ol>
   <p>Now <strong>assigning the bot</strong> to an issue starts an attempt,
   and you interact entirely through issue comments and PR reviews from
@@ -234,15 +233,15 @@ run DONE</span></code></pre>
 
   <h2>Troubleshooting</h2>
   <ul>
-    <li><strong>Nothing happens after assigning an issue</strong> — cron
-    isn't running the tick line, <code>gh</code> isn't authenticated on
-    that machine, or the assigner isn't in <code>ETIUM_GH_TRUSTED</code>
-    (assignments by untrusted users are ignored by design). Run the tick
-    command by hand and read its output.</li>
-    <li><strong>Your <code>/et</code> comment did nothing</strong> —
-    you're not in <code>ETIUM_GH_TRUSTED</code>, or the word isn't among
-    the open gate's options; the status comment always lists the valid
-    set. Decisions fail closed, silently on the invalid side.</li>
+    <li><strong>Nothing happens after assigning an issue</strong> — the
+    wake-up isn't running, the deployment isn't signed in (re-run
+    <code>etium configure</code>), or the assigner doesn't have Write
+    (ignored by design). Run the tick command by hand and read its
+    output.</li>
+    <li><strong>Your <code>/et</code> comment did nothing</strong> — you
+    don't have Write on the repository, or the word isn't among the open
+    gate's options; the status comment always lists the valid set.
+    Decisions fail closed, silently on the invalid side.</li>
     <li><strong>The run errored about harness auth</strong> — the harness
     on the executing machine isn't logged in; the error names the exact
     remedy (e.g. <code>pi</code> then <code>/login</code>). Fix and

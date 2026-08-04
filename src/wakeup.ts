@@ -106,17 +106,6 @@ function retireCronLines(repoDir: string, id?: string): boolean {
   return true;
 }
 
-/** gh auth stored in gh's own hosts.yml works from any context (ssh, cron,
- * launchd, GUI); keychain-held auth works only in the GUI session. The
- * wake-up mechanism follows the credential (ADR-021). */
-export function ghFileAuth(hostsYml = path.join(os.homedir(), ".config", "gh", "hosts.yml")): boolean {
-  try {
-    return fs.readFileSync(hostsYml, "utf8").includes("oauth_token:");
-  } catch {
-    return false;
-  }
-}
-
 // --- install / detect / remove --------------------------------------------
 
 export function wakeupInstalled(repoDir: string): boolean {
@@ -185,13 +174,14 @@ function verifyFirstTick(repoDir: string, cmd: string): { ok: boolean; lines: st
 /** Install the always-on wake-up; returns the lines to print. Idempotent
  * across re-runs and label-grammar changes: anything already installed for
  * this repository is removed first, then the current form is installed.
- * Mechanism follows the credential (ADR-021): keychain-held gh auth needs
- * the GUI session (launchd agent); file-held auth runs headless (cron —
- * which on macOS runs with no one logged in at all). */
+ * Mechanism is a platform constant (ADR-022): a launchd agent on macOS
+ * (Apple's blessed scheduler — event triggers and prompt post-sleep ticks
+ * later; runs while logged in, resumes at login), cron on Linux. Auth is
+ * repo-scoped and file-held either way, so both verify inline. */
 export function installWakeup(repoDir: string, env: string, id: string): { ok: boolean; lines: string[] } {
   repoDir = canon(repoDir);
   const cmd = tickCommand(repoDir, env, id);
-  if (process.platform === "darwin" && !ghFileAuth()) {
+  if (process.platform === "darwin") {
     for (const a of etiumAgents().filter((a) => belongsTo(a.payload, repoDir, id))) {
       spawnSync("launchctl", ["bootout", `gui/${process.getuid?.() ?? 501}/${a.label}`], { stdio: "ignore" });
       try {
@@ -207,24 +197,27 @@ export function installWakeup(repoDir: string, env: string, id: string): { ok: b
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(plist, launchAgentPlist(label, cmd));
     const r = spawnSync("launchctl", ["bootstrap", `gui/${process.getuid?.() ?? 501}`, plist], { encoding: "utf8" });
-    return r.status === 0
-      ? {
-          ok: true,
-          lines: [
-            `Installed the launchd agent (${label}): ticks once a minute while`,
-            "you're logged in, resumes at login (gh's sign-in is keychain-held,",
-            "which only a GUI session can read — token sign-in lifts this).",
-          ],
-        }
-      : {
-          ok: false,
-          lines: [
-            `Could not load the agent — is a GUI session active? Wrote ${plist};`,
-            `load it with:`,
-            "",
-            `  launchctl bootstrap gui/${process.getuid?.() ?? 501} ${plist}`,
-          ],
-        };
+    if (r.status === 0) {
+      const v = verifyFirstTick(repoDir, cmd);
+      return {
+        ok: v.ok,
+        lines: [
+          `Installed the launchd agent (${label}): ticks once a minute while`,
+          "you're logged in, resumes at login (dedicated bot Macs: enable",
+          "auto-login so a reboot resumes on its own).",
+          ...v.lines,
+        ],
+      };
+    }
+    return {
+      ok: false,
+      lines: [
+        `Could not load the agent — is a GUI session active? Wrote ${plist};`,
+        `load it with:`,
+        "",
+        `  launchctl bootstrap gui/${process.getuid?.() ?? 501} ${plist}`,
+      ],
+    };
   }
   retireCronLines(repoDir, id);
   const line = cronLine(cmd);
@@ -244,8 +237,7 @@ export function printWakeup(repoDir: string, env: string, id: string): string[] 
   if (process.platform === "darwin")
     return [
       "When you want always-on, run: etium configure --wakeup cron",
-      "It installs a launchd agent (the scheduler that can read gh's keychain",
-      "token) running, once a minute:",
+      "It installs a launchd agent running, once a minute:",
       "",
       `  ${cmd}`,
     ];

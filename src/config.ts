@@ -16,7 +16,15 @@ export interface EtiumConfig {
    * artifacts (ADR-020) and survives repo moves — never re-minted. */
   id: string;
   library: string; // ralph | ai-engineer | none
-  github: { repo: string; trusted: string; agent: string; loop: string } | null;
+  /** Who acts and who commands are not config (ADR-022): the deployment
+   * acts as its repo-scoped gh sign-in, and anyone with Write commands. */
+  github: { repo: string; loop: string } | null;
+}
+
+/** The deployment's own gh home (ADR-022): sign-in stored by gh, in a file,
+ * inside this checkout's .etium — the machine's gh is never touched. */
+export function ghConfigDir(repoDir: string): string {
+  return path.join(repoDir, ".etium", "gh");
 }
 
 const cfgPath = (base: string) => path.join(base, "config.json");
@@ -40,17 +48,16 @@ export function writeConfig(base: string, cfg: Omit<EtiumConfig, "id"> & { id?: 
 }
 
 export function ghEnv(g: NonNullable<EtiumConfig["github"]>): string {
-  // An empty agent means "gh's runtime identity" — omit the var so the
-  // surface falls back to the authenticated user instead of matching "".
-  return [`ETIUM_GH_REPO=${g.repo}`, `ETIUM_GH_TRUSTED=${g.trusted}`, g.agent ? `ETIUM_GH_AGENT=${g.agent}` : "", `ETIUM_GH_LOOP=${g.loop}`].filter(Boolean).join(" ");
+  return `ETIUM_GH_REPO=${g.repo} ETIUM_GH_LOOP=${g.loop}`;
 }
 
 /** The `status` action's view of a repository, ready to print. */
-export function statusLines(cfg: EtiumConfig | null, wakeOn: boolean, base: string, cwd: string): string[] {
+export function statusLines(cfg: EtiumConfig | null, wakeOn: boolean, base: string, cwd: string, login?: string): string[] {
   const runsDir = path.join(base, "runs");
   return [
     `  library   ${cfg?.library ?? "none recorded"}`,
-    `  github    ${cfg?.github ? `${cfg.github.repo} (trusted: ${cfg.github.trusted}; acts as ${cfg.github.agent || "gh's signed-in account"}; loop: ${cfg.github.loop || "your own"})` : "off"}`,
+    `  github    ${cfg?.github ? `${cfg.github.repo} (loop: ${cfg.github.loop || "your own"}; commands: anyone with Write)` : "off"}`,
+    `  identity  ${cfg?.github ? (login ? `signed in as ${login} (this repository's own gh sign-in)` : "not signed in — re-run setup") : "-"}`,
     `  wake-up   ${wakeOn ? "installed — ticks once a minute" : "not installed"}`,
     `  runs      ${fs.existsSync(runsDir) ? fs.readdirSync(runsDir).length : 0} under ${path.relative(cwd, runsDir) || "."}/`,
   ];

@@ -18,6 +18,7 @@ const STUB = `#!/usr/bin/env node
 const fs = require("node:fs");
 const path = require("node:path");
 const dir = process.env.ETIUM_GH_STUB_DIR;
+fs.appendFileSync(path.join(dir, "envs.txt"), (process.env.GH_CONFIG_DIR || "-") + "\\n");
 const args = process.argv.slice(2); // ["api", ...]
 let method = "GET"; let p = ""; let readInput = false;
 for (let i = 1; i < args.length; i++) {
@@ -29,6 +30,8 @@ const read = (f, d) => { try { return JSON.parse(fs.readFileSync(path.join(dir, 
 if (method === "GET") {
   let out;
   if (p === "user") out = { login: "agentbot" };
+  else if (/collaborators\\/([^/]+)\\/permission/.test(p))
+    out = { permission: read("permissions.json", {})[decodeURIComponent(p.match(/collaborators\\/([^/]+)\\/permission/)[1])] || "none" };
   else if (/^repos\\/.+\\/issues\\?/.test(p)) out = read("issues.json", []);
   else if (/issues\\/(\\d+)\\/timeline/.test(p)) out = read("timeline-" + p.match(/issues\\/(\\d+)/)[1] + ".json", []);
   else if (/issues\\/(\\d+)\\/comments/.test(p)) out = read("comments-" + p.match(/issues\\/(\\d+)/)[1] + ".json", []);
@@ -84,10 +87,10 @@ function setup() {
   process.env.ETIUM_GH_CMD = stubPath;
   process.env.ETIUM_GH_STUB_DIR = stubDir;
   process.env.ETIUM_GH_REPO = "acme/widgets";
-  process.env.ETIUM_GH_TRUSTED = "carlospche";
   process.env.ETIUM_GH_WORKDIR = workdir;
   process.env.ETIUM_GH_LOOP = loopPath;
-  process.env.ETIUM_GH_AGENT = "agentbot";
+  // Trust is permission-based (ADR-022): carlospche can push, rando can't.
+  fs.writeFileSync(path.join(stubDir, "permissions.json"), JSON.stringify({ carlospche: "write", rando: "read" }));
 
   const writes = () =>
     fs.existsSync(path.join(stubDir, "writes.jsonl"))
@@ -99,16 +102,19 @@ function setup() {
 const fixture = (dir: string, name: string, data: unknown) =>
   fs.writeFileSync(path.join(dir, name), JSON.stringify(data));
 
-test("assignment → worktree run; projection pushes branch, opens draft PR, upserts status, labels", async () => {
-  const { stubDir, base, bare, g, writes } = setup();
+test("assignment → worktree run; read-only assigner ignored; projection pushes branch, opens draft PR, upserts status, labels", async () => {
+  const { stubDir, base, bare, g, writes, workdir } = setup();
   fixture(stubDir, "issues.json", [
     { number: 7, state: "open", title: "Fix the widget", body: "it wobbles", assignees: [{ login: "agentbot" }] },
+    { number: 9, state: "open", title: "Sneaky", body: "", assignees: [{ login: "agentbot" }] },
   ]);
   fixture(stubDir, "timeline-7.json", [{ event: "assigned", assignee: { login: "agentbot" }, actor: { login: "carlospche" } }]);
+  fixture(stubDir, "timeline-9.json", [{ event: "assigned", assignee: { login: "agentbot" }, actor: { login: "rando" } }]);
 
   await tickOnce(base, "unused-entry", true, [surface]);
 
   const runsDir = path.join(base, "runs");
+  assert.equal(fs.readdirSync(runsDir).length, 1, "read-permission assigner must not start attempts");
   const runId = fs.readdirSync(runsDir)[0]!;
   const created = readLedger(path.join(runsDir, runId)).find((e) => e.type === "run.created")!
     .data as { params: Record<string, string>; workspace: string; worktree?: { branch: string } };
@@ -125,6 +131,10 @@ test("assignment → worktree run; projection pushes branch, opens draft PR, ups
   assert.match(status.body.body!, /\/et plan/);
   assert.match(status.body.body!, /\/et wrap-up/);
   assert.ok(w.some((x) => /issues\/7\/labels$/.test(x.path) && x.body.labels?.includes("et:waiting")));
+  // Every gh call carried the deployment's own config dir (ADR-022).
+  const envs = fs.readFileSync(path.join(stubDir, "envs.txt"), "utf8").trim().split("\n");
+  const expected = path.join(workdir, ".etium", "gh");
+  assert.ok(envs.length > 0 && envs.every((e) => e === expected), `repo-scoped gh: ${envs[0]}`);
 });
 
 test("trusted /et command decides; untrusted ignored; /et stop abandons; issue close abandons", async () => {

@@ -121,11 +121,12 @@ A surface connects an external system to the same gates the CLI drives:
 tasks in, decisions in, projections out, on every `etium tick`. The built-in
 **`github`** surface (`etium tick --surface github`) turns issue assignment
 into a worktree run of any loop you configure, `/et <option>` comments by
-allowlisted users into gate decisions, and close/merge into run lifecycle —
-and projects back a draft PR, one status comment listing the valid commands,
-and `et:*` filter labels. Configuration is env vars (`ETIUM_GH_REPO`,
-`ETIUM_GH_TRUSTED`, `ETIUM_GH_AGENT`, `ETIUM_GH_LOOP`, `ETIUM_GH_WORKDIR`,
-`ETIUM_GH_BASE`) — none of them secrets; GitHub auth belongs to `gh`.
+anyone with Write on the repository into gate decisions, and close/merge
+into run lifecycle — and projects back a draft PR, one status comment
+listing the valid commands, and `et:*` filter labels. The deployment acts
+as the repository's own gh sign-in (`.etium/gh`, created by `etium
+configure`). Configuration is env vars (`ETIUM_GH_REPO`, `ETIUM_GH_LOOP`,
+`ETIUM_GH_WORKDIR`, `ETIUM_GH_BASE`) — none of them secrets.
 Custom surfaces are modules loaded by path (see DESIGN §10.3).
 
 The **[ai-engineer](ai-engineer/)** loop library is the flagship workload: a

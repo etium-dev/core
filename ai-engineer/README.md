@@ -54,44 +54,42 @@ etium decide <run> route plan --note "start with the retry"
 ## Running it against GitHub
 
 Etium's built-in `github` surface drives any loop; this library is just what
-you point it at. Configuration is env vars — no secrets among them; GitHub
-auth is `gh`'s, model auth is the harness's
+you point it at. The deployment acts as this repository's own gh sign-in
+(created by `etium configure`, stored under `.etium/gh`); anyone with
+**Write** on the repository commands it. Configuration is env vars — no
+secrets among them; model auth is the harness's
 ([MODEL_AUTH.md](../MODEL_AUTH.md)):
 
 | var | meaning | default |
 |---|---|---|
 | `ETIUM_GH_REPO` | `owner/name` (**required**) | — |
-| `ETIUM_GH_TRUSTED` | comma-separated logins allowed to command (**required**) | — |
 | `ETIUM_GH_LOOP` | loop to run per task (**required**) — point it here | — |
-| `ETIUM_GH_AGENT` | login whose *assignment* starts an attempt | authenticated user |
 | `ETIUM_GH_WORKDIR` | checkout to branch worktrees from | cwd |
 | `ETIUM_GH_BASE` | PR base branch | `main` |
 
-The whole deployment, either mode, is one scheduled tick — `etium configure
---wakeup cron` installs it platform-correctly: a **launchd agent** on macOS
-(the scheduler context that can read gh's keychain-stored token — cron
-runs in a different audit session and cannot; ADR-018), a crontab line on
-Linux:
+The whole deployment is one scheduled tick — `etium configure --wakeup
+cron` installs it platform-correctly (a launchd agent on macOS, a crontab
+line on Linux):
 
 ```
-* * * * *  cd /path/to/checkout && ETIUM_GH_REPO=acme/widgets ETIUM_GH_TRUSTED=you \
+* * * * *  cd /path/to/checkout && ETIUM_GH_REPO=acme/widgets \
            ETIUM_GH_LOOP=ai-engineer/loop.ts etium tick --surface github
 ```
 
-*Mode A (you, your machine)*: your `gh` auth, your harness login, done.
-*Mode B (separate AI-engineer box)*: same line on that machine, with the bot
-account's `gh` auth and the harness authenticated there; give the bot
-**Write** (never admin), protect the default branch, and it can only ever
-open draft PRs — the AI never merges.
+A dedicated AI-engineer box is the same setup with a bot account's token
+pasted at configure time: give the bot **Write** (never admin), protect
+the default branch, and it can only ever open draft PRs — the AI never
+merges.
 
 **Protocol** (append-only events in, idempotent projections out — never
 labels as commands):
 
-- Assigning `ETIUM_GH_AGENT` to an issue (by a trusted user) starts an
-  attempt: a worktree run on `etium/issue-N-attempt-K`. Re-assignment after
-  an abandoned attempt starts attempt K+1 on a fresh branch.
-- Commands are comments: `/et <option> [note]` (or `@<agent> <option>`) by a
-  trusted author — the option is matched against whichever open gate
+- Assigning the deployment's account to an issue (by anyone with Write)
+  starts an attempt: a worktree run on `etium/issue-N-attempt-K`.
+  Re-assignment after an abandoned attempt starts attempt K+1 on a fresh
+  branch.
+- Commands are comments: `/et <option> [note]` (or `@<agent> <option>`) by
+  anyone with Write — the option is matched against whichever open gate
   declares it, validated fail-closed by core. `/et stop` abandons.
 - The bot's status comment on the issue always lists the currently-valid
   commands. Labels `et:working|waiting|blocked` are decoration for issue

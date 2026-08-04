@@ -15,9 +15,9 @@ import { loadState, openGates, readLedger, writeStateCache } from "./ledger.ts";
 import { isLockLive, readLock, writeDecision } from "./lock.ts";
 import { abandonRun, createRun, supervise, superviseDetached } from "./supervisor.ts";
 import { loadSurfaces, tickOnce, watchLoop } from "./tick.ts";
-import { etiumsOnPath, ghUnverifiableHere } from "./checks.ts";
+import { etiumsOnPath } from "./checks.ts";
 import { ghEnv, readConfig, statusLines, writeConfig } from "./config.ts";
-import { ensureGhAuth } from "./ghauth.ts";
+import { ensureGhAuth, repoLogin } from "./ghauth.ts";
 import { installWakeup, printWakeup, removeWakeup, wakeupInstalled } from "./wakeup.ts";
 import { DEFAULT_GATE_OPTIONS, ETIUM_VERSION, type AnyEnvelope } from "./types.ts";
 
@@ -39,8 +39,8 @@ usage:
   etium watch [--surface name|path]… [--every seconds]   tick on an interval, foreground (Ctrl-C to stop)
   etium rebuild <run>        rebuild state.json from the ledger
   etium clone-loop [library] [--into dir]   copy a loop library (ralph, ai-engineer) into your repo (no arg: list)
-  etium configure [--library ralph|ai-engineer|none] [--github owner/name|off] [--trusted logins]
-             [--act-as login|me] [--wakeup watch|cron|print] [--git-name n] [--git-email e] [--yes]
+  etium configure [--library ralph|ai-engineer|none] [--github owner/name|off]
+             [--wakeup watch|cron|print] [--git-name n] [--git-email e] [--yes]
              check the machine, ask, apply — re-run any time (wake-up on/off, status)
   etium --version
 
@@ -516,8 +516,6 @@ async function cmdConfigure(argv: string[]): Promise<number> {
     options: {
       library: { type: "string" },
       github: { type: "string" },
-      trusted: { type: "string" },
-      "act-as": { type: "string" },
       wakeup: { type: "string" },
       "git-name": { type: "string" },
       "git-email": { type: "string" },
@@ -586,13 +584,12 @@ async function cmdConfigure(argv: string[]): Promise<number> {
     hardFail = true;
   }
   const ghInstalled = sh("gh", ["--version"]).status === 0;
-  const ghAuthed = ghInstalled && sh("gh", ["auth", "status"]).status === 0;
-  let ghLogin = ghAuthed ? (sh("gh", ["api", "user", "--jq", ".login"]).stdout || "").trim() : "";
-  const ghUnverifiable = ghInstalled && !ghAuthed && ghUnverifiableHere();
-  if (ghInstalled && ghAuthed) out(`  ok     gh — signed in as ${ghLogin || "unknown"} (only needed for GitHub wiring)`);
-  else if (ghUnverifiable) out("  note   gh installed — sign-in isn't verifiable over SSH (the login keychain\n         isn't readable here); GitHub wiring offers a headless-proof token sign-in");
-  else if (ghInstalled) out("  note   gh installed but not signed in — fine unless GitHub should drive\n         the engineer; then: gh auth login   (device flow; works over SSH)");
-  else out("  note   gh (GitHub CLI) not installed — fine unless GitHub should drive\n         the engineer; then: curl -sS https://webi.sh/gh | sh, and: gh auth login");
+  // The identity that matters is the DEPLOYMENT's (repo-scoped, ADR-022) —
+  // the machine's personal gh sign-in is deliberately not consulted.
+  let deployLogin = ghInstalled && repoDir ? repoLogin(repoDir) : "";
+  if (!ghInstalled) out("  note   gh (GitHub CLI) not installed — fine unless GitHub should drive\n         the engineer; then: curl -sS https://webi.sh/gh | sh");
+  else if (deployLogin) out(`  ok     gh — this repository's deployment is signed in as ${deployLogin}`);
+  else out("  note   gh installed — the deployment sign-in (stored under .etium/gh)\n         happens during GitHub wiring");
 
   let anyHarness = false;
   for (const ad of allAdapters()) {
@@ -623,7 +620,7 @@ async function cmdConfigure(argv: string[]): Promise<number> {
   const etiumBase = path.join(repoDir!, ".etium");
   const cfg = readConfig(etiumBase);
   const wakeOn = wakeupInstalled(repoDir!);
-  const flagsGiven = [v.library, v.github, v.trusted, v["act-as"], v.wakeup].some((x) => x !== undefined);
+  const flagsGiven = [v.library, v.github, v.wakeup].some((x) => x !== undefined);
 
   const rl = interactive ? readline.createInterface({ input: process.stdin, output: process.stdout }) : undefined;
 
@@ -695,7 +692,7 @@ async function cmdConfigure(argv: string[]): Promise<number> {
       }
       if (action === "status") {
         out();
-        for (const l of statusLines(cfg, wakeOn, etiumBase, process.cwd())) out(l);
+        for (const l of statusLines(cfg, wakeOn, etiumBase, process.cwd(), cfg?.github ? repoLogin(repoDir!) : undefined)) out(l);
         return 0;
       }
       // "setup" falls through into the questions.
@@ -710,7 +707,7 @@ async function cmdConfigure(argv: string[]): Promise<number> {
       const email = await askText(
         "Email for commits",
         [],
-        ghLogin ? `${ghLogin}@users.noreply.github.com` : "",
+        deployLogin ? `${deployLogin}@users.noreply.github.com` : "",
         v["git-email"],
       );
       if (!name || !email) {
@@ -757,53 +754,26 @@ async function cmdConfigure(argv: string[]): Promise<number> {
         0,
       ));
 
-    let trusted = v.trusted ?? "";
-    let actAs = v["act-as"] ?? "me";
     let wakeup = v.wakeup ?? "watch";
     if (github !== "off") {
       if (github === "github")
         github = await askText(
           "GitHub repository",
-          ["The issues of this repository will drive the engineer (owner/name)."],
+          ["The issues of this repository will drive the engineer (owner/name).", "Anyone GitHub lets push to it (Write) can command the engineer."],
           originRepo,
         );
-      const auth = await ensureGhAuth({ installed: ghInstalled, authed: ghAuthed, unverifiable: ghUnverifiable,
-        interactive: Boolean(interactive), repo: github, out, menu, sh,
+      const auth = await ensureGhAuth({ installed: ghInstalled, interactive: Boolean(interactive),
+        repoDir: repoDir!, repo: github, out, menu,
         suspendInput: () => { rl?.pause(); process.stdin.setRawMode?.(false); },
         resumeInput: () => rl?.resume() });
       if (!auth.ok) return 1;
-      if (auth.login) ghLogin = auth.login;
-      trusted = await askText(
-        "Your GitHub username",
-        [
-          "The engineer only obeys comments and assignments from usernames on",
-          "this list. Start with just yourself; comma-separate to add teammates.",
-        ],
-        ghLogin || "your-login",
-        v.trusted,
-      );
-      actAs = await menu(
-        "The engineer acts as",
-        [
-          "Acting as you is the simple start: assigning yourself to an issue",
-          "kicks it off. A separate bot account keeps the engineer's activity",
-          "under its own name — this machine's gh must then be signed in as",
-          "that bot, since it is who the engineer pushes and comments as.",
-        ],
-        [
-          { label: "You", value: "me" },
-          { label: "A separate bot account", value: "bot" },
-        ],
-        0,
-        v["act-as"],
-      );
-      if (actAs === "bot") actAs = await askText("Bot username", ["The bot account's GitHub username."], "");
+      if (auth.login) deployLogin = auth.login;
       wakeup = await menu(
         "Wake-up",
         ["The engineer wakes on a schedule to look for new work."],
         [
           { label: "etium watch — run it in a terminal while trying things out; nothing installed", value: "watch" },
-          { label: "always-on — install the once-a-minute wake-up now (cron; a launchd agent when gh's sign-in is keychain-held)", value: "cron" },
+          { label: "always-on — install the once-a-minute wake-up now (launchd agent on macOS; crontab on Linux)", value: "cron" },
           { label: "print — show what always-on would install; you do it later", value: "print" },
         ],
         0,
@@ -836,15 +806,12 @@ async function cmdConfigure(argv: string[]): Promise<number> {
       }
       return 0;
     }
-    const agentLogin = actAs === "me" ? ghLogin : actAs;
     const saved = writeConfig(etiumBase, {
       v: 1,
       library,
-      github: { repo: github, trusted, agent: agentLogin, loop: library === "none" ? "" : `${library}/loop.ts` },
+      github: { repo: github, loop: library === "none" ? "" : `${library}/loop.ts` },
     });
-    // Empty agent = acts-as-me with no verifiable login here: defer to gh's
-    // runtime identity by omitting the var (the surface defaults to it).
-    const env = [`ETIUM_GH_REPO=${github}`, `ETIUM_GH_TRUSTED=${trusted}`, agentLogin ? `ETIUM_GH_AGENT=${agentLogin}` : "", `ETIUM_GH_LOOP=${library === "none" ? "<path-to-your-loop>" : `${library}/loop.ts`}`].filter(Boolean).join(" ");
+    const env = saved.github!.loop ? ghEnv(saved.github!) : `ETIUM_GH_REPO=${github} ETIUM_GH_LOOP=<path-to-your-loop>`;
     if (wakeup === "cron") {
       const w = installWakeup(repoDir!, env, saved.id);
       for (const l of w.lines) out(l);
@@ -862,8 +829,7 @@ async function cmdConfigure(argv: string[]): Promise<number> {
       out(`  ${env} etium watch --surface github`);
       out();
     }
-    if (actAs !== "me" && agentLogin && ghLogin !== agentLogin) out(`  make sure this machine's gh is signed in as ${agentLogin}`);
-    out(`  assign ${agentLogin || "the engineer"} to a GitHub issue to start the first attempt`);
+    out(`  assign ${deployLogin || "the deployment's account"} to a GitHub issue to start the first attempt`);
     return 0;
   } finally {
     rl?.close();

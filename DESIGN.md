@@ -239,7 +239,7 @@ Gate notes: when a decision carries `--note`, the note is recorded in `gate.deci
 - `gate.opened` records the declared answer set (`options`) and lists artifact refs to show the human. `etium gates` renders the inbox across all runs, including each gate's options.
 - Decisions travel through the **mailbox**: `etium approve <run> <gate> [--note ...]` (sugar for the default binary set) or `etium decide <run> <gate> <option> [--note ...]` writes `decisions/<gate>.<occ>.json` `{ decision, note, by, via, ts }`. The lock holder ingests mailbox files, appends `gate.decided`, and deletes the file — consumed once, even with a live supervisor running parallel steps. If no supervisor is alive, the CLI verifies the gate is open, writes the decision file, and spawns a detached supervisor, returning immediately; the supervisor ingests the mailbox at attach (`etium tail` to watch). The CLI never takes the run lock itself.
 - Decisions fail closed twice over: the gate must be open, and the decision must be an element of the option set **as recorded in `gate.opened`** — the ledger, not current loop code, is the validation authority (if the two drift after a loop edit, the supervisor warns and the ledger governs). Invalid decisions are dropped with a message naming the declared options. The sanctioned pre-approval path is explicit at run creation: `etium run --approve merge-approved ...` records intent; when that gate opens it is immediately decided with `via: "preapproval"` — and errors loudly if the gate's declared options do not include `"approve"`.
-- Attribution: `by` is the OS user for CLI, the platform identity for surfaces (M2). Surfaces must enforce their own authorization (the GitHub surface honors an allowlist equivalent to the predecessor's single trusted user).
+- Attribution: `by` is the OS user for CLI, the platform identity for surfaces (M2). Surfaces must enforce their own authorization (the GitHub surface delegates to the repository's own permission model: anyone with Write may command).
 
 ---
 
@@ -365,10 +365,11 @@ draft PR once the branch has commits past its recorded `baseSha`, rewrites
 one bot-owned status comment listing the currently-valid commands, and
 maintains a write-only decoration label (`et:working` / `et:waiting` /
 `et:blocked`) for issue-list filtering. Configuration is environment
-variables with no secret values — `ETIUM_GH_REPO`, `ETIUM_GH_TRUSTED`,
-`ETIUM_GH_AGENT`, `ETIUM_GH_LOOP`, `ETIUM_GH_WORKDIR`, `ETIUM_GH_BASE` —
-and all GitHub access goes through `gh`, whose auth is the operator's.
-Unauthorized authors are refused surface-side (§8 attribution).
+variables with no secret values — `ETIUM_GH_REPO`, `ETIUM_GH_LOOP`,
+`ETIUM_GH_WORKDIR`, `ETIUM_GH_BASE`. The surface acts as the deployment's
+own repo-scoped gh sign-in (`.etium/gh` under the workdir, ADR-022), and
+authorization delegates to the repository's permission model: anyone with
+Write may command; everyone else is refused surface-side (§8 attribution).
 
 ### 10.4 Grader hook
 

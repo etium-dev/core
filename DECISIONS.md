@@ -772,3 +772,47 @@ the token itself (delegation: gh owns its credential end to end).
 Auto-login guidance as the primary answer (it is the workaround for
 keychain-mode, not the path). GH_TOKEN in the scheduled command line
 (secrets in crontab/plists, and etium becomes the credential handler).
+
+---
+
+## ADR-022 — one identity per deployment; trust is the repository's permission model
+
+**Decision.** The GitHub surface has no configurable identities. The
+deployment acts as its own repo-scoped gh sign-in: every etium gh call
+runs with `GH_CONFIG_DIR=<checkout>/.etium/gh`, where gh stores the token
+in its hosts.yml (file-held via `--insecure-storage` on both the token and
+device-flow paths, so nothing ever lands in the shared system keyring; the
+machine's personal gh is never read or written). `configure` creates the
+sign-in — token pasted straight into gh, hidden input — verifies push
+access immediately, and wires a repo-local git credential helper (an empty
+first entry silences global helpers like osxkeychain) so projection pushes
+authenticate the same way. Who may command is not configured either:
+anyone the repository grants Write (checked live per actor against the
+collaborator-permission API, cached per poll, fail-closed). Deleted:
+`ETIUM_GH_TRUSTED`, `ETIUM_GH_AGENT`, `--trusted`, `--act-as`, the
+bot-vs-me question, and config.json's trusted/agent fields — the GitHub
+wiring is a repository, a loop, and one pasted token. The wake-up
+mechanism returns to a platform constant — launchd agent on macOS (the
+platform's blessed scheduler; event triggers like WatchPaths and prompt
+post-sleep ticks are its future), cron on Linux — because auth is
+file-held either way; both verify with one inline tick at install.
+
+**Why.** A day of field failures was identity multiplication: whose
+keychain, whose account is active, which token type for whose repo, which
+machine's gh. Two accounts times three storage contexts times two token
+types made every setup step a place to be wrong. Scoping identity to the
+checkout removes the multiplication: it composes with per-checkout
+config.json and the minted id (the deployment is the unit of everything),
+two checkouts of one repo hold separately revocable tokens, and mode A vs
+mode B collapses into "whose token you paste." Delegating trust to Write
+keeps authorization in the one place it is already administered — GitHub
+grants nothing a Write-holder lacks, since they could push directly and
+the engineer only ever opens draft PRs.
+
+**Rejected.** Machine-scoped identity (one gh account per machine forces
+one deployment identity per machine and fights the operator's personal
+sign-in). `GH_TOKEN` in the scheduled command line (secrets in
+crontabs/plists; etium as credential handler). A trusted-list *and*
+permission checks (two authorization systems). Cron-only wake-up
+(forecloses launchd's event-driven future and demotes the laptop half of
+the audience — the earlier tunnel vision, reversed on analysis).

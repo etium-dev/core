@@ -46,28 +46,22 @@ git config user.email
 
 **Round 2 — only if item 3 became `github`:** (if the `gh` CLI is not
 installed, say so first in this same message — "note: the GitHub CLI isn't
-installed; I'll prepare the wiring, and installing `gh` + authenticating
-lands in your report" — then continue)
+installed; I'll prepare the wiring, and installing `gh` + the deployment
+sign-in land in your report" — then continue)
 
 > GitHub wiring. Reply **yes** to accept, or correct by number:
-> 1. GitHub repository: `<owner/name from origin — or ask>`
-> 2. Commander: `<detected gh username>` — the only username whose
->    comments and assignments are obeyed. Teammates can be added later.
-> 3. The engineer acts **as you**: assigning yourself to an issue starts
->    it. Give a bot username to use a separate account instead — this
->    machine's `gh` must then be authenticated **as that bot**, since it
->    is the account the engineer pushes, comments, and opens PRs as.
-> 4. Wake-up: you run `etium watch` in a terminal while trying things out
+> 1. GitHub repository: `<owner/name from origin — or ask>`. Anyone GitHub
+>    lets push to it (Write) can command the engineer; the engineer acts
+>    as the repository's own sign-in, set up during configure.
+> 2. Wake-up: you run `etium watch` in a terminal while trying things out
 >    — nothing installed. Say **cron** and init installs the once-a-minute
->    wake-up now (cron — headless-proof when gh signs in with a token; a
->    launchd agent when gh's sign-in is keychain-held); say **print** and
->    it goes in my report instead.
+>    wake-up now (a launchd agent on macOS, a crontab entry on Linux);
+>    say **print** and it goes in my report instead.
 
 Two hard rules on answers: an item whose detection failed **has no
 default** — "yes" or an omitted number cannot accept it; if a reply leaves
 such an item unanswered, re-ask **just that item** before proceeding, and
-never infer its value from elsewhere. And never surface raw input names (a
-newcomer has no idea what a "trusted login" is).
+never infer its value from elsewhere. And never surface raw input names.
 
 One conditional item: when the `git config user.email` detection fails,
 add item 5 to round 1 asking what name and email the runs' commits should
@@ -78,15 +72,13 @@ applies them itself. After acceptance, restate the configuration in one line —
 "Configuration: repo /a/b, etium only, no GitHub wiring, scratch in a temp
 dir. Starting." — and proceed.
 
-The accepted items bind these inputs, referenced by the steps below (round 1: 1→`REPO_DIR`, 2→`LIBRARY`, 3→github on/off, 4→`SCRATCH_DIR`; round 2: 1→`GITHUB_REPO`, 2→`TRUSTED`, 3→`AGENT_LOGIN`, 4→`WAKEUP`):
+The accepted items bind these inputs, referenced by the steps below (round 1: 1→`REPO_DIR`, 2→`LIBRARY`, 3→github on/off, 4→`SCRATCH_DIR`; round 2: 1→`GITHUB_REPO`, 2→`WAKEUP`):
 
 | input | required | meaning |
 |---|---|---|
 | `REPO_DIR` | yes | absolute path of the target repository checkout |
 | `GITHUB_REPO` | no | `owner/name` to wire the GitHub surface; omit for terminal-only install |
-| `TRUSTED` | if `GITHUB_REPO` | comma-separated GitHub logins allowed to command the engineer |
-| `AGENT_LOGIN` | if `GITHUB_REPO` | GitHub login whose issue-assignment starts an attempt |
-| `WAKEUP` | if `GITHUB_REPO` | `watch` (foreground, nothing installed), `cron` (init installs the always-on wake-up: cron, or a launchd agent when gh's sign-in is keychain-held), or `print` (goes in the report) |
+| `WAKEUP` | if `GITHUB_REPO` | `watch` (foreground, nothing installed), `cron` (init installs the always-on wake-up: launchd agent on macOS, crontab on Linux), or `print` (goes in the report) |
 | `SCRATCH_DIR` | no | writable directory for throwaway verification work; default: a fresh `mktemp -d` directory |
 | `LIBRARY` | yes (round 1, default `ralph`) | `ralph` (clones the reference loop — writes a commit), `ai-engineer` (clones the full workflow — writes a commit; only by explicit choice, never assumed), or `none` (nothing added) |
 
@@ -169,13 +161,14 @@ installs or prints the crontab entry per the wake-up answer:
 ```sh
 cd "$REPO_DIR"
 etium configure --library <ralph|ai-engineer|none> --github <owner/name|off> \
-  --trusted <logins> --act-as <me|bot-login> --wakeup <watch|cron|print> \
-  --git-name "<name>" --git-email "<email>"
+  --wakeup <watch|cron|print> --git-name "<name>" --git-email "<email>"
 ```
 
-(Omit `--trusted`/`--act-as`/`--wakeup` when GitHub wiring is off, and the
-git identity flags when the `git config user.email` detection succeeded —
-when it failed they are required, with values from the interview's item 5.)
+(Omit `--wakeup` when GitHub wiring is off, and the git identity flags
+when the `git config user.email` detection succeeded — when it failed they
+are required, with values from the interview's item 5. GitHub wiring also
+needs the repository's own gh sign-in — see Step 4's note; without one,
+configure exits 1 printing the exact sign-in command to relay.)
 
 **PASS**: exit 0. On exit 1: relay every `needs` line to the operator
 **verbatim** — each contains the command that fixes it — list them in the
@@ -269,19 +262,13 @@ to Step 5.
 
 ## Step 4 — GitHub verification (only if wiring was chosen)
 
-`etium configure` already gated on `gh` being installed and authenticated.
-Confirm the account can push, then prove the wiring with one tick:
+`etium configure` already verified the deployment sign-in and its push
+access (it exits 1 with the sign-in command otherwise). Prove the wiring
+with one tick:
 
 ```sh
-gh api "repos/$GITHUB_REPO" --jq .permissions.push
-```
-
-**PASS**: prints `true`. Otherwise stop and report: "the authenticated
-account needs Write on the repository".
-
-```sh
-cd "$REPO_DIR" && ETIUM_GH_REPO="$GITHUB_REPO" ETIUM_GH_TRUSTED="$TRUSTED" \
-  ETIUM_GH_AGENT="$AGENT_LOGIN" ETIUM_GH_LOOP="$LIBRARY/loop.ts" etium tick --surface github
+cd "$REPO_DIR" && ETIUM_GH_REPO="$GITHUB_REPO" ETIUM_GH_LOOP="$LIBRARY/loop.ts" \
+  etium tick --surface github
 ```
 
 (With `LIBRARY=none`, substitute the path of the operator's own loop for
@@ -299,15 +286,16 @@ End with a report to your operator containing exactly:
    (e.g. `SKIPPED — GITHUB_REPO not provided`, `SKIPPED — LIBRARY=none`).
    Never invent other status words.
 2. The commit hash created in Step 2 (only when a library was chosen).
-3. Remaining manual steps, chosen from: install the GitHub CLI and/or
-   authenticate `gh` on this machine — **as the bot account when one was
-   chosen**; on a headless or SSH-driven machine the sturdy form is
-   `gh auth login -h github.com --with-token --insecure-storage`, pasting
-   a fine-grained token scoped to the repository (Issues, Pull requests,
-   Contents — read/write);
+3. Remaining manual steps, chosen from: install the GitHub CLI; create
+   the repository's deployment sign-in when configure reported none —
+   `GH_CONFIG_DIR="$REPO_DIR/.etium/gh" gh auth login -h github.com
+   --with-token --insecure-storage`, pasting a token for the account the
+   engineer should act as (fine-grained scoped to the repository when
+   that account owns it; classic `repo`-scope when it is a collaborator);
    authenticate a harness before real-persona runs (pi's `/login` TUI works
    over SSH; codex headless: `codex login --api-key` or the
-   `OPENAI_API_KEY` env var); install the printed crontab line; assign
-   `AGENT_LOGIN` to a GitHub issue to start the first attempt.
+   `OPENAI_API_KEY` env var); install the printed always-on wake-up;
+   assign the deployment's account to a GitHub issue to start the first
+   attempt.
 4. Nothing else — no summaries of what the package "will" do, no edits you
    "recommend". Install reports state what was verified.

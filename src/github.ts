@@ -9,15 +9,21 @@
 // access goes through the `gh` CLI — auth stays gh's problem, per
 // MODEL_AUTH's delegation principle.
 //
-// Config (env): ETIUM_GH_REPO (owner/name, required), ETIUM_GH_TRUSTED
-// (comma-separated logins, required), ETIUM_GH_LOOP (loop module path,
-// required), ETIUM_GH_AGENT (login whose assignment triggers tasks;
-// default: the authenticated user), ETIUM_GH_WORKDIR (the checkout to
-// branch from; default cwd), ETIUM_GH_BASE (PR base branch, default main),
-// ETIUM_GH_CMD (gh binary override; tests point this at a stub).
+// Identity and trust are not configured (ADR-022): the surface acts as the
+// deployment's own repo-scoped gh sign-in (stored under the workdir's
+// .etium/gh — see ghConfigDir), its assignment starts attempts, and anyone
+// GitHub lets push (Write) may command — authorization delegates to the
+// repository's own permission model, checked live and fail-closed.
+//
+// Config (env): ETIUM_GH_REPO (owner/name, required), ETIUM_GH_LOOP (loop
+// module path, required), ETIUM_GH_WORKDIR (the checkout to branch from;
+// default cwd), ETIUM_GH_BASE (PR base branch, default main), ETIUM_GH_CMD
+// (gh binary override; tests point this at a stub).
 
 import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
+import * as path from "node:path";
+import { ghConfigDir } from "./config.ts";
 import type { RunView, Surface, SurfaceDecision, SurfacePollResult, SurfaceTask } from "./types.ts";
 
 const env = (k: string, d?: string): string => {
@@ -27,13 +33,14 @@ const env = (k: string, d?: string): string => {
 };
 const GH = () => process.env.ETIUM_GH_CMD ?? "gh";
 const REPO = () => env("ETIUM_GH_REPO");
-const TRUSTED = () => env("ETIUM_GH_TRUSTED").split(",").map((s) => s.trim()).filter(Boolean);
 const PREFIX = "/et";
+const ghDir = () => ghConfigDir(path.resolve(process.env.ETIUM_GH_WORKDIR ?? process.cwd()));
 
 function gh(args: string[], input?: unknown): unknown {
   const r = spawnSync(GH(), args, {
     encoding: "utf8",
     input: input === undefined ? undefined : JSON.stringify(input),
+    env: { ...process.env, GH_CONFIG_DIR: ghDir() },
   });
   if (r.status !== 0) throw new Error(`gh ${args.slice(0, 3).join(" ")}: ${(r.stderr || "").trim()}`);
   const out = (r.stdout || "").trim();
@@ -59,16 +66,31 @@ interface Issue { number: number; state: string; title: string; body?: string; p
 interface Comment { id: number; body: string; created_at: string; user: { login: string } }
 
 let agentLogin: string | undefined;
-const agent = (): string =>
-  (agentLogin ??= process.env.ETIUM_GH_AGENT ?? ((api("user") as { login: string }).login));
+const agent = (): string => (agentLogin ??= (api("user") as { login: string }).login);
 
-/** Last assignment of the agent must come from a trusted human (invariant 6). */
-function assignedByTrusted(issueN: number): boolean {
+/** Trust is the repository's own permission model (ADR-022): anyone GitHub
+ * lets push may command. Cached per poll; lookup failures fail closed (§8). */
+function canCommand(login: string, cache: Map<string, boolean>): boolean {
+  let v = cache.get(login);
+  if (v === undefined) {
+    try {
+      const p = (api(`repos/${REPO()}/collaborators/${encodeURIComponent(login)}/permission`) as { permission?: string })?.permission;
+      v = p === "admin" || p === "write" || p === "maintain";
+    } catch {
+      v = false;
+    }
+    cache.set(login, v);
+  }
+  return v;
+}
+
+/** Last assignment of the agent must come from someone with Write (invariant 6). */
+function assignedByAuthorized(issueN: number, can: Map<string, boolean>): boolean {
   const tl = (api(`repos/${REPO()}/issues/${issueN}/timeline?per_page=100`) ?? []) as {
     event?: string; assignee?: { login: string }; actor?: { login: string };
   }[];
   const last = [...tl].reverse().find((e) => e.event === "assigned" && e.assignee?.login === agent());
-  return !!last && TRUSTED().includes(last.actor?.login ?? "");
+  return !!last && canCommand(last.actor?.login ?? "", can);
 }
 
 function parseCommand(body: string): { word: string; note?: string } | null {
@@ -115,12 +137,11 @@ const surface: Surface = {
   poll({ cursor, runs }): SurfacePollResult {
     // Fail fast and legibly on broken auth: every call below dies anyway, but
     // the operator deserves the remedy, not a pile of raw gh stderr.
-    const who = spawnSync(GH(), ["auth", "status"], { encoding: "utf8" });
+    const who = spawnSync(GH(), ["auth", "status"], { encoding: "utf8", env: { ...process.env, GH_CONFIG_DIR: ghDir() } });
     if (who.error) throw new Error("gh CLI not found — install: curl -sS https://webi.sh/gh | sh");
     if (who.status !== 0)
-      throw new Error(
-        `gh auth is invalid — run: gh auth login${process.env.ETIUM_GH_AGENT ? ` (as ${process.env.ETIUM_GH_AGENT})` : ""}`,
-      );
+      throw new Error(`no deployment sign-in (${ghDir()}) — run: etium configure`);
+    const can = new Map<string, boolean>();
     const since = cursor ?? new Date(0).toISOString();
     const now = new Date().toISOString();
     const tasks: SurfaceTask[] = [];
@@ -135,7 +156,7 @@ const surface: Surface = {
 
       // Ownership → task (open, assigned, no active run, trusted assigner).
       if (issue.state === "open" && !active) {
-        if (!assignedByTrusted(issue.number)) continue;
+        if (!assignedByAuthorized(issue.number, can)) continue;
         const attempt = runs.filter((r) => r.params.issue === String(issue.number)).length;
         tasks.push({
           key: `issue-${issue.number}#${attempt}`,
@@ -177,7 +198,7 @@ const surface: Surface = {
         .filter((c) => c.created_at > since)
         .sort((a, b) => a.created_at.localeCompare(b.created_at));
       for (const c of comments) {
-        if (!TRUSTED().includes(c.user.login)) continue;
+        if (!canCommand(c.user.login, can)) continue;
         const cmd = parseCommand(c.body);
         if (!cmd) continue;
         if (cmd.word === "stop") {
