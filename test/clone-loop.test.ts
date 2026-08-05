@@ -46,6 +46,56 @@ test("clone-loop --replace: moves the existing copy to .old (never deletes), the
   assert.equal(fs.readFileSync(path.join(dest + ".old", "loop.ts"), "utf8"), "// my edited copy\n");
 });
 
+test("clone-loop --replace refuses the library source itself; a pin beside it is fine (ADR-034)", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "etium-src-"));
+  const src = path.join(root, "srcrepo");
+  fs.mkdirSync(path.join(src, "ai-engineer"), { recursive: true });
+  fs.writeFileSync(path.join(src, "package.json"), JSON.stringify({ name: "@etium/core" }));
+  fs.writeFileSync(path.join(src, "ai-engineer", "loop.ts"), "// SOURCE\n");
+  assert.equal(await main(["clone-loop", "ai-engineer", "--into", path.join(src, "ai-engineer"), "--replace"]), 1);
+  assert.equal(fs.readFileSync(path.join(src, "ai-engineer", "loop.ts"), "utf8"), "// SOURCE\n", "the source is never clobbered");
+  assert.equal(await main(["clone-loop", "ai-engineer", "--into", path.join(src, ".etium", "loop")]), 0);
+  assert.ok(fs.existsSync(path.join(src, ".etium", "loop", "loop.ts")), "the deployment pin clones fine");
+});
+
+test("configure in the library source: the deployment pins under .etium/loop; the source stays untouched (ADR-034)", () => {
+  const cli = path.resolve("src/cli.ts");
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "etium-pin-"));
+  const repo = path.join(root, "repo");
+  fs.mkdirSync(repo);
+  const g = (...a: string[]) => spawnSync("git", ["-C", repo, "-c", "user.name=t", "-c", "user.email=t@t", ...a]);
+  g("init", "-q"); g("commit", "-qm", "init", "--allow-empty");
+  g("config", "user.name", "t"); g("config", "user.email", "t@t");
+  fs.writeFileSync(path.join(repo, "package.json"), JSON.stringify({ name: "@etium/core" }));
+  fs.mkdirSync(path.join(repo, "ai-engineer"));
+  fs.writeFileSync(path.join(repo, "ai-engineer", "loop.ts"), "// SOURCE\n");
+  const stubBin = path.join(root, "stubbin");
+  fs.mkdirSync(stubBin);
+  fs.writeFileSync(path.join(stubBin, "pi"), "#!/bin/sh\necho 0.0.0-stub\n", { mode: 0o755 });
+  const gh = path.join(root, "gh-stub");
+  fs.writeFileSync(gh, `#!/bin/sh
+case "$*" in
+  *"auth status"*) exit 0 ;;
+  *"api user"*) echo botx ;;
+  *".permissions.push"*) echo true ;;
+esac
+exit 0
+`, { mode: 0o755 });
+  const env = { ...process.env, PATH: `${stubBin}:${process.env.PATH}`, ETIUM_GH_CMD: gh };
+  const r = spawnSync(process.execPath, [cli, "configure", "--library", "ai-engineer", "--github", "acme/w", "--wakeup", "print"], { cwd: repo, encoding: "utf8", env });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const cfg = JSON.parse(fs.readFileSync(path.join(repo, ".etium", "config.json"), "utf8"));
+  assert.equal(cfg.github.loop, ".etium/loop/loop.ts", "the deployment runs the pin, not the source");
+  assert.ok(fs.existsSync(path.join(repo, ".etium", "loop", "loop.ts")));
+  assert.ok(!fs.readFileSync(path.join(repo, ".etium", "loop", "loop.ts"), "utf8").includes("// SOURCE"), "pin content is the packaged library");
+  assert.equal(fs.readFileSync(path.join(repo, "ai-engineer", "loop.ts"), "utf8"), "// SOURCE\n", "source untouched");
+  // Re-run: the pin is kept by default, never silently refreshed.
+  fs.writeFileSync(path.join(repo, ".etium", "loop", "PIN-MARK"), "x");
+  const r2 = spawnSync(process.execPath, [cli, "configure", "--library", "ai-engineer", "--github", "acme/w", "--wakeup", "print"], { cwd: repo, encoding: "utf8", env });
+  assert.equal(r2.status, 0, r2.stdout + r2.stderr);
+  assert.ok(fs.existsSync(path.join(repo, ".etium", "loop", "PIN-MARK")), "re-run keeps the pin");
+});
+
 test("configure: sets the git identity itself (from flags when non-interactive; hard-fails without)", () => {
   const cli = path.resolve("src/cli.ts");
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "etium-ident-"));

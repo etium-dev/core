@@ -1227,3 +1227,36 @@ files and events). Surface-side delivery to the next gate (arrives
 rounds late, and still never reaches a reviewer prompt). Treating
 plain non-`/et` comments as instructions (the thread is for humans;
 `/et` is the address).
+
+---
+
+## ADR-034 — in the library-source checkout, the deployment runs a pin
+
+**Decision.** When `configure` runs in the loop-library's own source
+checkout (detected by `package.json` name `@etium/core`), the library
+question becomes a placement question: **pinned** (default) clones the
+*installed* etium's library to `.etium/loop` and wires
+`github.loop = ".etium/loop/loop.ts"`; **live** runs the source tree
+directly. Re-runs manage the pin — keep (default) or refresh from the
+installed etium, with the replaced copy moved aside as always. The
+repo-root replace question is suppressed there, and `clone-loop
+--replace` targeting a library folder inside the source checkout
+refuses outright: that folder is the upstream, not a clone. Normal
+repos are untouched — no new question, no behavior change.
+
+**Why.** Dogfooding etium on etium collapses the two locations the
+copy-and-own model keeps distinct: the package's bundled source and the
+deployment's executed clone become the same folder. That produced two
+real failures in one afternoon — a `--replace` that "upgraded" the
+source tree to the published copy, and the standing hazard that
+uncommitted template edits silently drive (and diverge) live runs. The
+pin restores the model's separation inside the one repo that breaks it,
+and folds its whole lifecycle into the command the product already
+teaches for everything: re-run `etium configure`.
+
+**Rejected.** A documented manual pattern (`clone-loop --into` + a
+config edit — forgettable by design; if the answer isn't "run
+configure", it isn't done). A second checkout as the deployment
+(supported by ADR-022, but needs keep-fresh plumbing and splits
+attention). Running the installed package's bundled copy in place
+(npm replaces those files on upgrade, mid-run).

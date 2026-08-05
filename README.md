@@ -71,6 +71,12 @@ etium run "make the tests pass" --param check="npm test" --param iterations=20
 
 (`--loop` defaults to `ralph/loop.ts`; any path works.)
 
+Using etium on etium's own repository? There — and only there — the
+library folder is the *source*, not a clone, so `configure` pins the
+deployment's loop to a copy of the installed library under `.etium/loop`
+(ADR-034): uncommitted library edits never drive the agents, and
+re-running `configure` is how you keep or refresh the pin.
+
 ## What a run is
 
 A directory. `task.md` (intent), `events.jsonl` (append-only ledger — the

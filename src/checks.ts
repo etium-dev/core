@@ -25,6 +25,41 @@ export function etiumsOnPath(): string[] {
   return [...seen.values()];
 }
 
+/** True when this checkout IS the loop-library source (@etium/core) —
+ * where "clone" and "source" would collide: replace must refuse, and the
+ * deployment's loop belongs in a pin under .etium/loop (ADR-034). */
+export function isLibrarySource(repoDir: string): boolean {
+  try {
+    return (JSON.parse(fs.readFileSync(path.join(repoDir, "package.json"), "utf8")) as { name?: string }).name === "@etium/core";
+  } catch {
+    return false;
+  }
+}
+
+/** Configure's loop-placement question, asked only in the library-source
+ * checkout (ADR-034): the deployment runs a pin under .etium/loop, or the
+ * source tree live. Re-runs manage the pin (keep / refresh). */
+export function loopPlacement(hasPin: boolean): { explain: string[]; options: { label: string; value: string }[] } {
+  return {
+    explain: [
+      "This checkout is the loop library's source. The deployment can run a",
+      "pinned copy of the installed etium's library under .etium/loop —",
+      "untouched by your source edits — or run the source tree live, where",
+      "uncommitted template edits drive the agents and can diverge runs.",
+    ],
+    options: hasPin
+      ? [
+          { label: "pinned — keep the existing .etium/loop copy", value: "keep" },
+          { label: "pinned — refresh .etium/loop from the installed etium (old copy moves aside)", value: "refresh" },
+          { label: "live — run the source tree directly", value: "live" },
+        ]
+      : [
+          { label: "pinned — copy the installed library to .etium/loop (recommended)", value: "new" },
+          { label: "live — run the source tree directly", value: "live" },
+        ],
+  };
+}
+
 /** Options for configure's default-harness question: installed first, then
  * known-but-absent (you may be installing it later), then skip. */
 export function harnessOptions(installed: string[], current?: string): { options: { label: string; value: string }[]; defIdx: number } {

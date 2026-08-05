@@ -15,7 +15,7 @@ import { loadState, openGates, readLedger, writeStateCache } from "./ledger.ts";
 import { isLockLive, readLock, writeDecision } from "./lock.ts";
 import { abandonRun, createRun, supervise, superviseDetached } from "./supervisor.ts";
 import { configuredSurfaces, tickOnce, watchLoop } from "./tick.ts";
-import { etiumsOnPath, harnessOptions, harnessParamLines } from "./checks.ts";
+import { etiumsOnPath, harnessOptions, harnessParamLines, isLibrarySource, loopPlacement } from "./checks.ts";
 import { defaultParams, readConfig, statusLines, writeConfig } from "./config.ts";
 import { ensureGhAuth, repoLogin } from "./ghauth.ts";
 import { installWakeup, printWakeup, removeWakeup, wakeupInstalled } from "./wakeup.ts";
@@ -40,7 +40,7 @@ usage:
   etium rebuild <run>        rebuild state.json from the ledger
   etium clone-loop [library] [--into dir] [--replace]   copy a loop library (ralph, ai-engineer) into your repo (no arg: list)
   etium configure [--library ralph|ai-engineer|none] [--github owner/name|off]
-             [--harness pi|codex|…] [--wakeup watch|cron|print] [--git-name n] [--git-email e] [--yes]
+             [--harness pi|codex|…] [--wakeup watch|cron|print] [--loop-pin keep|refresh|new|live] [--git-name n] [--git-email e] [--yes]
              check the machine, ask, apply — re-run any time (wake-up on/off, status)
   etium --version
 
@@ -415,6 +415,10 @@ function cmdCloneLoop(argv: string[]): number {
   }
   const src = path.join(packageRoot, name);
   const dest = path.resolve(v.into ?? name);
+  if (v.replace && LIBRARIES.includes(path.basename(dest)) && isLibrarySource(path.dirname(dest))) {
+    process.stderr.write(`etium clone-loop: ${dest} is the library SOURCE (this checkout is @etium/core), not a clone — replace refused. Deployment-pinned copies live under .etium/loop; etium configure manages them (ADR-034).\n`);
+    return 1;
+  }
   if (fs.existsSync(dest)) {
     if (!v.replace) {
       process.stderr.write(`etium clone-loop: ${dest} already exists — clone-loop never overwrites. Re-run with --replace to swap in the packaged version (your copy moves aside to .old first).\n`);
@@ -526,6 +530,7 @@ async function cmdConfigure(argv: string[]): Promise<number> {
     options: {
       library: { type: "string" },
       harness: { type: "string" },
+      "loop-pin": { type: "string" },
       github: { type: "string" },
       wakeup: { type: "string" },
       "git-name": { type: "string" },
@@ -616,10 +621,7 @@ async function cmdConfigure(argv: string[]): Promise<number> {
     }
   }
   if (installedHarnesses.length === 0) {
-    out("  needs  a coding-agent harness — harnesses are the agents etium");
-    out("         supervises; install at least one, then run etium configure again:");
-    out("         pi     https://pi.dev");
-    out("         codex  https://github.com/openai/codex");
+    out("  needs  a coding-agent harness — harnesses are the agents etium\n         supervises; install at least one, then run etium configure again:\n         pi     https://pi.dev\n         codex  https://github.com/openai/codex");
     hardFail = true;
   }
   out();
@@ -746,7 +748,7 @@ async function cmdConfigure(argv: string[]): Promise<number> {
       v.library,
     );
     let libReplace = false;
-    if (library !== "none" && fs.existsSync(path.resolve(library)))
+    if (library !== "none" && fs.existsSync(path.resolve(library)) && !isLibrarySource(repoDir ?? process.cwd()))
       libReplace = (await menu(
         `Existing ${library}/`,
         [
@@ -761,6 +763,7 @@ async function cmdConfigure(argv: string[]): Promise<number> {
         0,
       )) === "replace";
 
+    let pinAction = ""; // ADR-034: "", or keep | refresh | new — the deployment's pinned loop
     const { options: hOpts, defIdx: hDef } = harnessOptions(installedHarnesses, readConfig(etiumBase)?.params?.harness);
     const harnessDefault = await menu("Default harness", [
       "The harness is the coding agent etium runs for each step; this default",
@@ -801,6 +804,11 @@ async function cmdConfigure(argv: string[]): Promise<number> {
         resumeInput: () => rl?.resume() });
       if (!auth.ok) return 1;
       if (auth.login) deployLogin = auth.login;
+      if (isLibrarySource(repoDir!) && library !== "none") {
+        const lp = loopPlacement(fs.existsSync(path.join(repoDir!, ".etium", "loop")));
+        pinAction = await menu("Loop placement", lp.explain, lp.options, 0, v["loop-pin"]);
+        if (pinAction === "live") pinAction = "";
+      }
       wakeup = await menu(
         "Wake-up",
         ["The engineer wakes on a schedule to look for new work."],
@@ -817,7 +825,11 @@ async function cmdConfigure(argv: string[]): Promise<number> {
 
     out();
     if (library !== "none") {
-      if (fs.existsSync(path.resolve(library)) && !libReplace) out(`${library}/ is already in this repo — leaving it untouched.`);
+      if (pinAction === "new" || pinAction === "refresh") {
+        const r = await main(["clone-loop", library, "--into", path.join(".etium", "loop"), ...(pinAction === "refresh" ? ["--replace"] : [])]);
+        if (r !== 0) return r;
+      } else if (pinAction === "keep") out(".etium/loop — the deployment's pinned copy, kept.");
+      else if (fs.existsSync(path.resolve(library)) && !libReplace) out(`${library}/ is already in this repo — leaving it untouched.`);
       else {
         const r = await main(["clone-loop", library, ...(libReplace ? ["--replace"] : [])]);
         if (r !== 0) return r;
@@ -829,21 +841,15 @@ async function cmdConfigure(argv: string[]): Promise<number> {
       out(style("1", "Done. Next:"));
       out();
       if (library === "ralph") {
-        out(`  echo "your goal, precisely stated" > PROMPT.md`);
-        out(`  etium run "your goal" --loop ralph/loop.ts --workspace . --param check="npm test"`);
-        out();
-        out(`  ralph iterates the agent until the check passes; swap in any check.`);
-      } else if (library === "none") {
-        out(`  write a loop (https://etium.dev/quickstart.html) and: etium run "goal" --loop your-loop.ts`);
-      } else {
-        out(`  etium run "your goal" --loop ${library}/loop.ts --worktree`);
-      }
+        out(`  echo "your goal, precisely stated" > PROMPT.md\n  etium run "your goal" --loop ralph/loop.ts --workspace . --param check="npm test"\n\n  ralph iterates the agent until the check passes; swap in any check.`);
+      } else if (library === "none") out(`  write a loop (https://etium.dev/quickstart.html) and: etium run "goal" --loop your-loop.ts`);
+      else out(`  etium run "your goal" --loop ${library}/loop.ts --worktree`);
       return 0;
     }
     const saved = writeConfig(etiumBase, {
       v: 1,
       library,
-      github: { repo: github, loop: library === "none" ? "" : `${library}/loop.ts` },
+      github: { repo: github, loop: library === "none" ? "" : pinAction ? ".etium/loop/loop.ts" : `${library}/loop.ts` },
       ...(cfgParams && { params: cfgParams }),
     });
     if (wakeup === "cron") {
@@ -857,12 +863,7 @@ async function cmdConfigure(argv: string[]): Promise<number> {
     }
     out(style("1", "Done. Next:"));
     out();
-    if (wakeup === "watch") {
-      out("  wake the engineer while you try it (Ctrl-C to stop):");
-      out();
-      out(`  etium watch`);
-      out();
-    }
+    if (wakeup === "watch") out("  wake the engineer while you try it (Ctrl-C to stop):\n\n  etium watch\n");
     out(`  comment "/et <what you want>" on a GitHub issue to start the first attempt`);
     return 0;
   } finally {
