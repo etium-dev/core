@@ -26,7 +26,7 @@ etium clone-loop ai-engineer
 interactively — checks with fix commands first, then the questions. The
 manual steps below show exactly what it does.)
 
-The library is a plain folder — a ~140-line loop, eleven persona prompts, and
+The library is a plain folder — a ~200-line loop, twelve persona prompts, and
 a README with the exact contract. Cloning it into your repo is the intended
 move: the templates are *yours to edit*, and the folder has no dependencies
 (type imports only — it runs anywhere). The GitHub integration is not in
@@ -217,7 +217,7 @@ and the loop's params/gates/artifacts contract: [README.md](README.md).
   run uses your baseline `params`. Ask for one it can't place and it stops
   to let you pick from the list or rephrase — it never guesses. Use
   lowercase mode names (operator words are matched lowercased).
-- **Change the workflow itself.** The loop is ~140 lines of ordinary
+- **Change the workflow itself.** The loop is ~200 lines of ordinary
   TypeScript — add a stage, change an option set, split a persona. The
   loop-authoring guide (`WRITING_LOOPS.md`) is the manual; the surface
   needs no changes, because it matches commands against whatever options

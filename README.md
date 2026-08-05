@@ -144,7 +144,9 @@ retype, no secrets anywhere. Deployment
 defaults for loop params — the `harness`, per-persona `harness.<step>` /
 `model.<step>`, `rounds`, … — live in `.etium/config.json` under `params`,
 merged beneath every run's own values; `etium configure` asks for the
-default harness and probes every harness the params reference.
+default harness and probes every harness the params reference. A `modes`
+map names param bundles the operator picks in plain words ("use deep
+mode") — a loop selects one per run through its own interpreter (ADR-037).
 Custom surface modules are deferred until a `surfaces` config field
 exists (DESIGN §10.3, ADR-030).
 

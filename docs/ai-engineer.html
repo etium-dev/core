@@ -83,7 +83,7 @@ etium clone-loop ai-engineer</code></pre>
   <p>(<code>etium configure</code> does Part 0's setup and Part 3's wiring
   questions interactively — checks with fix commands first, then the
   questions. The manual steps below show exactly what it does.)</p>
-  <p>The package is a plain folder — a ~140-line loop, eleven persona prompts,
+  <p>The package is a plain folder — a ~200-line loop, twelve persona prompts,
   one GitHub surface file, and a <a href="https://github.com/etium-dev/core/tree/main/ai-engineer">README</a>
   with the exact contract. Cloning it into your repo is the intended move:
   the templates are <em>yours to edit</em>, and the folder has no
@@ -247,7 +247,17 @@ run DONE</span></code></pre>
     param live in <code>.etium/config.json</code> under <code>params</code>;
     <code>etium configure</code> asks for the default harness and validates
     every harness your params name.</li>
-    <li><strong>Change the workflow itself.</strong> The loop is ~140 lines
+    <li><strong>Name modes and pick them in plain words.</strong> Under
+    <code>modes</code> in <code>.etium/config.json</code>, bundle params
+    behind a name and a description — say
+    <code>"deep": { "describe": "careful — fable designs", "params": {
+    "harness.design": "fable", "rounds": "3" } }</code>. Then just say it —
+    “use deep mode”, “run it fast”, “the careful one” — and the interpreter
+    maps your words to a mode and overlays its params for the whole run. Say
+    nothing about a mode and the run uses your baseline <code>params</code>;
+    ask for one it can’t place and it stops so you can pick from the list or
+    rephrase, never guessing. Lowercase mode names.</li>
+    <li><strong>Change the workflow itself.</strong> The loop is ~200 lines
     of ordinary TypeScript — add a stage, change an option set, split a
     persona. The
     loop-authoring guide in <a href="https://github.com/etium-dev/core">the repo</a>

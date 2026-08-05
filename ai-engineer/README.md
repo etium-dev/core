@@ -33,10 +33,27 @@ every harness the params reference; per-persona keys you edit in. Config
 params merge under a run's own values, so explicit flags, surface params,
 and task fields always win.
 
+**Modes** (optional): name a param bundle in `.etium/config.json` under
+`modes` and the operator can pick it in plain words —
+
+```json
+"modes": {
+  "deep": { "describe": "careful — fable designs, gpt-5.5 implements",
+            "params": { "harness.design": "fable", "model.implement": "gpt-5.5", "rounds": "3" } }
+}
+```
+
+At kickoff the interpreter maps the operator's words ("use deep mode",
+"run it fast", "the careful one") to a mode, whose `params` overlay the
+run for every step. No mode in the message → the baseline `params`
+above. A mode plainly meant but unmatched parks the `mode` gate to pick
+or rephrase — never a guess. Use lowercase mode names.
+
 **Gates**:
 
 | gate | opens | options |
 |---|---|---|
+| `mode` | at kickoff, only when `modes` are configured and the operator's words ask for one the interpreter can't place | the mode names · `default` · `consider` — carries a `reason` listing the modes; pick one, ask for `default` (the baseline), or rephrase |
 | `route` | at kickoff (unless the directive already routed), and after every stage | `debug · design · consider` — `plan` appears once a design converged (a mini-design is cheap by construction); `implement` once a plan converged; `finalize` once implementation converged — the one closing act: retires `ai/` into a distilled final commit (SUMMARY lines become the message) and completes the run |
 | `<stage>-stuck` | reviewer still objects after `rounds` rounds | `keep-going · accept · consider` — ending is `/et stop`, from anywhere; carries a `reason` and shows REVIEW.md first |
 
