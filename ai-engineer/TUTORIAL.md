@@ -149,6 +149,13 @@ Then, on GitHub:
    Anything else — `/et actually, wrap this up` — goes to the loop's
    interpreter, which maps it to the vocabulary or asks you to rephrase.
    Anyone without Write is ignored.
+3. **Speak mid-stage, any time.** A `/et` comment while a stage is
+   working — no gate open — is never lost: it becomes an operator
+   instruction for that stage, delivered to the builder *and* the
+   reviewer every round until the stage converges, as ground truth that
+   outranks the repository's own docs. `/et use tabs, and the identity
+   file may be edited` mid-design steers both the designer and its
+   critic.
 3. **Review the draft PR.** As soon as a stage produces artifacts, the
    surface pushes the branch and opens one draft PR. The `ai/` documents
    and the commits are the reviewable work.
