@@ -199,8 +199,8 @@ and the loop's params/gates/artifacts contract: [README.md](README.md).
 
 - **Edit the personas.** `templates/*.md` are plain markdown — team
   conventions belong in `conventions.md`, stage behavior in each persona.
-  Editing a template mid-run fails loudly rather than silently replaying
-  stale work; finish or abandon runs first.
+  Each run snapshots the whole library at creation, so edits apply to the
+  next run you start — never to one already in flight.
 - **Tune the knobs.** `--param rounds=3`, `--param wall=30m`, `--param
   check="make test"`, per-run `--harness`/`--param model=…` — and
   per-persona: `--param harness.implement=codex`, `--param

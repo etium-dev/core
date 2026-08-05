@@ -169,7 +169,7 @@ test("foreign await guard: a never-resolving non-etium promise errors out", asyn
   assert.match((last.data as { summary: string }).summary, /non-etium promise/);
 });
 
-test("divergence: editing a template mid-run fails loudly", async () => {
+test("divergence: a template that changes between attaches fails loudly (integrity check under the run snapshot)", async () => {
   const { runDir, workspace } = tmpRun();
   fs.writeFileSync(path.join(workspace, "P.md"), "version one");
   const loop: LoopFn = async (run) => {

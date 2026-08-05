@@ -191,8 +191,9 @@ result instantly; the first unrecorded call executes for real. "Resume" and
    detects a loop stuck on a non-etium promise and errors the run.
 3. **Don't change a recorded step's config.** Harness, model, prompt
    (template content included), budget, env — a mismatch against the ledger
-   is a loud `DIVERGENCE`, never a silent re-run. Renaming the step is the
-   escape hatch (`etium redo` arrives in M1).
+   is a loud `DIVERGENCE`, never a silent re-run. Each run executes its own
+   frozen snapshot of the loop (ADR-036), so library edits can't trip this;
+   a divergence means step config that isn't a pure function of prior results.
 4. **Steps are at-least-once; write them re-enterable.** A supervisor killed
    mid-step re-executes that step from scratch with fresh context. Have each
    step leave the workspace in a state it can re-enter — under `--worktree`,

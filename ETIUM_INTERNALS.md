@@ -150,9 +150,9 @@ Two guarantees keep replay honest:
   (templates included), budgets, env. On replay, if the current code would
   run that step differently than the ledger recorded, etium refuses with a
   `DIVERGENCE` error rather than silently pretending the old result came
-  from the new configuration. History cannot be edited, only extended;
-  when you truly need to redo, that is an explicit operation, not a quiet
-  substitution.
+  from the new configuration. History cannot be edited, only extended.
+  Runs are hermetic against this by construction: creation snapshots the
+  loop into the run directory, and replay executes the snapshot (ADR-036).
 
 Nondeterminism gets the same treatment in miniature: a loop that needs a
 timestamp or a random id records it once through `run.effect`, and replay

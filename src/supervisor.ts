@@ -118,9 +118,26 @@ export function createRun(base: string, spec: CreateRunSpec): { runId: string; r
     }
   }
 
+  // Snapshot the loop into the run (ADR-036): replay always executes this
+  // frozen copy, so upgrades and edits never touch in-flight runs and a
+  // run directory is hermetic — replayable anywhere, forever. A directory
+  // containing templates/ is a loop library and is copied whole; a bare
+  // loop file is copied alone (its run.t reads fall back to the workspace).
+  const snapDir = path.join(runDir, "loop");
+  const srcDir = path.dirname(loopPath);
+  if (fs.existsSync(path.join(srcDir, "templates"))) {
+    fs.cpSync(srcDir, snapDir, {
+      recursive: true,
+      filter: (src) => !/(^|\/)(\.git|node_modules|\.etium)($|\/)/.test(path.relative(srcDir, src)),
+    });
+  } else {
+    fs.mkdirSync(snapDir, { recursive: true });
+    fs.copyFileSync(loopPath, path.join(snapDir, path.basename(loopPath)));
+  }
+  const snapLoop = path.join("loop", path.basename(loopPath)); // runDir-relative: portable
   const params = spec.params ?? {};
   const cfg: LoopConfig = {
-    loop: loopPath,
+    loop: snapLoop,
     params,
     workspace,
     preapprove: spec.preapprove ?? [],
@@ -131,7 +148,7 @@ export function createRun(base: string, spec: CreateRunSpec): { runId: string; r
   const w = new LedgerWriter(runDir, runId, 0);
   w.append("run.created", {
     taskSha256: sha256(spec.task),
-    loop: loopPath,
+    loop: loopPath, // provenance: where the snapshot came from
     params,
     workspace,
     worktree,
@@ -201,7 +218,8 @@ export async function supervise(runDir: string): Promise<SuperviseOutcome> {
 
     const cfg = JSON.parse(fs.readFileSync(loopConfigPath(runDir), "utf8")) as LoopConfig;
     fs.mkdirSync(cfg.workspace, { recursive: true });
-    const mod = (await import(pathToFileURL(cfg.loop).href)) as { default: LoopFn };
+    const loopAbs = path.isAbsolute(cfg.loop) ? cfg.loop : path.join(runDir, cfg.loop); // pre-snapshot runs stored absolute
+    const mod = (await import(pathToFileURL(loopAbs).href)) as { default: LoopFn };
     if (typeof mod.default !== "function")
       throw new Error(`loop module has no default export function: ${cfg.loop}`);
 
@@ -219,7 +237,7 @@ export async function supervise(runDir: string): Promise<SuperviseOutcome> {
       writer,
       state,
       loopFn: mod.default,
-      loopDir: path.dirname(cfg.loop),
+      loopDir: path.dirname(loopAbs),
       params: cfg.params ?? {},
       workspace: cfg.workspace,
       preapprovals: cfg.preapprove ?? [],

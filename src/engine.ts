@@ -267,8 +267,9 @@ export async function executeLoop(ctx: EngineCtx): Promise<EngineOutcome> {
         const prior = hist.started?.digest;
         if (prior && prior !== digest)
           throw new DivergenceError(
-            `step ${name}.${occ}: loop config changed since it was recorded ` +
-              `(recorded ${prior}, replayed ${digest}). Rename the step or use \`etium redo\` (M1).`,
+            `step ${name}.${occ}: the run's loop snapshot no longer matches what this step recorded ` +
+              `(recorded ${prior}, replayed ${digest}) — the snapshot should never change (ADR-036). ` +
+              `Restore runs/<id>/loop/, or abandon and start a fresh attempt.`,
           );
         return materialize(name, occ, hist.completed);
       }

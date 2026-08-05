@@ -1299,3 +1299,44 @@ as a hidden post-finalize state (ceremony with no decision left to
 make). Excluding `ai/` from merges via git machinery (no clean
 path-scoped merge exists). A model-written final commit message (the
 SUMMARY lines already are the distillate; Invariant 1 stays intact).
+
+## ADR-036 — runs snapshot their loop at creation; redo is rejected
+
+**Decision.** (1) `createRun` copies the loop into the run directory
+(`runs/<id>/loop/`) and `loop.json` points at that copy with a
+runDir-relative path; replay executes the snapshot, never the library.
+A directory containing `templates/` is a loop library and is copied
+whole (excluding `.git`, `node_modules`, `.etium`); a bare loop file is
+copied alone, its `run.t` reads falling back to the workspace as before.
+The `run.created` event keeps the original source path as provenance.
+Old runs with absolute `loop.json` paths still attach. (2) Divergence is
+demoted from "the upgrade error you'll meet" to a pure integrity check:
+with snapshots, a digest mismatch can only mean a damaged snapshot or
+step config that isn't a pure function of prior results — the error now
+says so, and the docs' "finish or abandon runs before editing templates"
+doctrine inverts to "edits apply to the next run, never a run in
+flight". (3) `etium redo` (the M1 `step.invalidated` reservation) is
+rejected, not deferred: safely invalidating a completed step requires
+knowing which later steps depended on it, and that dependency graph
+lives in the loop, not the ledger — core can only guess. Rework is
+loop-level re-entry (gates and occurrences already express "do it
+again"); upgrades are snapshots; the accepted cost of a mid-run template
+fix is abandon and re-kick.
+
+**Why.** The first dogfood run died twice in one afternoon from
+version skew: a pin refresh mid-run made the old binary execute new
+loop code (`run.notes is not a function`), then template-digest
+DIVERGENCE on resume — and the user's framing generalized it: people
+will upgrade etium while runs are in flight, and that must be safe.
+Sharing the loop between the library and live runs made every library
+write a mutation of someone's execution; the snapshot makes the run
+hermetic — replayable anywhere, forever — and makes upgrades boring:
+new runs get the new library, in-flight runs finish on the code they
+started with.
+
+**Rejected.** `etium redo` (dependency cascade is unknowable from
+core). Copy-on-write or hash-addressed template stores (bookkeeping to
+save kilobytes). Snapshotting only `templates/` (the loop file itself
+is equally load-bearing). Version-stamping steps and teaching replay to
+tolerate drift (silently mixing two loop versions in one ledger is the
+corruption divergence exists to prevent).

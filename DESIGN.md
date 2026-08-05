@@ -56,7 +56,10 @@ Well-known paths are the most language-neutral API there is. Everything below is
   runs/
     <run-id>/
       task.md               # immutable for the life of the run
-      loop.json             # { "loop": "<path-or-package>", "params": {...} } — resolved at creation
+      loop.json             # { "loop": "loop/<file>", "params": {...} } — points at the snapshot
+      loop/                 # frozen copy of the loop library, made at creation (ADR-036):
+                            #   replay executes THIS, so upgrades and edits never touch
+                            #   in-flight runs and the run directory is hermetic
       events.jsonl          # THE ledger (§5)
       state.json            # derived cache; rebuildable via `etium rebuild` (internal format)
       lock                  # supervisor lockfile: { pid, host, started } (internal)
@@ -122,7 +125,6 @@ Newline-delimited JSON (JSONL), append-only, single writer. Crash recovery rule:
 | `run.interrupted` | supervisor (on attach) | reason: `stale-lock` \| `no-lock`, prior pid/host, lock age |
 | `run.completed` | supervisor or CLI | status: `done` \| `abandoned` \| `superseded` \| `error`, summary |
 
-Reserved for M1: `step.invalidated` (human `etium redo` marks a completed step for re-execution on next replay).
 
 Authority split, stated once: the **ledger is authoritative for control flow** (steps, gates, decisions, budgets, outcomes); **raw is authoritative for step content** (full messages, tool payloads, reasoning). `step.activity` carries summaries and pointers, never full payloads, so the ledger stays small and greppable.
 
@@ -147,7 +149,7 @@ On every supervisor attach, the loop function executes from the top. Each `run.s
 - **Key** = (kind, name, occurrence). Occurrence = count of prior calls with the same kind+name in this execution, assigned synchronously at call time — deterministic under `Promise.all` and under ralph-style iteration.
 - **Hit** (a `*.completed`/`gate.decided`/`effect.recorded` exists for the key): return the recorded result instantly. Completed work is exactly-once.
 - **Miss**: execute for real (spawn the step, open the gate, run the effect fn) and record.
-- **Divergence**: a ledger entry exists for the key but its config digest (harness, model, prompt hash, budget, env profile) differs from the replayed call → hard error naming the exact mismatch. Never silently corrupt. Escape hatches: rename the step, or `etium redo` (M1).
+- **Divergence**: a ledger entry exists for the key but its config digest (harness, model, prompt hash, budget, env profile) differs from the replayed call → hard error naming the exact mismatch. Never silently corrupt. Because every run executes its own loop snapshot (ADR-036), divergence cannot arise from library edits or upgrades — it indicates a damaged snapshot or a loop whose step config isn't a pure function of prior results. Recovery: restore the snapshot, or abandon and start a fresh attempt.
 - **Orphans**: completed ledger entries never reached during replay produce a warning, not an error (loops evolve).
 
 Determinism rules for loop authors (enforced by review and by divergence detection, documented loudly): route every nondeterministic value through `run.effect("name", fn)`; no clocks, no sleeps, no network in loop code — cadence belongs to cron, waiting belongs to gates, work belongs to steps. Loop functions are milliseconds of glue; everything expensive is memoized.
@@ -420,7 +422,7 @@ LOC budgets are enforced in CI and published in the README — both a feature an
 
 Testing: adapter parser tests against golden fixtures; property tests on the fold (random valid event interleavings preserve invariants); end-to-end on the `replay` harness; crash-injection (SIGKILL a real detached supervisor mid-step; assert `tick` recovers, completed steps never re-execute, interrupted steps re-execute at most from scratch); torn-last-line recovery tests. Model auth (ADR-007): `resolveEnv` passes declared-and-present vars through under `agent`, omits absent ones, leaves `host` and `env.add` precedence unchanged, and registers every passed-through value as a redaction secret unconditionally; passthrough values are redacted in raw, stderr, and `grade.txt`; a failing pre-spawn check appends no `step.started`, ends the run `error` with the remedy in the summary, and a subsequent resume executes the step under the same occurrence; changing host-env credential presence between attaches never diverges; `doctor` against a fake adapter; `exec`/`replay` declare nothing, keeping the test substrate credential-free.
 
-CLI (M0 set): `run`, `status`, `tail`, `gates`, `approve`, `reject`, `decide`, `resume`, `abandon`, `tick`, `rebuild`, `clone-loop`, `watch`, `init`. M1 adds: `redo`, `gc`.
+CLI (M0 set): `run`, `status`, `tail`, `gates`, `approve`, `reject`, `decide`, `resume`, `abandon`, `tick`, `rebuild`, `clone-loop`, `watch`, `init`. M1 adds: `gc`. (`redo` was considered and rejected — ADR-036: safe invalidation needs a dependency graph only the loop has; rework is loop-level re-entry, upgrades are snapshots.)
 
 ---
 
@@ -428,7 +430,7 @@ CLI (M0 set): `run`, `status`, `tail`, `gates`, `approve`, `reject`, `decide`, `
 
 **M0 — kernel.** Ledger + fold + engine (replay memoization, divergence, parking), runner (raw capture, redaction, wall/stall budgets, kill), lockfile + mailbox + `tick`, adapters `exec` + `replay` + `codex`, the `ralph` loop, the M0 CLI set, plain-directory workspaces. Fixture capture from Claude Code and Pi to validate schema neutrality. Exit criteria: etium is being developed by a Codex ralph loop running under etium, and `kill -9` at any point is recovered by `tick`.
 
-**M1 — daily driver.** Git worktrees per run (landed — ADR-010); usage/cost normalization and token/cost budgets; the `claude` adapter (`pi` was pulled forward with the quick start and is fixture-validated; the model-auth pre-spawn gate also landed early — see ADR-007); creation-time preflight; a tick admission cap (resume at most K live supervisors per tick, oldest first; the rest stay parked until a later tick — a budget, not a scheduler); the `plan-implement` loop with predecessor defaults; `redo`, `gc`, `watch`.
+**M1 — daily driver.** Git worktrees per run (landed — ADR-010); usage/cost normalization and token/cost budgets; the `claude` adapter (`pi` was pulled forward with the quick start and is fixture-validated; the model-auth pre-spawn gate also landed early — see ADR-007); creation-time preflight; a tick admission cap (resume at most K live supervisors per tick, oldest first; the rest stay parked until a later tick — a budget, not a scheduler); the `plan-implement` loop with predecessor defaults; `gc`, `watch`.
 
 **M2 — team surface.** The `github` surface is built into core (§10.3, ADR-012) and the multi-persona workflow ships as the `ai-engineer` loop library — templates and a loop that users copy and adapt (ADR-011); remaining: hardened env profiles and publication steps; `openhands` adapter; predecessor-system migration guide.
 
@@ -439,7 +441,6 @@ CLI (M0 set): `run`, `status`, `tail`, `gates`, `approve`, `reject`, `decide`, `
 ## 14. Open items
 
 1. **Config-as-code** (`etium.config.ts`, evaluated to a plain object, core-only) — working position, confirm at M0.
-2. `redo` / `step.invalidated` fine print (M1).
 3. ~~Run-ID format and collision handling~~ — settled at M0: `YYYY-MM-DD-<goal-slug>-<rand4>`; prefix matching in the CLI.
 4. ~~npm name~~ — settled twice: the project is **Etium**; GitHub org `etium-dev` is held. npm's typosquat guard rejects the bare name (`etium` is too similar to `cesium`), so the package is **`@etium/core`** under the `etium` npm org — mirroring `github.com/etium-dev/core`, with the scope housing future artifacts (`@etium/mcp`). The CLI command remains `etium` (the `bin` name is independent of the package name).
 5. ~~License~~ — settled: MIT (LICENSE in repo), matching Pi and OpenHands.

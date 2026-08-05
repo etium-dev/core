@@ -236,9 +236,9 @@ run DONE</span></code></pre>
   <ul>
     <li><strong>Edit the personas.</strong> <code>templates/*.md</code> are
     plain markdown — team conventions belong in <code>conventions.md</code>,
-    stage behavior in each persona. Editing a template mid-run fails loudly
-    rather than silently replaying stale work; finish or abandon runs
-    first.</li>
+    stage behavior in each persona. Each run snapshots the whole library at
+    creation, so edits apply to the next run you start — never to one
+    already in flight.</li>
     <li><strong>Tune the knobs.</strong> <code>--param rounds=3</code>,
     <code>--param wall=30m</code>, <code>--param check="make test"</code>,
     per-run <code>--harness</code> / <code>--param model=…</code> — and
