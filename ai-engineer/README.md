@@ -110,6 +110,11 @@ labels as commands):
   declares it, validated fail-closed by core. Anything else is delivered
   as `consider` with your full text: the interpreter maps it to the
   vocabulary or asks you to rephrase. `/et stop` abandons.
+- A `/et` comment while a stage is executing (no gate to receive it)
+  becomes an operator instruction: together with the note that entered
+  the stage and any stuck-gate notes, it is delivered to the stage's
+  builder **and** reviewer prompts every round until the stage
+  converges, as ground truth that outranks repository documentation.
 - The bot narrates state changes as appended comments — stage
   transitions, gate openings (with the currently-valid commands, "just
   say what you want" when freestyle is open, the shown artifact's key

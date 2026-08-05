@@ -25,6 +25,10 @@ Write `ai/REVIEW.md`:
   to expose it — if nothing changed, it is a note, not a blocker.
 - Then `## Notes` for everything non-blocking, briefly.
 
+Operator instructions included in your prompt are ground truth: they
+outrank repository documentation for this run, and a document honoring
+them is not in violation of those documents.
+
 Approval is the expected outcome, not a failure of diligence: when the
 previous blockers are resolved and no new one meets the bar, the verdict
 is `approve` — with notes attached if you have them. An endless review

@@ -1184,3 +1184,46 @@ step→commit from commit messages at projection time (ordinal drift, and
 projection often runs rounds later). Linking every artifact a step
 collected (the glob collects the whole `ai/` folder; one primary link
 per step is the readable unit).
+
+---
+
+## ADR-033 — operator words are stage-scoped ground truth, delivered to both personas
+
+**Decision.** A run gains a notes mailbox (`notes/`, beside `decisions/`
+— read-many, never consumed; surface redelivery is idempotent by key).
+The github surface routes a `/et` comment on an active run that matches
+no open gate — today silently dropped, fail-closed — into that mailbox.
+`Run` gains `notes()`, a chronological read. The ai-engineer treats the
+operator's words as stage-scoped ground truth: the note that entered
+the stage (route decision note or kickoff directive), every stuck-gate
+`keep-going` note, and every mailbox note arriving after stage start
+are rendered into an `<operator_instructions>` block appended to BOTH
+the builder's and the reviewer's prompts, every round, until the stage
+converges. Each round snapshots the set through an effect, so replay
+sees exactly what that round saw; the stage-start timestamp is itself
+an effect, so re-attach after a crash cannot shrink the window. The
+shared review frame states the authority rule: operator instructions
+outrank repository documentation for this run, and a document honoring
+them is not in violation of those documents. Core's one-shot
+"Operator notes:" injection is unchanged (other loops rely on it); the
+one-time overlap is harmless. Loop budget raised to 175.
+
+**Why.** Three observed failures, one cause — the operator's authority
+had a one-step lifespan and never reached the judge. A reviewer vetoed
+five rounds over repo docs the operator had explicitly overruled; the
+builder that heard the ruling obeyed for one round, then the next
+round's builder — which never heard it — deleted the requirement to buy
+approval; and mid-stage comments reached no one at all, because
+decisions fail closed and there was no other inbound channel. Scoping
+by "everything said since the instruction that entered the stage"
+matches how operators actually steer: words are about the work in
+flight, and whatever they reshape persists into the next stage through
+the document it shaped.
+
+**Rejected.** Keeping the fix inside the stuck/keep-going channel
+(authority semantics belong to operator words, not to one gate).
+Core-level stage awareness (stages are a loop concept; core delivers
+files and events). Surface-side delivery to the next gate (arrives
+rounds late, and still never reaches a reviewer prompt). Treating
+plain non-`/et` comments as instructions (the thread is for humans;
+`/et` is the address).

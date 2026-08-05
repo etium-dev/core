@@ -80,18 +80,29 @@ export default async function aiEngineer(run: Run) {
     return options.includes(w as string) ? (w as string) : "";
   };
 
+  // The operator's words are ground truth for the stage they steer
+  // (ADR-033): the entry note, every stuck-gate note, and every mid-stage
+  // mailbox note reach BOTH personas, every round, until the stage ends.
+  const opBlock = (notes: string[]) => notes.length === 0 ? "" :
+    `\n\n<operator_instructions>\nGround truth for this stage — these outrank repository documentation for this run:\n${notes.map((n) => `- ${n}`).join("\n")}\n</operator_instructions>\n`;
+
   // One stage: builder/reviewer rounds until the reviewer approves (and, for
   // implement, the check passes). The maker never grades its own homework.
-  const converge = async (stage: string): Promise<"ready" | "wrapped-up"> => {
+  const converge = async (stage: string, entry?: string): Promise<"ready" | "wrapped-up"> => {
+    const since = await run.effect("stage-start", () => new Date().toISOString());
+    const ruling = entry ? [entry] : [];
     for (;;) {
       for (let r = 0; r < rounds; r++) {
-        const built = await step(stage, persona(stage), { artifacts: [ARTIFACT[stage]!, "ai/*.md"] });
+        const arrived = JSON.parse(await run.effect("op-notes", () =>
+          JSON.stringify(run.notes().filter((n) => n.ts >= since).map((n) => `${n.by}: ${n.text}`)))) as string[];
+        const op = opBlock([...ruling, ...arrived]);
+        const built = await step(stage, persona(stage) + op, { artifacts: [ARTIFACT[stage]!, "ai/*.md"] });
         await commit(stage, stage === "implement");
         if (built.status !== "ok") break;
         const check = stage === "implement"
           ? await run.step("check", { harness: "exec", command: run.params.check ?? "true" })
           : undefined;
-        const review = await step(`${stage}-review`, reviewer(stage), {
+        const review = await step(`${stage}-review`, reviewer(stage) + op, {
           artifacts: ["ai/REVIEW.md"],
           grade: "grep -qi '^VERDICT: approve' ai/REVIEW.md",
         });
@@ -110,14 +121,14 @@ export default async function aiEngineer(run: Run) {
         const d = e.decision === "consider" ? await interpret(["keep-going", "accept", "wrap-up"], e.note ?? "") : e.decision;
         if (d === "accept") return "ready";
         if (d === "wrap-up") return "wrapped-up";
-        if (d === "keep-going") break; // another block of rounds
+        if (d === "keep-going") { if (e.note) ruling.push(e.note); break; } // more rounds, ruling standing
         stuckShow = ["ai/REPLY.md"]; // unclear: re-ask, question shown
       }
     }
   };
 
-  const runStage = async (stage: string): Promise<boolean> => {
-    if ((await converge(stage)) === "wrapped-up") {
+  const runStage = async (stage: string, entry?: string): Promise<boolean> => {
+    if ((await converge(stage, entry)) === "wrapped-up") {
       await run.abandon(`${stage} wrapped up by operator`);
       return false;
     }
@@ -129,7 +140,7 @@ export default async function aiEngineer(run: Run) {
   // go. Unclear falls to the route gate with the question shown — fail closed.
   if (run.params.directive) {
     const w = await interpret(ROUTES, run.params.directive);
-    if (w) { if (!(await runStage(w))) return; }
+    if (w) { if (!(await runStage(w, run.params.directive))) return; }
     else show = ["ai/REPLY.md"];
   }
 
@@ -145,6 +156,6 @@ export default async function aiEngineer(run: Run) {
     const decision = route.decision === "consider" ? await interpret(options, route.note ?? "") : route.decision;
     if (!decision) { show = ["ai/REPLY.md"]; continue; }
     if (decision === "wrap-up") return; // e.g. the PR merged (surface decides this)
-    if (!(await runStage(decision))) return;
+    if (!(await runStage(decision, route.note))) return;
   }
 }

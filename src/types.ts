@@ -2,7 +2,7 @@
 // language-neutral contract. Keep them in sync; the schema wins on conflict.
 
 export const SCHEMA_VERSION = 1;
-export const ETIUM_VERSION = "0.15.4"; // must match package.json (enforced by test)
+export const ETIUM_VERSION = "0.15.5"; // must match package.json (enforced by test)
 
 // ---------------------------------------------------------------------------
 // Ledger envelope and event payloads (§5 of DESIGN.md)
@@ -281,6 +281,9 @@ export interface Run {
   readonly workspace: string;
   step(name: string, opts: StepOptions): Promise<StepResult>;
   gate(name: string, opts?: { show?: string[]; options?: string[]; reason?: string }): Promise<GateResult>;
+  /** Operator notes sent mid-run (ADR-033): read-many, chronological. Loops
+   * snapshot via effect() so replay sees exactly what each round saw. */
+  notes(): { ts: string; by: string; text: string }[];
   effect<T>(name: string, fn: () => T | Promise<T>): Promise<T>;
   abandon(reason?: string): Promise<never>;
   t(file: string): PromptSpec; // template relative to the loop file, then workspace
@@ -342,6 +345,9 @@ export interface SurfacePollResult {
    * unmerged, a superseding command): kill any live supervisor and mark the
    * run abandoned/superseded. Already-completed runs are skipped. */
   abandons?: { run: string; reason?: string; superseded?: boolean }[];
+  /** Operator words with no gate to receive them → the run's notes mailbox
+   * (ADR-033). `key` dedupes redelivery (e.g. the comment id). */
+  notes?: { run: string; ts: string; by: string; text: string; key: string }[];
   /** Opaque to core; persisted and handed back on the next poll. Encode
    * whatever the surface needs (timeline cursor, per-run projected seq, …). */
   cursor: string | null;

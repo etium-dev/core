@@ -228,6 +228,7 @@ const surface: Surface = {
     const tasks: SurfaceTask[] = [];
     const decisions: SurfaceDecision[] = [];
     const abandons: NonNullable<SurfacePollResult["abandons"]> = [];
+    const notes: NonNullable<SurfacePollResult["notes"]> = [];
 
     // Lifecycle for every active run, event-independent: close and merge
     // must land no matter what happened to comments or assignment. Also
@@ -314,11 +315,17 @@ const surface: Surface = {
       // Freestyle: a gate that declares `consider` receives the whole
       // message as its note; the loop's interpreter maps it (ADR-023).
       const fre = active.openGates.find((g) => g.options.includes("consider"));
-      if (fre)
+      if (fre) {
         decisions.push({ run: active.id, gate: fre.name, decision: "consider", note: [cmd.word, cmd.note].filter(Boolean).join(" "), by: c.user.login });
+        continue;
+      }
+      // No gate to receive it: the operator spoke mid-stage. Never dropped —
+      // it lands in the run's notes mailbox, and the loop delivers it to the
+      // stage's builder and reviewer prompts (ADR-033).
+      notes.push({ run: active.id, ts: c.created_at, by: c.user.login, text: [cmd.word, cmd.note].filter(Boolean).join(" "), key: String(c.id) });
     }
 
-    return { tasks, decisions, abandons, cursor: `${lastId}@${lastSeen > now ? lastSeen : now}` };
+    return { tasks, decisions, abandons, notes, cursor: `${lastId}@${lastSeen > now ? lastSeen : now}` };
   },
 
   project(view: RunView): void {

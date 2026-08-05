@@ -7,7 +7,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { LedgerWriter, loadState, readLedger, writeStateCache } from "./ledger.ts";
-import { isLockLive, readLock, writeDecision } from "./lock.ts";
+import { isLockLive, readLock, writeDecision, writeNote } from "./lock.ts";
 import { decisionsDir } from "./lock.ts";
 import { readConfig } from "./config.ts";
 import githubSurface from "./github.ts";
@@ -48,6 +48,7 @@ export interface TickAction {
     | "crash-loop"
     | "surface-task"
     | "surface-decision"
+    | "surface-note"
     | "surface-abandon"
     | "surface-drop"
     | "surface-skip"
@@ -243,6 +244,16 @@ async function driveSurface(base: string, runsDir: string, s: Surface, actions: 
     } catch {
       actions.push({ run: d.run, action: "surface-skip", detail: `${gate.name}.${gate.occ} decision already pending` });
     }
+  }
+
+  for (const n of res.notes ?? []) {
+    const view = views.find((v) => v.id === n.run);
+    if (!view || view.completed) {
+      actions.push({ run: n.run, action: "surface-skip", detail: "note for inactive run" });
+      continue;
+    }
+    writeNote(view.dir, { ts: n.ts, by: n.by, text: n.text }, `${s.id}-${n.key}`);
+    actions.push({ run: n.run, action: "surface-note", detail: `${n.by}: ${n.text.slice(0, 60)}` });
   }
 
   for (const a of res.abandons ?? []) {

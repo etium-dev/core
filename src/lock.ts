@@ -104,6 +104,24 @@ export function decisionsDir(runDir: string): string {
   return path.join(runDir, DECISIONS_DIR);
 }
 
+/** Operator-note mailbox (ADR-033): read-many, never consumed — words the
+ * operator sent mid-run with no gate to receive them. `key` makes surface
+ * redelivery idempotent (same comment → same file). */
+export interface NoteFile { ts: string; by: string; text: string }
+export function notesDir(runDir: string): string {
+  return path.join(runDir, "notes");
+}
+export function writeNote(runDir: string, n: NoteFile, key: string): void {
+  fs.mkdirSync(notesDir(runDir), { recursive: true });
+  fs.writeFileSync(path.join(notesDir(runDir), `${key}.json`), JSON.stringify(n));
+}
+export function listNotes(runDir: string): NoteFile[] {
+  if (!fs.existsSync(notesDir(runDir))) return [];
+  return fs.readdirSync(notesDir(runDir)).filter((f) => f.endsWith(".json")).sort()
+    .map((f) => JSON.parse(fs.readFileSync(path.join(notesDir(runDir), f), "utf8")) as NoteFile)
+    .sort((a, b) => a.ts.localeCompare(b.ts));
+}
+
 /** Fail-closed at the edge: callers must verify the gate is open before writing. */
 export function writeDecision(runDir: string, d: DecisionFile): void {
   fs.mkdirSync(decisionsDir(runDir), { recursive: true });

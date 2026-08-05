@@ -10,6 +10,7 @@ The whole vocabulary, before we start:
 ```ts
 run.step(name, opts)   // one headless harness invocation under a budget
 run.gate(name, opts?)  // park until a human decides; options default to approve/reject; reason? = why (surfaces headline + escalate it)
+run.notes()            // operator notes sent mid-run (read-many; snapshot via effect() for replay-exact prompts)
 run.effect(name, fn)   // record a nondeterministic value once, replay it forever
 run.abandon(reason?)   // end the run as abandoned
 run.task               // task.md content — the goal this run is an attempt at

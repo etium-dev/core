@@ -10,7 +10,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { readLedger } from "../src/ledger.ts";
 import { tickOnce } from "../src/tick.ts";
-import type { RunView, Surface, SurfaceDecision, SurfaceTask } from "../src/types.ts";
+import type { RunView, Surface, SurfaceDecision, SurfaceTask , SurfacePollResult } from "../src/types.ts";
 
 const GATE_LOOP = `
 export default async function (run) {
@@ -32,6 +32,7 @@ function fakeSurface(id: string) {
     id,
     tasks: [] as SurfaceTask[],
     decisions: [] as SurfaceDecision[],
+    notes: [] as NonNullable<SurfacePollResult["notes"]>,
     nextCursor: null as string | null,
     seenCursor: undefined as string | null | undefined,
     polledRuns: [] as RunView[][],
@@ -43,9 +44,10 @@ function fakeSurface(id: string) {
     poll(ctx) {
       s.seenCursor = ctx.cursor;
       s.polledRuns.push(ctx.runs);
-      const out = { tasks: s.tasks, decisions: s.decisions, cursor: s.nextCursor };
+      const out = { tasks: s.tasks, decisions: s.decisions, notes: s.notes, cursor: s.nextCursor };
       s.tasks = [];
       s.decisions = [];
+      s.notes = [];
       return out;
     },
     project(run) {
@@ -150,6 +152,31 @@ test("a throwing surface reports an error and does not block reconciliation", as
   assert.ok(actions.some((a) => a.action === "surface-error" && /broken poll: api down/.test(a.detail ?? "")));
   assert.ok(actions.some((a) => a.action === "surface-task"));
   assert.equal(fs.readdirSync(path.join(base, "runs")).length, 1);
+});
+
+test("surface notes: delivered to the run's mailbox, idempotent by key, inactive runs skipped (ADR-033)", async () => {
+  const { base, loopPath } = tmpBase();
+  const f = fakeSurface("gh");
+  f.tasks = [{ key: "evt-1", task: "work", loop: loopPath }];
+  await tickOnce(base, "unused-entry", true, [f.surface]);
+  const runId = fs.readdirSync(path.join(base, "runs"))[0]!;
+  const runDir = path.join(base, "runs", runId);
+
+  f.notes = [{ run: runId, ts: "2026-08-04T10:00:00Z", by: "carlospche", text: "steer left", key: "901" }];
+  let actions = await tickOnce(base, "unused-entry", true, [f.surface]);
+  assert.ok(actions.some((a) => a.action === "surface-note" && /steer left/.test(a.detail ?? "")));
+  const notesDir = path.join(runDir, "notes");
+  assert.equal(fs.readdirSync(notesDir).length, 1);
+
+  // Redelivery of the same comment (same key) overwrites, never duplicates.
+  f.notes = [{ run: runId, ts: "2026-08-04T10:00:00Z", by: "carlospche", text: "steer left", key: "901" }];
+  await tickOnce(base, "unused-entry", true, [f.surface]);
+  assert.equal(fs.readdirSync(notesDir).length, 1, "same key never duplicates");
+
+  // Notes for unknown or completed runs are skipped, loudly.
+  f.notes = [{ run: "no-such-run", ts: "2026-08-04T10:01:00Z", by: "x", text: "y", key: "902" }];
+  actions = await tickOnce(base, "unused-entry", true, [f.surface]);
+  assert.ok(actions.some((a) => a.action === "surface-skip" && a.run === "no-such-run"));
 });
 
 test("surface abandons: lifecycle facts terminate runs; completed runs are skipped", async () => {

@@ -99,7 +99,7 @@ Budgets are enforced in CI (`npm run budget`):
 | core (ledger, engine, runner, supervisor, tick) | 3,000 |
 | each adapter | 300 |
 | the built-in github surface | 450 |
-| each shipped loop (ralph, ai-engineer) | 150 |
+| each shipped loop | ralph 150; ai-engineer 175 |
 
 Current core: ~2,100. If etium needs more than this, it is becoming the thing
 it exists to avoid.
@@ -122,8 +122,10 @@ tasks in, decisions in, projections out, on every `etium tick`. The built-in
 **`github`** surface turns `/et` comments
 by anyone with Write on the repository into runs and gate decisions — a
 `/et <anything>` comment on an issue kickstarts a worktree run of any loop
-you configure, an exact `/et <option>` decides the open gate, and freestyle
-text is handed to the loop to interpret — and close/merge into run
+you configure, an exact `/et <option>` decides the open gate, freestyle
+text is handed to the loop to interpret, and words sent mid-stage become
+standing operator instructions for that stage (builder and reviewer both,
+every round) — and close/merge into run
 lifecycle, projecting back a draft PR, append-only narration comments —
 each state change, each gate with its valid commands and the shown
 artifact's key points, each stage linked to that round's exact commit,

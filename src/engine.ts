@@ -5,7 +5,7 @@ import * as path from "node:path";
 import * as fs from "node:fs";
 import { setImmediate as flushTurn } from "node:timers/promises";
 import { sha256, type LedgerWriter } from "./ledger.ts";
-import { listDecisions, removeDecision, type DecisionFile } from "./lock.ts";
+import { listNotes, listDecisions, removeDecision, type DecisionFile } from "./lock.ts";
 import {
   DEFAULT_GATE_OPTIONS,
   stepKey,
@@ -255,6 +255,7 @@ export async function executeLoop(ctx: EngineCtx): Promise<EngineOutcome> {
     params: ctx.params,
     workspace: ctx.workspace,
     t: (file: string) => ({ __template: file }),
+    notes: () => listNotes(ctx.runDir),
 
     async step(name: string, opts: StepOptions): Promise<StepResult> {
       const occ = nextOcc("s", name);

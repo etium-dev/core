@@ -197,6 +197,46 @@ test("kickoff directive: freestyle is interpreted, then the stage runs without a
     "no stage ran on an unclear directive — fail closed");
 });
 
+test("operator words reach both personas for the whole stage (ADR-033)", async () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "etium-ai-"));
+  const { runDir } = createRun(base, {
+    task: "steer me",
+    loop: LOOP,
+    params: {
+      harness: "exec",
+      rounds: "1",
+      "cmd.design": "mkdir -p ai && printf 'SUMMARY: d\\n' > ai/DESIGN.md",
+      "cmd.design-review": "printf 'VERDICT: revise\\ndesign-x: no\\n' > ai/REVIEW.md",
+    },
+  });
+  await tickOnce(base, "unused-entry", true);
+  await decide(base, runDir, lastOpenGate(runDir), "design", "entry-instruction");
+  // Round 0 ran with the entry note; reviewer objects → design-stuck.
+  assert.equal(lastOpenGate(runDir).name, "design-stuck");
+  // Mid-stage, the operator speaks with no gate to receive it: mailbox.
+  fs.mkdirSync(path.join(runDir, "notes"), { recursive: true });
+  fs.writeFileSync(path.join(runDir, "notes", "github-901.json"),
+    JSON.stringify({ ts: new Date().toISOString(), by: "carlos", text: "mid-stage-instruction" }));
+  await decide(base, runDir, lastOpenGate(runDir), "keep-going", "standing-ruling");
+
+  const steps = fs.readdirSync(path.join(runDir, "steps"));
+  const promptOf = (suffix: string) => {
+    const d = steps.find((n) => n.endsWith(suffix))!;
+    assert.ok(d, `no step dir for ${suffix}`);
+    return fs.readFileSync(path.join(runDir, "steps", d, "prompt.md"), "utf8");
+  };
+  for (const suffix of ["design.1", "design-review.1"]) {
+    const prompt = promptOf(suffix);
+    assert.ok(prompt.includes("<operator_instructions>"), `${suffix} missing the block`);
+    assert.ok(prompt.includes("entry-instruction"), `${suffix} missing the entry note`);
+    assert.ok(prompt.includes("standing-ruling"), `${suffix} missing the keep-going ruling`);
+    assert.ok(prompt.includes("carlos: mid-stage-instruction"), `${suffix} missing the mailbox note`);
+    assert.ok(prompt.includes("outrank repository documentation"), `${suffix} missing the authority phrasing`);
+  }
+  // The reviewer round BEFORE the ruling saw only the entry note.
+  assert.ok(!promptOf("design-review.0").includes("standing-ruling"));
+});
+
 test("per-step harness: harness.<step> overrides the loop-wide value (ADR-025)", async () => {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), "etium-ai-"));
   const { runDir } = createRun(base, {

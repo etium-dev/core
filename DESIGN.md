@@ -61,6 +61,7 @@ Well-known paths are the most language-neutral API there is. Everything below is
       state.json            # derived cache; rebuildable via `etium rebuild` (internal format)
       lock                  # supervisor lockfile: { pid, host, started } (internal)
       decisions/            # mailbox: pending decision files awaiting ingestion (§8)
+      notes/                # operator-note mailbox: read-many, never consumed (ADR-033)
       steps/
         <seq>-<name>.<occ>/ # e.g. 003-implement.0/
           prompt.md          # exact prompt sent, after template + note injection
