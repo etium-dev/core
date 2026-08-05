@@ -1,11 +1,16 @@
 VERDICT: approve
+Resolved since last review: none
 
 ## Notes
 
-- The timeout verification can pass by timing out the auth preflight before reaching helper-routed API calls, because `poll` runs `gh auth status` first (`src/github.ts:209`, `src/github.ts:212`), while normal API reads and writes go through `gh()` via `api`, `post`, and `del` (`src/github.ts:48`, `src/github.ts:63`, `src/github.ts:64`, `src/github.ts:65`).
-- The design's recorded `rg --files ai` output is stale: it records only `ai/REPLY.md` (`ai/DESIGN.md:37`, `ai/DESIGN.md:39`, `ai/DESIGN.md:40`, `ai/DESIGN.md:41`), but the current output is:
+- The planned timeout tests are faithful integration tests, but they add at least two real timeout waits because both new tests sleep longer than `15_000` ms before expecting `surface-error` (`ai/PLAN.md:21`, `ai/PLAN.md:22`, `package.json:46`).
+- The plan's recorded `rg --files ai` evidence omits the current plan file, so that transcript is stale but not decision-affecting (`ai/PLAN.md:33`, `ai/PLAN.md:35`, `ai/PLAN.md:36`, `ai/PLAN.md:37`, `ai/PLAN.md:38`, `ai/PLAN.md:39`).
+
+`rg --files ai`
 
 ```text
+ai/REVIEW.md
 ai/DESIGN.md
+ai/PLAN.md
 ai/REPLY.md
 ```
