@@ -1,11 +1,12 @@
 // The ai-engineer loop is CLI-complete and surface-agnostic: this drives the
-// FULL state graph — triage → route → design (with a revise round) → plan →
-// implement (with check) → wrap-up, plus the stuck/accept path — using only
+// FULL state graph — route → design (with a revise round) → plan →
+// implement (with check) → finalize, plus the stuck/accept path — using only
 // scripted exec steps (`cmd.*` dry-run hooks) and mailbox decisions. No
 // GitHub, no model, no surface. The GitHub surface is a skin over exactly
 // these gates.
 
 import { test } from "node:test";
+import { spawnSync } from "node:child_process";
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as os from "node:os";
@@ -39,7 +40,7 @@ async function decide(base: string, runDir: string, gate: { name: string; occ: n
   await tickOnce(base, "unused-entry", true);
 }
 
-test("full graph: triage → design (revise round) → plan → implement+check → wrap-up", async () => {
+test("full graph: design (revise round) → plan → implement+check → finalize retires ai/ into a distilled commit", async () => {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), "etium-ai-"));
   const { runDir } = createRun(base, {
     task: "Fix the flaky auth test in ci/",
@@ -48,7 +49,7 @@ test("full graph: triage → design (revise round) → plan → implement+check 
       harness: "exec",
       rounds: "2",
       check: "test -f fixed.txt",
-      "cmd.design": "mkdir -p ai && printf 'approach A\\n' > ai/DESIGN.md",
+      "cmd.design": "mkdir -p ai && printf 'SUMMARY: approach A\\n' > ai/DESIGN.md",
       "cmd.design-review": `if [ -f ai/.dr ]; then ${APPROVE}; else printf 'VERDICT: revise\\ndesign-scope: too broad\\n' > ai/REVIEW.md && touch ai/.dr; fi`,
       "cmd.plan": "printf '1. fix retry\\n' > ai/PLAN.md",
       "cmd.plan-review": APPROVE,
@@ -57,6 +58,10 @@ test("full graph: triage → design (revise round) → plan → implement+check 
     },
   });
 
+  const ws = path.join(runDir, "ws");
+  spawnSync("git", ["-C", ws, "init", "-q"], { encoding: "utf8" });
+  spawnSync("git", ["-C", ws, "config", "user.name", "t"]);
+  spawnSync("git", ["-C", ws, "config", "user.email", "t@t"]);
   await tickOnce(base, "unused-entry", true);
   let gate = lastOpenGate(runDir);
   assert.equal(gate.name, "route");
@@ -78,13 +83,22 @@ test("full graph: triage → design (revise round) → plan → implement+check 
 
   await decide(base, runDir, gate, "implement");
   gate = lastOpenGate(runDir);
-  assert.deepEqual(gate.options, ["debug", "design", "plan", "implement", "wrap-up", "consider"]);
+  assert.deepEqual(gate.options, ["debug", "design", "plan", "implement", "finalize", "consider"]);
   assert.ok(fs.existsSync(path.join(runDir, "ws", "fixed.txt")), "check gated on real workspace evidence");
+  const opened = readLedger(runDir).filter((e) => e.type === "gate.opened").at(-1)!.data as { reason?: string };
+  assert.match(opened.reason!, /review the draft PR.*finalize/, "the post-implement gate teaches the ending");
 
-  await decide(base, runDir, gate, "wrap-up");
+  await decide(base, runDir, gate, "finalize");
   const last = readLedger(runDir).at(-1)!;
   assert.equal(last.type, "run.completed");
   assert.deepEqual((last.data as { status: string }).status, "done");
+  // The one closing ceremony: ai/ retired from the tip, history intact,
+  // SUMMARY lines distilled into the final commit message.
+  assert.ok(!fs.existsSync(path.join(ws, "ai")), "ai/ retired from the tip");
+  const msg = spawnSync("git", ["-C", ws, "log", "-1", "--format=%B"], { encoding: "utf8" }).stdout;
+  assert.match(msg, /^ai: finalize/);
+  assert.match(msg, /Design: approach A/);
+  assert.match(msg, /Verified: test -f fixed\.txt/);
   const shas = readLedger(runDir).filter((e) => e.type === "effect.recorded" && (e.data as { name: string }).name === "sha");
   assert.ok(shas.length >= 1, "every commit records its sha for version-pinned links (ADR-032)");
 });
@@ -106,7 +120,7 @@ test("stuck path: reviewer never approves → <stage>-stuck gate → accept proc
 
   let gate = lastOpenGate(runDir);
   assert.equal(gate.name, "debug-stuck");
-  assert.deepEqual(gate.options, ["keep-going", "accept", "wrap-up", "consider"]);
+  assert.deepEqual(gate.options, ["keep-going", "accept", "consider"]); // ending is /et stop, not a stage verdict
   const opened0 = readLedger(runDir)
     .filter((e) => e.type === "gate.opened")
     .map((e) => e.data as { name: string; occ: number; show: string[]; reason?: string })
@@ -123,11 +137,11 @@ test("stuck path: reviewer never approves → <stage>-stuck gate → accept proc
   gate = lastOpenGate(runDir);
   assert.equal(gate.name, "route");
 
-  await decide(base, runDir, gate, "wrap-up"); // wait — wrap-up not offered before implement
+  await decide(base, runDir, gate, "finalize"); // not offered before implement converges
   // The decision above is dropped fail-closed (not in options); run stays parked.
   gate = lastOpenGate(runDir);
   assert.equal(gate.name, "route");
-  assert.ok(!gate.options.includes("wrap-up"));
+  assert.ok(!gate.options.includes("finalize"));
 });
 
 test("kickoff directive: an exact route word goes straight to the stage — no interpreter, no gate", async () => {

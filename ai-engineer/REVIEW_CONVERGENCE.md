@@ -85,8 +85,8 @@ Cursor checkpoints; AutoGen's `human_input_mode="TERMINATE"` hands the
 human the decision and resets the counter on input). The `<stage>-stuck`
 gate is the third kind: `keep-going` (another block of rounds, your note
 injected into the next builder prompt), `accept` (overrule the
-reviewer), `wrap-up` (abandon) — and it arrives with a reason and the
-reviewer's blockers leading the shown files.
+reviewer); ending is `/et stop`, from anywhere — and the gate arrives
+with a reason and the reviewer's blockers leading the shown files.
 
 **Measure the reviewer by resolution, not findings.** Production
 north-star everywhere: Cursor drove resolution 52% → ~80%; Greptile

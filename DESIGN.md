@@ -370,7 +370,8 @@ the run's notes mailbox (ADR-033: read-many operator words, never dropped;
 loops deliver them to the in-flight stage's prompts) — never labels,
 which are a mutable bitfield with no payload, no atomic consume, and no
 attribution; `/et stop`, issue close, and PR close-unmerged → abandons; PR
-merge → the `wrap-up` option when a gate declares it (the convention for "a
+merge on a still-active run → abandon as a human override (a finalized
+run completes before the merge; the old convention of "a
 mergeable end"). Outbound, projection pushes the run's branch, opens one
 draft PR once the branch has commits past its recorded `baseSha`, rewrites
 append-only narration comments (one per tick, covering the run's notable

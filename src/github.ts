@@ -7,7 +7,8 @@
 // it; anything else is delivered as `consider` when declared, and with
 // no open gate at all it becomes an operator note in the run's mailbox —
 // mid-stage words are never dropped, ADR-033); issue close /
-// PR close / PR merge → abandons or wrap-up. Outbound is append-only
+// PR close / PR merge on an active run → abandons (a finalized run is
+// already done, ADR-035). Outbound is append-only
 // narration (ADR-029): one comment per tick covering the run's notable
 // ledger events since the last posted marker — state changes, gate
 // openings with their commands and the shown artifact's key points +
@@ -252,9 +253,9 @@ const surface: Surface = {
       const pr = prFor(v);
       if (pr) byNum.set(pr.number, v);
       if (pr?.merged_at) {
-        const route = v.openGates.find((g) => g.options.includes("wrap-up"));
-        if (route) decisions.push({ run: v.id, gate: route.name, decision: "wrap-up", by: "merge" });
-        else abandons.push({ run: v.id, reason: "PR merged (human override)" });
+        // A finalized run is done before the merge; an active run at merge
+        // time was overridden by the human (ADR-035).
+        abandons.push({ run: v.id, reason: "PR merged (human override)" });
       } else if (pr && pr.state === "closed") {
         abandons.push({ run: v.id, reason: "PR closed unmerged" });
       }

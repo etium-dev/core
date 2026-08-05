@@ -215,7 +215,7 @@ absence is part of the test).
 etium decide verify route design --sync
 etium decide verify route plan --sync
 etium decide verify route implement --sync
-etium decide verify route wrap-up --sync
+etium decide verify route finalize --sync
 ```
 
 **PASS**: the first three each end with `outcome: parked`; the fourth

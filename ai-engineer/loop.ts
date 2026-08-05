@@ -88,7 +88,7 @@ export default async function aiEngineer(run: Run) {
 
   // One stage: builder/reviewer rounds until the reviewer approves (and, for
   // implement, the check passes). The maker never grades its own homework.
-  const converge = async (stage: string, entry?: string): Promise<"ready" | "wrapped-up"> => {
+  const converge = async (stage: string, entry?: string): Promise<void> => {
     const since = await run.effect("stage-start", () => new Date().toISOString());
     const ruling = entry ? [entry] : [];
     for (;;) {
@@ -108,54 +108,65 @@ export default async function aiEngineer(run: Run) {
         });
         await commit(`${stage}-review`);
         show = [ARTIFACT[stage]!, "ai/REVIEW.md"];
-        if (review.passed && (check?.passed ?? true)) return "ready";
+        if (review.passed && (check?.passed ?? true)) return;
       }
       // Escalation: the reason is the headline; REVIEW.md leads the show.
       let stuckShow = ["ai/REVIEW.md", ...show.filter((f) => f !== "ai/REVIEW.md")];
       for (;;) {
         const e = await run.gate(`${stage}-stuck`, {
-          options: ["keep-going", "accept", "wrap-up", "consider"],
+          options: ["keep-going", "accept", "consider"],
           show: stuckShow,
           reason: `the ${stage} reviewer still objects after ${rounds} round${rounds === 1 ? "" : "s"} — blockers in REVIEW.md`,
         });
-        const d = e.decision === "consider" ? await interpret(["keep-going", "accept", "wrap-up"], e.note ?? "") : e.decision;
-        if (d === "accept") return "ready";
-        if (d === "wrap-up") return "wrapped-up";
+        const d = e.decision === "consider" ? await interpret(["keep-going", "accept"], e.note ?? "") : e.decision;
+        if (d === "accept") return;
         if (d === "keep-going") { if (e.note) ruling.push(e.note); break; } // more rounds, ruling standing
         stuckShow = ["ai/REPLY.md"]; // unclear: re-ask, question shown
       }
     }
   };
 
-  const runStage = async (stage: string, entry?: string): Promise<boolean> => {
-    if ((await converge(stage, entry)) === "wrapped-up") {
-      await run.abandon(`${stage} wrapped up by operator`);
-      return false;
-    }
+  const runStage = async (stage: string, entry?: string) => {
+    await converge(stage, entry);
     done.add(stage);
-    return true;
+  };
+
+  // The one closing ceremony (ADR-035): retire ai/ and distill its SUMMARY
+  // lines into the final commit; merging the PR is the human's act.
+  const finalize = async () => {
+    const msg = (await run.effect("finalize-msg", () => {
+      const line = (f: string) => { try { return /^SUMMARY:\s*(.+)/m.exec(fs.readFileSync(path.join(run.workspace, f), "utf8"))?.[1] ?? ""; } catch { return ""; } };
+      const parts = Object.entries({ Diagnosis: "ai/DIAGNOSIS.md", Design: "ai/DESIGN.md", Plan: "ai/PLAN.md", Report: "ai/REPORT.md" })
+        .map(([t, f]) => (line(f) ? `${t}: ${line(f)}` : "")).filter(Boolean);
+      return ["ai: finalize", "", ...parts, `Verified: ${run.params.check ?? "true"}`].join("\n");
+    })) as string;
+    await run.step("finalize", {
+      harness: "exec",
+      command: `if git rev-parse --git-dir >/dev/null 2>&1; then git rm -r -q --ignore-unmatch ai && { git diff --cached --quiet || git commit -q -m '${msg.replace(/'/g, "'\\''")}'; }; fi`,
+    });
   };
 
   // The kickoff directive is the operator's words, delivered early: map and
   // go. Unclear falls to the route gate with the question shown — fail closed.
   if (run.params.directive) {
     const w = await interpret(ROUTES, run.params.directive);
-    if (w) { if (!(await runStage(w, run.params.directive))) return; }
+    if (w) await runStage(w, run.params.directive);
     else show = ["ai/REPLY.md"];
   }
 
   for (;;) {
     // Fail-closed routing: every stage is earned — no plan without a
     // design (a mini-design is cheap by construction), no implement
-    // without a plan, no wrap-up before implementation.
+    // without a plan, no finalize before implementation.
     const options = [...ROUTES];
     if (done.has("design")) options.push("plan");
     if (done.has("plan")) options.push("implement");
-    if (done.has("implement")) options.push("wrap-up");
-    const route = await run.gate("route", { options: [...options, "consider"], show });
+    if (done.has("implement")) options.push("finalize");
+    const route = await run.gate("route", { options: [...options, "consider"], show,
+      reason: done.has("implement") ? "implementation approved — review the draft PR; `/et finalize` retires the ai/ documents into the final commit message; merging then closes the issue" : undefined });
     const decision = route.decision === "consider" ? await interpret(options, route.note ?? "") : route.decision;
     if (!decision) { show = ["ai/REPLY.md"]; continue; }
-    if (decision === "wrap-up") return; // e.g. the PR merged (surface decides this)
-    if (!(await runStage(decision, route.note))) return;
+    if (decision === "finalize") { await finalize(); return; }
+    await runStage(decision, route.note);
   }
 }

@@ -122,8 +122,10 @@ etium run "Add input validation to the signup form" \
 <pre><code>etium decide &lt;run&gt; route design --note "smallest thing that works"</code></pre>
   <p>Your note is injected into the designer's prompt. Design converges,
   <code>plan</code> unlocks; plan converges, <code>implement</code>
-  unlocks. Route through them, then <code>wrap-up</code>, and read the
-  whole story:</p>
+  unlocks; implementation converges, <code>finalize</code> unlocks — the
+  one closing act: it retires the <code>ai/</code> documents into a
+  distilled final commit and completes the run. Route through it all and
+  read the whole story:</p>
 <pre><code>$ etium tail &lt;run&gt; --once
 <span class="out">gate ? route.0  awaiting decision  options=debug|design
 gate <span class="mark">◆</span> route.0  design by you (cli) — smallest thing that works
@@ -131,8 +133,8 @@ gate ? route.1  awaiting decision  options=…|design|<span class="mark">plan</s
 gate <span class="mark">◆</span> route.1  plan by you (cli)
 gate ? route.2  awaiting decision  options=…|plan|<span class="mark">implement</span>  show=ai/PLAN.md,ai/REVIEW.md
 gate <span class="mark">◆</span> route.2  implement by you (cli)
-gate ? route.3  awaiting decision  options=…|implement|<span class="mark">wrap-up</span>  show=ai/REPORT.md,ai/REVIEW.md
-gate <span class="mark">◆</span> route.3  wrap-up by you (cli)
+gate ? route.3  awaiting decision  options=…|implement|<span class="mark">finalize</span>  show=ai/REPORT.md,ai/REVIEW.md
+gate <span class="mark">◆</span> route.3  finalize by you (cli)
 run DONE</span></code></pre>
   <p>Because of <code>--worktree</code>, all of it happened on branch
   <code>etium/&lt;run-id&gt;</code> in its own checkout under
@@ -156,7 +158,8 @@ run DONE</span></code></pre>
   <strong>both</strong> its reviewer and your <code>check</code> command.
   When a reviewer still objects after <code>rounds</code> rounds (default
   2), you get a <code>&lt;stage&gt;-stuck</code> gate:
-  <code>keep-going</code>, <code>accept</code>, or <code>wrap-up</code> —
+  <code>keep-going</code> or <code>accept</code> (ending is
+  <code>/et stop</code>, from anywhere) —
   on GitHub it arrives as its own comment carrying why, with the
   reviewer's blockers quoted.
   Walk away at any gate; <code>kill&nbsp;-9</code> anything;

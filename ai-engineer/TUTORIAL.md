@@ -73,8 +73,11 @@ etium decide <run> route design --note "smallest thing that works"
 ```
 
 Your note is injected into the designer's prompt. Design converges,
-`plan` unlocks; plan converges, `implement` unlocks. Route through them,
-then `wrap-up`, and read the whole story:
+`plan` unlocks; plan converges, `implement` unlocks; implementation
+converges, `finalize` unlocks — the one closing act: it retires the
+`ai/` documents into a distilled final commit (their SUMMARY lines
+become the message) and completes the run. Route through it all and
+read the whole story:
 
 ```
 $ etium tail <run> --once
@@ -84,8 +87,8 @@ gate ? route.1  awaiting decision  options=…|design|plan  show=ai/DESIGN.md,ai
 gate ◆ route.1  plan by you (cli)
 gate ? route.2  awaiting decision  options=…|plan|implement  show=ai/PLAN.md,ai/REVIEW.md
 gate ◆ route.2  implement by you (cli)
-gate ? route.3  awaiting decision  options=…|implement|wrap-up  show=ai/REPORT.md,ai/REVIEW.md
-gate ◆ route.3  wrap-up by you (cli)
+gate ? route.3  awaiting decision  options=…|implement|finalize  show=ai/REPORT.md,ai/REVIEW.md
+gate ◆ route.3  finalize by you (cli)
 run DONE
 ```
 
@@ -110,9 +113,9 @@ plan — reviewers actually object (`VERDICT: revise` with stable
 objection keys — the builder must address them next round), and
 `implement` must pass **both** its reviewer and your `check` command. When
 a reviewer still objects after `rounds` rounds (default 2), you get a
-`<stage>-stuck` gate: `keep-going`, `accept`, or `wrap-up` — on GitHub it
-arrives as its own comment carrying why, with the reviewer's blockers
-quoted. Walk away at
+`<stage>-stuck` gate: `keep-going` or `accept` (ending is `/et stop` or
+`etium abandon`, from anywhere) — on GitHub it arrives as its own
+comment carrying why, with the reviewer's blockers quoted. Walk away at
 any gate; `kill -9` anything; `etium tick` from cron reconciles. That's the
 operating model: the AI works, parks, and waits for you.
 
@@ -159,10 +162,15 @@ Then, on GitHub:
 3. **Review the draft PR.** As soon as a stage produces artifacts, the
    surface pushes the branch and opens one draft PR. The `ai/` documents
    and the commits are the reviewable work.
-4. **Finish on GitHub's own terms.** Merging the PR ends the run. Closing
-   the PR or the issue abandons the attempt. `/et stop` abandons it with
-   your note as the reason. A later `/et` comment starts attempt #1 on a
-   fresh branch — abandoned work never blocks a retry.
+4. **Finish with `/et finalize`, then merge.** After implement converges,
+   review the draft PR — the `ai/` documents are on the branch. When
+   satisfied, `/et finalize` retires them into a distilled final commit
+   (the run completes; Files-changed then shows only the real change) and
+   merging the PR closes the issue. Closing the PR or the issue abandons
+   the attempt; `/et stop` abandons with your note; a merge while the run
+   is still active is a human override and abandons it. A later `/et`
+   comment starts attempt #1 on a fresh branch — abandoned work never
+   blocks a retry.
 
 The `et:working` / `et:waiting` / `et:blocked` labels are decoration for
 your issue list (`label:et:waiting` = "waiting on me"); nothing ever reads

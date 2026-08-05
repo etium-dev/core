@@ -1260,3 +1260,42 @@ configure", it isn't done). A second checkout as the deployment
 (supported by ADR-022, but needs keep-fresh plumbing and splits
 attention). Running the installed package's bundled copy in place
 (npm replaces those files on upgrade, mid-run).
+
+---
+
+## ADR-035 — finalize is the one closing ceremony; wrap-up is gone
+
+**Decision.** The `wrap-up` option is removed everywhere. Its three jobs
+are covered better: (1) ending a run satisfied is **`finalize`** —
+earned by a converged implementation, it retires the `ai/` working
+documents from the branch tip in one commit whose message is assembled
+mechanically from their `SUMMARY:` lines (plus the verify command), and
+completes the run as done; merging the PR is the human's act on the
+artifact, not a run event, and `Closes #N` shuts the issue. (2) The
+surface's merge→wrap-up mapping is deleted: a finalized run is done
+before any merge, and a merge on a still-active run is a human override,
+abandoned with that reason — the fallback that already existed. (3)
+Giving up at a stuck gate was redundant with `/et stop` (and
+`etium abandon`), which end a run from anywhere; stuck gates offer
+`keep-going · accept · consider`. The post-implement route gate carries
+a reason teaching the flow: review the draft PR — the documents are on
+the branch until you finalize — then finalize, then merge. History keeps
+every round's documents, so the narration's sha-pinned links resolve
+forever; the merged tree contains only the real change.
+
+**Why.** The first real merge surfaced a latent gap: `ai/` riding the
+branch (correct — audit trail, pinned links, reviewable work) implied
+`ai/` landing in `main` on merge, which nobody had decided and nobody
+wanted. The operator also needed the documents to remain browsable while
+reviewing the PR — so retirement must be an explicit act after review,
+not an automatic one at implement-convergence — and asked for the
+distillate to survive in the commit message, which the SUMMARY contract
+makes mechanical. Two closing verbs (finalize + wrap-up) was one too
+many: every meaning now has exactly one word.
+
+**Rejected.** Auto-retiring `ai/` when implement converges (removes the
+documents exactly when the reviewer-human needs them). Keeping wrap-up
+as a hidden post-finalize state (ceremony with no decision left to
+make). Excluding `ai/` from merges via git machinery (no clean
+path-scoped merge exists). A model-written final commit message (the
+SUMMARY lines already are the distillate; Invariant 1 stays intact).

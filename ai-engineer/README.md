@@ -37,8 +37,8 @@ and task fields always win.
 
 | gate | opens | options |
 |---|---|---|
-| `route` | at kickoff (unless the directive already routed), and after every stage | `debug · design · consider` — `plan` appears once a design converged (a mini-design is cheap by construction); `implement` once a plan converged; `wrap-up` once implementation converged |
-| `<stage>-stuck` | reviewer still objects after `rounds` rounds | `keep-going · accept · wrap-up · consider` — carries a `reason` and shows REVIEW.md first; on GitHub it arrives as its own persistent comment |
+| `route` | at kickoff (unless the directive already routed), and after every stage | `debug · design · consider` — `plan` appears once a design converged (a mini-design is cheap by construction); `implement` once a plan converged; `finalize` once implementation converged — the one closing act: retires `ai/` into a distilled final commit (SUMMARY lines become the message) and completes the run |
+| `<stage>-stuck` | reviewer still objects after `rounds` rounds | `keep-going · accept · consider` — ending is `/et stop`, from anywhere; carries a `reason` and shows REVIEW.md first |
 
 Routing is fail-closed by construction: every stage is earned. `plan`
 isn't offered until a design converged — the design styles make that
@@ -122,5 +122,8 @@ labels as commands):
   Comments are never edited; the thread is the run's history. Labels
   `et:working|waiting|blocked` are decoration for issue lists; nothing
   ever reads them back.
-- Closing the issue abandons the attempt; closing the PR unmerged abandons
-  it; merging the PR completes it (or ends it as a human override earlier).
+- After implement converges: review the draft PR, `/et finalize` (retires
+  the `ai/` documents into the distilled final commit; the run completes),
+  then merge — merging closes the issue. Closing the issue abandons the
+  attempt; closing the PR unmerged abandons it; merging while the run is
+  still active is a human override and abandons it.
