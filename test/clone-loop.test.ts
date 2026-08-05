@@ -16,7 +16,7 @@ test("clone-loop: copies the library, ignores .etium/, never overwrites, rejects
 
   assert.equal(await main(["clone-loop", "ai-engineer", "--into", dest]), 0);
   assert.ok(fs.existsSync(path.join(dest, "loop.ts")));
-  assert.ok(fs.existsSync(path.join(dest, "TUTORIAL.md")));
+  assert.ok(fs.existsSync(path.join(dest, "README.md"))); // the clone's own contract; the tutorial lives on the web
   assert.equal(fs.readdirSync(path.join(dest, "templates")).filter((f) => f.endsWith(".md")).length, 12);
   assert.ok(fs.readFileSync(path.join(root, ".gitignore"), "utf8").split("\n").includes(".etium/"));
 

@@ -1,7 +1,7 @@
 # ai-engineer
 
-**New here? Start with [TUTORIAL.md](TUTORIAL.md)** — zero to a working AI
-engineer, including a token-free dry run. This file is the reference.
+**New here? Start with the [tutorial](https://etium.dev/ai-engineer.html)** — zero
+to a working AI engineer, including a token-free dry run. This file is the reference.
 **Having an AI agent do the install? Give it [AGENT_INSTALL.md](AGENT_INSTALL.md)**
 — deterministic steps, a PASS criterion per step, stop-on-fail.
 
