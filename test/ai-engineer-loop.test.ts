@@ -310,3 +310,85 @@ test("consider: the interpreter maps freestyle to an option; unclear re-asks sho
     .filter((e) => (e.data as { name: string }).name === "interpret");
   assert.equal(interprets.length, 2);
 });
+
+test("mode: a named mode overlays every later step (ADR-037)", async () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "etium-ai-"));
+  const { runDir } = createRun(base, {
+    task: "tidy the retry helper",
+    loop: LOOP,
+    params: {
+      harness: "exec",
+      rounds: "1",
+      directive: "go deep on this one",
+      modes: JSON.stringify({ deep: { describe: "careful — fable designs", params: { "model.design": "fable" } } }),
+      "cmd.mode": "mkdir -p ai && printf 'MODE: deep\\n' > ai/REPLY.md",
+      "cmd.interpret": "mkdir -p ai && printf 'ACTION: design\\n' > ai/REPLY.md",
+      "cmd.design": "printf 'mini: reword\\n' > ai/DESIGN.md",
+      "cmd.design-review": APPROVE,
+    },
+  });
+  await tickOnce(base, "unused-entry", true);
+  const started = readLedger(runDir)
+    .filter((e) => e.type === "step.started")
+    .map((e) => e.data as { name: string; model?: string });
+  assert.ok(started.some((s) => s.name === "mode"), "the mode interpreter ran on the operator's words");
+  assert.equal(started.find((s) => s.name === "design")!.model, "fable", "deep mode overlaid model.design");
+});
+
+test("mode: clearly meant but unmatched parks a fail-closed gate to pick or rephrase (ADR-037)", async () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "etium-ai-"));
+  const { runDir } = createRun(base, {
+    task: "make it faster",
+    loop: LOOP,
+    params: {
+      harness: "exec",
+      rounds: "1",
+      directive: "use turbo mode",
+      modes: JSON.stringify({ deep: { describe: "careful" }, fast: { describe: "cheap", params: { "model.design": "codex" } } }),
+      "cmd.mode": "mkdir -p ai && printf 'MODE: unclear\\ndeep or fast?\\n' > ai/REPLY.md",
+      "cmd.interpret": "mkdir -p ai && printf 'ACTION: design\\n' > ai/REPLY.md",
+      "cmd.design": "printf 'mini: x\\n' > ai/DESIGN.md",
+      "cmd.design-review": APPROVE,
+    },
+  });
+  await tickOnce(base, "unused-entry", true);
+  let gate = lastOpenGate(runDir);
+  assert.equal(gate.name, "mode", "an unmatched mode request parks — never a silent default");
+  assert.deepEqual(gate.options, ["deep", "fast", "default", "consider"]);
+  const opened = readLedger(runDir)
+    .filter((e) => e.type === "gate.opened")
+    .map((e) => e.data as { name: string; show: string[]; reason?: string })
+    .find((g) => g.name === "mode")!;
+  assert.match(opened.reason!, /couldn't match/, "the gate says why and lists the modes");
+  assert.deepEqual(opened.show, ["ai/REPLY.md"]);
+
+  await decide(base, runDir, gate, "fast"); // pick one → overlay applies, run proceeds
+  gate = lastOpenGate(runDir);
+  assert.equal(gate.name, "route", "resolving the mode unblocks routing");
+  assert.equal(
+    readLedger(runDir).filter((e) => e.type === "step.started").map((e) => e.data as { name: string; model?: string })
+      .find((s) => s.name === "design")!.model,
+    "codex",
+    "the mode chosen at the gate overlaid the design step",
+  );
+});
+
+test("mode: no catalog configured → the mode interpreter never runs (unchanged behavior)", async () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "etium-ai-"));
+  const { runDir } = createRun(base, {
+    task: "x",
+    loop: LOOP,
+    params: {
+      harness: "exec",
+      rounds: "1",
+      directive: "design",
+      "cmd.design": "mkdir -p ai && printf 'mini: y\\n' > ai/DESIGN.md",
+      "cmd.design-review": APPROVE,
+    },
+  });
+  await tickOnce(base, "unused-entry", true);
+  assert.ok(
+    !readLedger(runDir).some((e) => e.type === "step.started" && (e.data as { name: string }).name === "mode"),
+    "no modes in config → not one mode step spawns",
+  );
+});

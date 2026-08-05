@@ -16,7 +16,7 @@ import { isLockLive, readLock, writeDecision } from "./lock.ts";
 import { abandonRun, createRun, supervise, superviseDetached } from "./supervisor.ts";
 import { configuredSurfaces, tickOnce, watchLoop } from "./tick.ts";
 import { etiumsOnPath, harnessOptions, harnessParamLines, isLibrarySource, loopPlacement } from "./checks.ts";
-import { defaultParams, readConfig, statusLines, writeConfig } from "./config.ts";
+import { defaultParams, modesParam, readConfig, statusLines, writeConfig } from "./config.ts";
 import { ensureGhAuth, repoLogin } from "./ghauth.ts";
 import { installWakeup, printWakeup, removeWakeup, wakeupInstalled } from "./wakeup.ts";
 import { DEFAULT_GATE_OPTIONS, ETIUM_VERSION, type AnyEnvelope } from "./types.ts";
@@ -150,7 +150,7 @@ async function cmdRun(argv: string[]): Promise<number> {
     process.stderr.write("etium run: provide a goal or --task file\n");
     return 2;
   }
-  const params: Record<string, string> = { ...defaultParams(b) }; // config defaults; flags win (ADR-025)
+  const params: Record<string, string> = { ...defaultParams(b), ...modesParam(b) }; // config defaults + mode catalog; flags win (ADR-025/037)
   for (const p of v.param ?? []) {
     const i = p.indexOf("=");
     if (i === -1) {

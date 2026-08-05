@@ -14,7 +14,7 @@ const rows = [
   ["github surface (src/github.ts)", count("src/github.ts"), 450],
   ["cli (src/cli.ts)", count("src/cli.ts"), 1000],
   ["ralph loop (ralph/loop.ts)", count("ralph/loop.ts"), 150],
-  ["ai-engineer loop (ai-engineer/loop.ts)", count("ai-engineer/loop.ts"), 175],
+  ["ai-engineer loop (ai-engineer/loop.ts)", count("ai-engineer/loop.ts"), 200],
 ];
 let fail = false;
 for (const [name, loc, budget] of rows) {

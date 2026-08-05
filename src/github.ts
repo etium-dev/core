@@ -32,7 +32,7 @@
 import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { defaultParams, ghConfigDir } from "./config.ts";
+import { defaultParams, ghConfigDir, modesParam } from "./config.ts";
 import { readLedger } from "./ledger.ts";
 import type { AnyEnvelope, GateOpenedData, RunView, Surface, SurfaceDecision, SurfacePollResult, SurfaceTask } from "./types.ts";
 
@@ -306,9 +306,11 @@ const surface: Surface = {
           key: `issue-${n}#${attempt}`,
           task: `# ${issue.title}\n\n${issue.body ?? ""}\n`,
           loop: env("ETIUM_GH_LOOP"),
-          // Deployment-default params ride under the task's own (ADR-025).
+          // Deployment-default params ride under the task's own (ADR-025);
+          // the mode catalog rides alongside them (ADR-037).
           params: {
             ...defaultParams(path.join(path.resolve(process.env.ETIUM_GH_WORKDIR ?? process.cwd()), ".etium")),
+            ...modesParam(path.join(path.resolve(process.env.ETIUM_GH_WORKDIR ?? process.cwd()), ".etium")),
             issue: String(n),
             directive: [cmd.word, cmd.note].filter(Boolean).join(" "),
           },

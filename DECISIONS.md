@@ -1340,3 +1340,51 @@ save kilobytes). Snapshotting only `templates/` (the loop file itself
 is equally load-bearing). Version-stamping steps and teaching replay to
 tolerate drift (silently mixing two loop versions in one ledger is the
 corruption divergence exists to prevent).
+
+## ADR-037 — modes: the operator names a param bundle in plain words
+
+**Decision.** A deployment may define **modes** in `.etium/config.json` —
+named param bundles, each with a `describe` line and a `params` overlay:
+
+```json
+"modes": {
+  "deep": { "describe": "careful — fable designs, gpt-5.5 implements",
+            "params": { "harness.design": "fable", "model.implement": "gpt-5.5", "rounds": "3" } },
+  "fast": { "describe": "quick and cheap — codex on a small model",
+            "params": { "harness": "codex", "model": "gpt-5-mini" } }
+}
+```
+
+The surface carries the catalog to the loop as one `modes` run-param
+(JSON), riding the existing generic params conduit rather than growing a
+core primitive — modes are a **loop** concept, not core (Invariant 10).
+The ai-engineer loop resolves a mode at kickoff through its interpreter
+persona (a loop step — core never calls a model, Invariant 1): the
+operator's words map to a mode name (whose `params` overlay the run's
+effective params `P` for every later step), to `none` (no mode requested
+→ the baseline `config.params`, unchanged), or — when a mode is plainly
+meant but unmatched — the loop parks a fail-closed `mode` gate listing
+the modes so the operator picks one (`/et fast`) or rephrases. There is
+no separate default bundle and no `--mode` flag: "default" is just the
+name for the un-overlaid baseline, and the CLI expresses a mode the same
+way a comment does — in the task's words, read by the same interpreter.
+Resolution is replay-exact: the interpreter's choice is a recorded step,
+and the overlay is pure code over that choice plus the catalog.
+
+**Why.** Concurrent per-issue runs already worked, and per-step personas
+already resolved through `harness.<step>`/`model.<step>` params (ADR-025)
+— what was missing was a way to select a *bundle* per issue without
+retyping it every kickoff. The operator wanted that selection in natural
+language ("use deep mode", "the careful one"), which only an LLM step can
+parse, which is exactly why the loop's interpreter owns it and the
+surface stays model-free. Making it fail closed on an unrecognized mode —
+ask, never guess — matches the whole front-door doctrine (ADR-023/026):
+a wrong mode silently chosen is more expensive than a question.
+
+**Rejected.** A GitHub label or a `deep:`/`--profile` comment token
+(selection outside the operator's own words; and the label form couldn't
+express "the careful one"). A core `run.modes` primitive (modes aren't
+core). A silent default when a requested mode is unknown (guessing). A
+`--mode` CLI flag (the task text already flows through the interpreter;
+a second selection path is redundant). Mid-run mode switching (clean
+later extension; kept out of v1 to avoid overlay-reapplication).

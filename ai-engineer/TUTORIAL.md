@@ -207,6 +207,16 @@ and the loop's params/gates/artifacts contract: [README.md](README.md).
   model.design=…`. Deployment-wide defaults for any param live in
   `.etium/config.json` under `params`; `etium configure` asks for the
   default harness and validates every harness your params name.
+- **Name modes and pick them in plain words.** Under `modes` in
+  `.etium/config.json`, bundle params behind a name and a description:
+  `"deep": { "describe": "careful — fable designs, gpt-5.5 implements",
+  "params": { "harness.design": "fable", "model.implement": "gpt-5.5",
+  "rounds": "3" } }`. Then just say it — "use deep mode", "run it fast",
+  "the careful one" — and the interpreter maps your words to a mode and
+  overlays its params for the whole run. Say nothing about a mode and the
+  run uses your baseline `params`. Ask for one it can't place and it stops
+  to let you pick from the list or rephrase — it never guesses. Use
+  lowercase mode names (operator words are matched lowercased).
 - **Change the workflow itself.** The loop is ~140 lines of ordinary
   TypeScript — add a stage, change an option set, split a persona. The
   loop-authoring guide (`WRITING_LOOPS.md`) is the manual; the surface

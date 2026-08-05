@@ -30,9 +30,11 @@ const ARTIFACT: Record<string, string> = {
 const ROUTES = ["debug", "design"]; // plan is earned by a converged design — never offered cold
 
 export default async function aiEngineer(run: Run) {
-  const rounds = Number(run.params.rounds ?? "2");
   const done = new Set<string>();
   let show: string[] = [];
+  // Effective params: run.params, plus a mode's overlay once one is resolved
+  // (ADR-037). Every tunable is read from here so a mode can steer any step.
+  const P: Record<string, string> = { ...run.params };
 
   // `command` is the dry-run hook: under `--harness exec`, `--param
   // cmd.<step>=…` scripts a step; real harness adapters ignore `command`.
@@ -40,11 +42,11 @@ export default async function aiEngineer(run: Run) {
   // `model.<step>` win over the loop-wide `harness`/`model` (ADR-025).
   const step = (name: string, prompt: string, extra: object = {}) =>
     run.step(name, {
-      harness: run.params[`harness.${name}`] ?? run.params.harness ?? "pi",
-      model: run.params[`model.${name}`] ?? run.params.model,
+      harness: P[`harness.${name}`] ?? P.harness ?? "pi",
+      model: P[`model.${name}`] ?? P.model,
       prompt: prompt.replaceAll("{{task}}", run.task),
-      command: run.params[`cmd.${name}`],
-      budget: { wall: run.params.wall ?? "2h" },
+      command: P[`cmd.${name}`],
+      budget: { wall: P.wall ?? "2h" },
       ...extra,
     });
 
@@ -89,6 +91,7 @@ export default async function aiEngineer(run: Run) {
   // One stage: builder/reviewer rounds until the reviewer approves (and, for
   // implement, the check passes). The maker never grades its own homework.
   const converge = async (stage: string, entry?: string): Promise<void> => {
+    const rounds = Number(P.rounds ?? "2");
     const since = await run.effect("stage-start", () => new Date().toISOString());
     const ruling = entry ? [entry] : [];
     for (;;) {
@@ -100,7 +103,7 @@ export default async function aiEngineer(run: Run) {
         await commit(stage, stage === "implement");
         if (built.status !== "ok") break;
         const check = stage === "implement"
-          ? await run.step("check", { harness: "exec", command: run.params.check ?? "true" })
+          ? await run.step("check", { harness: "exec", command: P.check ?? "true" })
           : undefined;
         const review = await step(`${stage}-review`, reviewer(stage) + op, {
           artifacts: ["ai/REVIEW.md"],
@@ -138,13 +141,37 @@ export default async function aiEngineer(run: Run) {
       const line = (f: string) => { try { return /^SUMMARY:\s*(.+)/m.exec(fs.readFileSync(path.join(run.workspace, f), "utf8"))?.[1] ?? ""; } catch { return ""; } };
       const parts = Object.entries({ Diagnosis: "ai/DIAGNOSIS.md", Design: "ai/DESIGN.md", Plan: "ai/PLAN.md", Report: "ai/REPORT.md" })
         .map(([t, f]) => (line(f) ? `${t}: ${line(f)}` : "")).filter(Boolean);
-      return ["ai: finalize", "", ...parts, `Verified: ${run.params.check ?? "true"}`].join("\n");
+      return ["ai: finalize", "", ...parts, `Verified: ${P.check ?? "true"}`].join("\n");
     })) as string;
     await run.step("finalize", {
       harness: "exec",
       command: `if git rev-parse --git-dir >/dev/null 2>&1; then git rm -r -q --ignore-unmatch ai && { git diff --cached --quiet || git commit -q -m '${msg.replace(/'/g, "'\\''")}'; }; fi`,
     });
   };
+
+  // Modes (ADR-037): the deployment names param bundles; the operator asks
+  // for one in words. The interpreter maps them to a mode (whose params
+  // overlay P), to `none` (baseline), or parks a fail-closed gate to pick.
+  const modes = JSON.parse(run.params.modes ?? "{}") as Record<string, { describe?: string; params?: Record<string, string> }>;
+  const applyMode = async (): Promise<void> => {
+    const names = Object.keys(modes);
+    if (!names.length || !run.params.directive) return;
+    const list = names.map((n) => `- ${n}: ${modes[n]!.describe ?? ""}`).join("\n");
+    let msg = run.params.directive;
+    for (;;) {
+      await step("mode", read("conventions.md") + "\n\n" +
+        read("mode.md").replaceAll("{{modes}}", list).replaceAll("{{message}}", msg), { artifacts: ["ai/REPLY.md"] });
+      const w = (await run.effect("mode-choice", artifactWord("ai/REPLY.md", /^MODE:\s*(\S+)/im))) as string;
+      if (w === "none" || w === "") return; // no mode asked → baseline
+      if (names.includes(w)) return void Object.assign(P, modes[w]!.params ?? {});
+      const g = await run.gate("mode", { options: [...names, "default", "consider"], show: ["ai/REPLY.md"],
+        reason: `you asked for a mode I couldn't match — reply with one or rephrase:\n${list}` });
+      if (g.decision === "default") return;
+      if (g.decision !== "consider") return void Object.assign(P, modes[g.decision]!.params ?? {});
+      msg = g.note ?? msg; // rephrase → re-interpret
+    }
+  };
+  await applyMode();
 
   // The kickoff directive is the operator's words, delivered early: map and
   // go. Unclear falls to the route gate with the question shown — fail closed.
