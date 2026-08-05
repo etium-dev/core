@@ -4,7 +4,9 @@
 // a task running ETIUM_GH_LOOP, the text riding in as the `directive` param
 // (ADR-023); `/et <word> [note]` comments by trusted authors → gate
 // decisions (an exact word is matched against whichever open gate declares
-// it; anything else is delivered as `consider` when declared); issue close /
+// it; anything else is delivered as `consider` when declared, and with
+// no open gate at all it becomes an operator note in the run's mailbox —
+// mid-stage words are never dropped, ADR-033); issue close /
 // PR close / PR merge → abandons or wrap-up. Outbound is append-only
 // narration (ADR-029): one comment per tick covering the run's notable
 // ledger events since the last posted marker — state changes, gate

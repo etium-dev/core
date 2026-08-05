@@ -191,6 +191,12 @@ run DONE</span></code></pre>
     this up</code> — goes to the loop's interpreter, which maps it to the
     vocabulary or asks you to rephrase. Anyone without Write is
     ignored.</li>
+    <li><strong>Speak mid-stage, any time.</strong> A <code>/et</code>
+    comment while a stage is working — no gate open — is never lost: it
+    becomes an operator instruction for that stage, delivered to the
+    builder <em>and</em> the reviewer every round until the stage
+    converges, as ground truth that outranks the repository's own
+    docs.</li>
     <li><strong>Review the draft PR.</strong> As soon as a stage produces
     artifacts, the surface pushes the branch and opens one draft PR. The
     <code>ai/</code> documents and the commits are the reviewable work.</li>

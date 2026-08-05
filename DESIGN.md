@@ -365,7 +365,9 @@ the configured loop (`ETIUM_GH_LOOP`, required) on worktree branch
 against whichever open gate declares the option and validated against the
 ledger's set — a comment matching no option is delivered as the `consider`
 decision (full text as the note) when the gate declares it, for the loop
-to interpret — never labels,
+to interpret, and a comment with no open gate to receive it at all goes to
+the run's notes mailbox (ADR-033: read-many operator words, never dropped;
+loops deliver them to the in-flight stage's prompts) — never labels,
 which are a mutable bitfield with no payload, no atomic consume, and no
 attribution; `/et stop`, issue close, and PR close-unmerged → abandons; PR
 merge → the `wrap-up` option when a gate declares it (the convention for "a
