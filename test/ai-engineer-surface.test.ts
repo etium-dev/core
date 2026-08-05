@@ -112,11 +112,50 @@ function setup() {
   const soon = (s: number) => new Date(Date.now() + s * 1000).toISOString();
   const say = (n: number, id: number, body: string, login: string, at: string) =>
     ({ id, body, created_at: at, user: { login }, issue_url: `https://api.github.com/repos/acme/widgets/issues/${n}` });
-  return { root, stubDir, workdir, bare, base, g, writes, tick, soon, say };
+  return { root, stubDir, stubPath, workdir, bare, base, g, writes, tick, soon, say };
 }
 
 const fixture = (dir: string, name: string, data: unknown) =>
   fs.writeFileSync(path.join(dir, name), JSON.stringify(data));
+
+const slowGhStub = (slow: "auth" | "api") => `#!/usr/bin/env node
+const fs = require("node:fs");
+const path = require("node:path");
+const dir = process.env.ETIUM_GH_STUB_DIR;
+fs.appendFileSync(path.join(dir, "envs.txt"), (process.env.GH_CONFIG_DIR || "-") + "\\n");
+const args = process.argv.slice(2);
+const sleep = () => setTimeout(() => {
+  if (args[0] === "api") process.stdout.write("[]");
+}, 16_000);
+if (${JSON.stringify(slow)} === "auth" && args[0] === "auth" && args[1] === "status") sleep();
+else if (${JSON.stringify(slow)} === "api" && args[0] === "api") sleep();
+else process.stdout.write("{}");
+`;
+
+test("github poll reports a timed-out auth preflight", async () => {
+  const { stubPath, tick } = setup();
+  fs.writeFileSync(stubPath, slowGhStub("auth"), { mode: 0o755 });
+
+  const actions = await tick();
+
+  assert.ok(actions.some((a) =>
+    a.action === "surface-error" &&
+    a.detail?.includes("github poll: gh auth status timed out after 15000ms")
+  ));
+});
+
+test("github poll reports a timed-out helper-routed api call", async () => {
+  const { stubPath, tick } = setup();
+  fs.writeFileSync(stubPath, slowGhStub("api"), { mode: 0o755 });
+
+  const actions = await tick();
+
+  assert.ok(actions.some((a) =>
+    a.action === "surface-error" &&
+    a.detail?.includes("github poll: gh api repos/acme/widgets/issues/comments?since=") &&
+    a.detail?.includes("timed out after 15000ms")
+  ));
+});
 
 test("kickoff comment → worktree run with directive; read-only commenter ignored; projection pushes branch, opens draft PR, upserts status, labels", async () => {
   const { stubDir, base, bare, g, writes, workdir, tick, soon, say } = setup();

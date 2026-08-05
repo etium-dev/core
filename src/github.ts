@@ -44,6 +44,7 @@ const env = (k: string, d?: string): string => {
 const GH = () => process.env.ETIUM_GH_CMD ?? "gh";
 const REPO = () => env("ETIUM_GH_REPO");
 const PREFIX = "/et";
+const GH_TIMEOUT_MS = 15_000;
 const ghDir = () => ghConfigDir(path.resolve(process.env.ETIUM_GH_WORKDIR ?? process.cwd()));
 
 function gh(args: string[], input?: unknown): unknown {
@@ -51,7 +52,13 @@ function gh(args: string[], input?: unknown): unknown {
     encoding: "utf8",
     input: input === undefined ? undefined : JSON.stringify(input),
     env: { ...process.env, GH_CONFIG_DIR: ghDir() },
+    timeout: GH_TIMEOUT_MS,
   });
+  if (r.error) {
+    const cmd = args.slice(0, 3).join(" ");
+    if ((r.error as NodeJS.ErrnoException).code === "ETIMEDOUT") throw new Error(`gh ${cmd} timed out after ${GH_TIMEOUT_MS}ms`);
+    throw new Error(`gh ${cmd}: ${r.error.message}`);
+  }
   if (r.status !== 0) throw new Error(`gh ${args.slice(0, 3).join(" ")}: ${(r.stderr || "").trim()}`);
   const out = (r.stdout || "").trim();
   if (!out) return undefined;
@@ -210,8 +217,16 @@ const surface: Surface = {
   poll({ cursor, runs }): SurfacePollResult {
     // Fail fast and legibly on broken auth: every call below dies anyway, but
     // the operator deserves the remedy, not a pile of raw gh stderr.
-    const who = spawnSync(GH(), ["auth", "status"], { encoding: "utf8", env: { ...process.env, GH_CONFIG_DIR: ghDir() } });
-    if (who.error) throw new Error("gh CLI not found — install: curl -sS https://webi.sh/gh | sh");
+    const who = spawnSync(GH(), ["auth", "status"], {
+      encoding: "utf8",
+      env: { ...process.env, GH_CONFIG_DIR: ghDir() },
+      timeout: GH_TIMEOUT_MS,
+    });
+    if (who.error) {
+      if ((who.error as NodeJS.ErrnoException).code === "ETIMEDOUT")
+        throw new Error(`gh auth status timed out after ${GH_TIMEOUT_MS}ms`);
+      throw new Error("gh CLI not found — install: curl -sS https://webi.sh/gh | sh");
+    }
     if (who.status !== 0)
       throw new Error(`no deployment sign-in (${ghDir()}) — run: etium configure`);
     const can = new Map<string, boolean>();
